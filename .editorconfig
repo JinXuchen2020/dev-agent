@@ -1,0 +1,22 @@
+root = true
+
+[*]
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+end_of_line = crlf
+
+[*.cs]
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_prefer_simple_using_statement = true:warning
+csharp_style_prefer_method_group_conversion = true:silent
+
+[*.{xml,config,props,targets}]
+indent_size = 2
+
+[*.json]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
