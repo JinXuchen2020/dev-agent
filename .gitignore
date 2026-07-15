@@ -14,6 +14,9 @@ obj/
 *.so
 *.dylib
 *.nupkg
+*.db
+*.sqlite
+*.sqlite3
 *.log
 **/*.log
 *.cache
