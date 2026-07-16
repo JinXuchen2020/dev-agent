@@ -15,6 +15,7 @@ public sealed class StepFailedEventHandler
 {
     private readonly IExecutionLogRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IExecutionProgressBroadcaster _broadcaster;
     private readonly ILogger<StepFailedEventHandler> _logger;
 
     /// <summary>
@@ -22,14 +23,17 @@ public sealed class StepFailedEventHandler
     /// </summary>
     /// <param name="repository">The execution log repository for persisting log entries.</param>
     /// <param name="unitOfWork">The unit of work for persisting changes.</param>
+    /// <param name="broadcaster">The progress broadcaster for SSE streaming.</param>
     /// <param name="logger">The logger used to capture step failure events.</param>
     public StepFailedEventHandler(
         IExecutionLogRepository repository,
         IUnitOfWork unitOfWork,
+        IExecutionProgressBroadcaster broadcaster,
         ILogger<StepFailedEventHandler> logger)
     {
         _repository = repository;
         _unitOfWork = unitOfWork;
+        _broadcaster = broadcaster;
         _logger = logger;
     }
 
@@ -68,5 +72,16 @@ public sealed class StepFailedEventHandler
         _logger.LogWarning(
             "Step {StepName} ({StepOrder}) failed for workflow {WorkflowId}: {Error}",
             evt.StepName, evt.StepOrder, evt.WorkflowId, evt.ErrorDetail);
+
+        await _broadcaster.PublishAsync(evt.WorkflowId, new ExecutionProgressEvent(
+            Type: "step_failed",
+            WorkflowId: evt.WorkflowId,
+            ExecutionLogId: log.Id,
+            StepName: evt.StepName,
+            StepOrder: evt.StepOrder,
+            Status: "failed",
+            Result: null,
+            ErrorDetail: evt.ErrorDetail,
+            Timestamp: DateTime.UtcNow), ct);
     }
 }

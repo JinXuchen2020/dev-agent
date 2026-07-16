@@ -1,4 +1,5 @@
 using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Application.Diagnostics;
 using AgentPlatform.Domain.Aggregates.ExecutionLogs;
 using AgentPlatform.Domain.Aggregates.Workflows.Events;
 using AgentPlatform.Domain.Repositories;
@@ -15,6 +16,7 @@ public sealed class StepCompletedEventHandler
 {
     private readonly IExecutionLogRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IExecutionProgressBroadcaster _broadcaster;
     private readonly ILogger<StepCompletedEventHandler> _logger;
 
     /// <summary>
@@ -22,14 +24,17 @@ public sealed class StepCompletedEventHandler
     /// </summary>
     /// <param name="repository">The execution log repository for persisting log entries.</param>
     /// <param name="unitOfWork">The unit of work for persisting changes.</param>
+    /// <param name="broadcaster">The progress broadcaster for SSE streaming.</param>
     /// <param name="logger">The logger used to capture step completion events.</param>
     public StepCompletedEventHandler(
         IExecutionLogRepository repository,
         IUnitOfWork unitOfWork,
+        IExecutionProgressBroadcaster broadcaster,
         ILogger<StepCompletedEventHandler> logger)
     {
         _repository = repository;
         _unitOfWork = unitOfWork;
+        _broadcaster = broadcaster;
         _logger = logger;
     }
 
@@ -68,5 +73,21 @@ public sealed class StepCompletedEventHandler
         _logger.LogInformation(
             "Step {StepName} ({StepOrder}) completed for workflow {WorkflowId}",
             evt.StepName, evt.StepOrder, evt.WorkflowId);
+
+        await _broadcaster.PublishAsync(evt.WorkflowId, new ExecutionProgressEvent(
+            Type: "step_completed",
+            WorkflowId: evt.WorkflowId,
+            ExecutionLogId: log.Id,
+            StepName: evt.StepName,
+            StepOrder: evt.StepOrder,
+            Status: "completed",
+            Result: evt.Result,
+            ErrorDetail: null,
+            Timestamp: DateTime.UtcNow), ct);
+
+        // Record step duration metric
+        WorkflowMetrics.WorkflowStepDuration.Record(evt.Duration.TotalMilliseconds,
+            new KeyValuePair<string, object?>("step_name", evt.StepName),
+            new KeyValuePair<string, object?>("workflow_id", evt.WorkflowId));
     }
 }

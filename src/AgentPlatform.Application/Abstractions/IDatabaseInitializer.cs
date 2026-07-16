@@ -8,5 +8,6 @@ public interface IDatabaseInitializer
     /// <summary>
     /// 异步初始化数据库，运行迁移并创建表结构，必要时填充种子数据。
     /// </summary>
-    Task InitializeAsync();
+    /// <param name="ct">A token to observe for cancellation of the initialization request.</param>
+    Task InitializeAsync(CancellationToken ct = default);
 }

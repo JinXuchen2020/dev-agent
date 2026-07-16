@@ -49,6 +49,7 @@ internal sealed class InMemoryShortTermMemory : IShortTermMemory
     /// <returns>A task that completes with the cached value, or <c>default</c> if not found or expired.</returns>
     public Task<T?> GetAsync<T>(string key, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         if (_memory.TryGetValue(key, out var entry))
         {
             if (entry.ExpiresAt.HasValue && DateTime.UtcNow > entry.ExpiresAt.Value)

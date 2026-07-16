@@ -267,7 +267,7 @@ public class WorkflowStateMachineSteps
             return _executionCounts.TryGetValue(stepName, out var c) ? c : 0;
         }
 
-        public Task<StepExecutionResult> ExecuteAsync(WorkflowStep step, Workflow context, CancellationToken ct)
+        public Task<StepExecutionResult> ExecuteAsync(WorkflowStep step, WorkflowContext ctx, CancellationToken ct)
         {
             WasInvoked = true;
             var key = step.StepName;
@@ -276,16 +276,16 @@ public class WorkflowStateMachineSteps
             if (IsBranchExecutor)
             {
                 return Task.FromResult(BranchSucceeds
-                    ? new StepExecutionResult(true, "Branch alternative result", null)
-                    : new StepExecutionResult(false, null, "Branch step failed"));
+                    ? StepExecutionResult.Success("Branch alternative result", "{}")
+                    : StepExecutionResult.RetryableFailure("Branch step failed"));
             }
 
             if (_alwaysFailingSteps.Contains(key))
             {
-                return Task.FromResult(new StepExecutionResult(false, null, "Step always fails"));
+                return Task.FromResult(StepExecutionResult.RetryableFailure("Step always fails"));
             }
 
-            return Task.FromResult(new StepExecutionResult(true, $"Output from {step.StepName}", null));
+            return Task.FromResult(StepExecutionResult.Success($"Output from {step.StepName}", "{}"));
         }
     }
 
@@ -308,7 +308,10 @@ public class WorkflowStateMachineSteps
         {
             workflow.SetState(WorkflowState.Running);
 
-            foreach (var step in workflow.Steps.OrderBy(s => s.Order))
+            var orderedSteps = workflow.Steps.OrderBy(s => s.Order).ToList();
+            var ctx = BuildTestContext(workflow, null, orderedSteps);
+
+            foreach (var step in orderedSteps)
             {
                 ct.ThrowIfCancellationRequested();
 
@@ -329,8 +332,8 @@ public class WorkflowStateMachineSteps
 
                     try
                     {
-                        var result = await executor.ExecuteAsync(step, workflow, ct);
-                        if (result.IsSuccess)
+                        var result = await executor.ExecuteAsync(step, ctx, ct);
+                        if (result.Outcome == StepOutcome.Success)
                         {
                             step.SetState(WorkflowState.Completed);
                             success = true;
@@ -348,15 +351,18 @@ public class WorkflowStateMachineSteps
                 {
                     var isLast = step.Order == workflow.Steps.Max(s => s.Order);
                     workflow.SetState(isLast ? WorkflowState.Completed : WorkflowState.Running);
+                    // Rebuild context with completed artifacts
+                    ctx = BuildTestContext(workflow, null, orderedSteps);
                     continue;
                 }
 
-                var branchResult = await TryBranchAsync(step, workflow, ct);
+                var branchResult = await TryBranchAsync(step, ctx, ct);
                 if (branchResult)
                 {
                     step.SetState(WorkflowState.Completed);
                     var isLast = step.Order == workflow.Steps.Max(s => s.Order);
                     workflow.SetState(isLast ? WorkflowState.Completed : WorkflowState.Running);
+                    ctx = BuildTestContext(workflow, null, orderedSteps);
                     continue;
                 }
 
@@ -366,7 +372,33 @@ public class WorkflowStateMachineSteps
             return workflow.CurrentState;
         }
 
-        private async Task<bool> TryBranchAsync(WorkflowStep step, Workflow workflow, CancellationToken ct)
+        private static WorkflowContext BuildTestContext(Workflow workflow, WorkflowStep? currentStep, List<WorkflowStep> orderedSteps)
+        {
+            var artifacts = new Dictionary<string, StepArtifact>();
+            foreach (var s in orderedSteps.Where(s => s.State == WorkflowState.Completed && !string.IsNullOrEmpty(s.Result)))
+            {
+                artifacts[s.StepName] = new StepArtifact
+                {
+                    StepName = s.StepName,
+                    StepOrder = s.Order,
+                    Content = s.Result!,
+                    ContentType = "test"
+                };
+            }
+
+            return new WorkflowContext
+            {
+                WorkflowId = workflow.Id,
+                CurrentStepOrder = currentStep?.Order ?? 0,
+                Artifacts = artifacts,
+                Blackboard = Blackboard.Empty,
+                Retrieval = RetrievalContext.Empty,
+                Summary = StepHistory.Empty,
+                TenantId = workflow.TenantId
+            };
+        }
+
+        private async Task<bool> TryBranchAsync(WorkflowStep step, WorkflowContext ctx, CancellationToken ct)
         {
             foreach (var exe in _executors)
             {
@@ -374,8 +406,8 @@ public class WorkflowStateMachineSteps
                 {
                     try
                     {
-                        var result = await exe.ExecuteAsync(step, workflow, ct);
-                        if (result.IsSuccess)
+                        var result = await exe.ExecuteAsync(step, ctx, ct);
+                        if (result.Outcome == StepOutcome.Success)
                         {
                             return true;
                         }

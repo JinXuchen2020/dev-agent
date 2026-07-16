@@ -13,6 +13,12 @@ public sealed class ExecutionLogSettings
     public int RetentionDays { get; set; } = 90;
 
     /// <summary>
+    /// Gets or sets the number of days to retain execution payloads (request/response data) before cleanup.
+    /// Default: 30
+    /// </summary>
+    public int PayloadRetentionDays { get; set; } = 30;
+
+    /// <summary>
     /// Gets or sets the maximum number of log entries buffered before a batch write is triggered.
     /// Default: 50
     /// </summary>
@@ -23,4 +29,10 @@ public sealed class ExecutionLogSettings
     /// Default: false
     /// </summary>
     public bool SseEnabled { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets the interval in hours between automatic cleanup job runs.
+    /// Default: 24
+    /// </summary>
+    public int CheckIntervalHours { get; set; } = 24;
 }

@@ -41,6 +41,10 @@ internal sealed class CreateAgentRoleCommandHandler(
     public Task<AgentRoleResponse> Handle(
         CreateAgentRoleCommand request, CancellationToken ct)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.Name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.RoleCode);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.SystemPrompt);
+
         var definition = new AgentRoleDefinition(
             Guid.NewGuid(),
             request.Name,

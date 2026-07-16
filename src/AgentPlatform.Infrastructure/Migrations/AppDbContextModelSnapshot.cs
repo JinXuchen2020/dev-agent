@@ -4,7 +4,6 @@ using AgentPlatform.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
@@ -16,39 +15,82 @@ namespace AgentPlatform.Infrastructure.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.4")
-                .HasAnnotation("Relational:MaxIdentifierLength", 63);
+            modelBuilder.HasAnnotation("ProductVersion", "9.0.4");
 
-            NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
-
-            modelBuilder.Entity("AgentPlatform.Domain.Aggregates.AgentRoleDefinitions.AgentRoleDefinition", b =>
+            modelBuilder.Entity("AgentPlatform.Domain.Aggregates.AgentConfigurations.AgentConfiguration", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AgentTypeCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("YamlContent")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgentTypeCode");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "Status");
+
+                    b.ToTable("AgentConfigurations", (string)null);
+                });
+
+            modelBuilder.Entity("AgentPlatform.Domain.Aggregates.AgentRoleDefinitions.AgentRoleDefinition", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("RoleCode")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SystemPrompt")
                         .IsRequired()
                         .HasMaxLength(8000)
-                        .HasColumnType("character varying(8000)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -62,29 +104,29 @@ namespace AgentPlatform.Infrastructure.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SystemPrompt")
                         .IsRequired()
                         .HasMaxLength(8000)
-                        .HasColumnType("character varying(8000)");
+                        .HasColumnType("TEXT");
 
                     b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -95,24 +137,24 @@ namespace AgentPlatform.Infrastructure.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                        .HasColumnType("TEXT");
 
                     b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("TEXT");
 
                     b.Property<Guid?>("WorkflowId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -122,32 +164,32 @@ namespace AgentPlatform.Infrastructure.Migrations
             modelBuilder.Entity("AgentPlatform.Domain.Aggregates.ExecutionLogs.ExecutionLog", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTime>("StartedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                        .HasColumnType("TEXT");
 
                     b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("TotalSteps")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<Guid>("WorkflowId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowName")
                         .IsRequired()
                         .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -164,45 +206,45 @@ namespace AgentPlatform.Infrastructure.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("EndpointUrl")
                         .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("HandlerName")
                         .IsRequired()
                         .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("TEXT");
 
                     b.Property<bool>("IsEnabled")
-                        .HasColumnType("boolean");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ParametersSchema")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SkillPluginName")
                         .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Source")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                        .HasColumnType("TEXT");
 
                     b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -213,35 +255,72 @@ namespace AgentPlatform.Infrastructure.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Context")
                         .IsRequired()
                         .HasMaxLength(16000)
-                        .HasColumnType("character varying(16000)");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("CurrentState")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("TEXT");
 
                     b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
                     b.ToTable("Workflows", (string)null);
+                });
+
+            modelBuilder.Entity("AgentPlatform.Domain.Aggregates.AgentConfigurations.AgentConfiguration", b =>
+                {
+                    b.OwnsOne("AgentPlatform.Domain.ValueObjects.ConfigurationVersion", "Version", b1 =>
+                        {
+                            b1.Property<Guid>("AgentConfigurationId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("ChangeLog")
+                                .IsRequired()
+                                .HasMaxLength(2000)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("VersionChangeLog");
+
+                            b1.Property<int>("Major")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("VersionMajor");
+
+                            b1.Property<int>("Minor")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("VersionMinor");
+
+                            b1.Property<int>("Patch")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("VersionPatch");
+
+                            b1.HasKey("AgentConfigurationId");
+
+                            b1.ToTable("AgentConfigurations");
+
+                            b1.WithOwner()
+                                .HasForeignKey("AgentConfigurationId");
+                        });
+
+                    b.Navigation("Version")
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("AgentPlatform.Domain.Aggregates.Agents.Agent", b =>
@@ -249,24 +328,24 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.OwnsOne("AgentPlatform.Domain.ValueObjects.AgentType", "Role", b1 =>
                         {
                             b1.Property<Guid>("AgentId")
-                                .HasColumnType("uuid");
+                                .HasColumnType("TEXT");
 
                             b1.Property<string>("Description")
                                 .IsRequired()
                                 .HasMaxLength(500)
-                                .HasColumnType("character varying(500)")
+                                .HasColumnType("TEXT")
                                 .HasColumnName("RoleDescription");
 
                             b1.Property<string>("DisplayName")
                                 .IsRequired()
                                 .HasMaxLength(100)
-                                .HasColumnType("character varying(100)")
+                                .HasColumnType("TEXT")
                                 .HasColumnName("RoleDisplayName");
 
                             b1.Property<string>("RoleCode")
                                 .IsRequired()
                                 .HasMaxLength(50)
-                                .HasColumnType("character varying(50)")
+                                .HasColumnType("TEXT")
                                 .HasColumnName("RoleCode");
 
                             b1.HasKey("AgentId");
@@ -280,32 +359,32 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.OwnsOne("AgentPlatform.Domain.ValueObjects.ModelEndpoint", "ModelEndpoint", b1 =>
                         {
                             b1.Property<Guid>("AgentId")
-                                .HasColumnType("uuid");
+                                .HasColumnType("TEXT");
 
                             b1.Property<string>("ApiUrl")
                                 .IsRequired()
                                 .HasMaxLength(500)
-                                .HasColumnType("character varying(500)")
+                                .HasColumnType("TEXT")
                                 .HasColumnName("ModelApiUrl");
 
                             b1.Property<int>("MaxTokens")
-                                .HasColumnType("integer")
+                                .HasColumnType("INTEGER")
                                 .HasColumnName("ModelMaxTokens");
 
                             b1.Property<string>("ModelName")
                                 .IsRequired()
                                 .HasMaxLength(100)
-                                .HasColumnType("character varying(100)")
+                                .HasColumnType("TEXT")
                                 .HasColumnName("ModelName");
 
                             b1.Property<string>("Provider")
                                 .IsRequired()
                                 .HasMaxLength(50)
-                                .HasColumnType("character varying(50)")
+                                .HasColumnType("TEXT")
                                 .HasColumnName("ModelProvider");
 
                             b1.Property<double>("Temperature")
-                                .HasColumnType("double precision")
+                                .HasColumnType("REAL")
                                 .HasColumnName("ModelTemperature");
 
                             b1.HasKey("AgentId");
@@ -328,14 +407,14 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.OwnsOne("AgentPlatform.Domain.ValueObjects.TokenUsage", "TotalTokenUsage", b1 =>
                         {
                             b1.Property<Guid>("ConversationId")
-                                .HasColumnType("uuid");
+                                .HasColumnType("TEXT");
 
                             b1.Property<int>("CompletionTokens")
-                                .HasColumnType("integer")
+                                .HasColumnType("INTEGER")
                                 .HasColumnName("CompletionTokens");
 
                             b1.Property<int>("PromptTokens")
-                                .HasColumnType("integer")
+                                .HasColumnType("INTEGER")
                                 .HasColumnName("PromptTokens");
 
                             b1.HasKey("ConversationId");
@@ -350,30 +429,30 @@ namespace AgentPlatform.Infrastructure.Migrations
                         {
                             b1.Property<Guid>("Id")
                                 .ValueGeneratedOnAdd()
-                                .HasColumnType("uuid");
+                                .HasColumnType("TEXT");
 
                             b1.Property<string>("Content")
                                 .IsRequired()
                                 .HasMaxLength(16000)
-                                .HasColumnType("character varying(16000)");
+                                .HasColumnType("TEXT");
 
                             b1.Property<Guid>("ConversationId")
-                                .HasColumnType("uuid");
+                                .HasColumnType("TEXT");
 
                             b1.Property<DateTime>("CreatedAt")
-                                .HasColumnType("timestamp with time zone");
+                                .HasColumnType("TEXT");
 
                             b1.Property<string>("Role")
                                 .IsRequired()
                                 .HasMaxLength(50)
-                                .HasColumnType("character varying(50)");
+                                .HasColumnType("TEXT");
 
                             b1.Property<string>("ToolCalls")
                                 .HasMaxLength(8000)
-                                .HasColumnType("character varying(8000)");
+                                .HasColumnType("TEXT");
 
                             b1.Property<DateTime>("UpdatedAt")
-                                .HasColumnType("timestamp with time zone");
+                                .HasColumnType("TEXT");
 
                             b1.HasKey("Id");
 
@@ -387,14 +466,14 @@ namespace AgentPlatform.Infrastructure.Migrations
                             b1.OwnsOne("AgentPlatform.Domain.ValueObjects.TokenUsage", "TokenUsage", b2 =>
                                 {
                                     b2.Property<Guid>("MessageId")
-                                        .HasColumnType("uuid");
+                                        .HasColumnType("TEXT");
 
                                     b2.Property<int>("CompletionTokens")
-                                        .HasColumnType("integer")
+                                        .HasColumnType("INTEGER")
                                         .HasColumnName("MsgCompletionTokens");
 
                                     b2.Property<int>("PromptTokens")
-                                        .HasColumnType("integer")
+                                        .HasColumnType("INTEGER")
                                         .HasColumnName("MsgPromptTokens");
 
                                     b2.HasKey("MessageId");
@@ -419,40 +498,40 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.OwnsMany("AgentPlatform.Domain.Aggregates.ExecutionLogs.ExecutionLogEntry", "Entries", b1 =>
                         {
                             b1.Property<Guid>("Id")
-                                .HasColumnType("uuid");
+                                .HasColumnType("TEXT");
 
                             b1.Property<DateTime>("CompletedAt")
-                                .HasColumnType("timestamp with time zone");
+                                .HasColumnType("TEXT");
 
                             b1.Property<TimeSpan>("Duration")
-                                .HasColumnType("interval");
+                                .HasColumnType("TEXT");
 
                             b1.Property<string>("ErrorDetail")
                                 .HasMaxLength(2000)
-                                .HasColumnType("character varying(2000)");
+                                .HasColumnType("TEXT");
 
                             b1.Property<Guid>("ExecutionLogId")
-                                .HasColumnType("uuid");
+                                .HasColumnType("TEXT");
 
                             b1.Property<string>("Result")
                                 .HasMaxLength(4000)
-                                .HasColumnType("character varying(4000)");
+                                .HasColumnType("TEXT");
 
                             b1.Property<DateTime>("StartedAt")
-                                .HasColumnType("timestamp with time zone");
+                                .HasColumnType("TEXT");
 
                             b1.Property<string>("Status")
                                 .IsRequired()
                                 .HasMaxLength(50)
-                                .HasColumnType("character varying(50)");
+                                .HasColumnType("TEXT");
 
                             b1.Property<string>("StepName")
                                 .IsRequired()
                                 .HasMaxLength(200)
-                                .HasColumnType("character varying(200)");
+                                .HasColumnType("TEXT");
 
                             b1.Property<int>("StepOrder")
-                                .HasColumnType("integer");
+                                .HasColumnType("INTEGER");
 
                             b1.HasKey("Id");
 
@@ -473,37 +552,37 @@ namespace AgentPlatform.Infrastructure.Migrations
                         {
                             b1.Property<Guid>("Id")
                                 .ValueGeneratedOnAdd()
-                                .HasColumnType("uuid");
+                                .HasColumnType("TEXT");
 
                             b1.Property<Guid?>("AssignedAgentId")
-                                .HasColumnType("uuid");
+                                .HasColumnType("TEXT");
 
                             b1.Property<string>("ErrorDetail")
                                 .HasMaxLength(8000)
-                                .HasColumnType("character varying(8000)");
+                                .HasColumnType("TEXT");
 
                             b1.Property<int>("Order")
-                                .HasColumnType("integer");
+                                .HasColumnType("INTEGER");
 
                             b1.Property<string>("Result")
                                 .HasMaxLength(16000)
-                                .HasColumnType("character varying(16000)");
+                                .HasColumnType("TEXT");
 
                             b1.Property<string>("State")
                                 .IsRequired()
                                 .HasMaxLength(50)
-                                .HasColumnType("character varying(50)");
+                                .HasColumnType("TEXT");
 
                             b1.Property<string>("StepName")
                                 .IsRequired()
                                 .HasMaxLength(200)
-                                .HasColumnType("character varying(200)");
+                                .HasColumnType("TEXT");
 
                             b1.Property<DateTime>("UpdatedAt")
-                                .HasColumnType("timestamp with time zone");
+                                .HasColumnType("TEXT");
 
                             b1.Property<Guid>("WorkflowId")
-                                .HasColumnType("uuid");
+                                .HasColumnType("TEXT");
 
                             b1.HasKey("Id");
 

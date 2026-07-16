@@ -1,6 +1,7 @@
 using System.Linq.Expressions;
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Domain.Abstractions;
+using AgentPlatform.Domain.Aggregates.AgentConfigurations;
 using AgentPlatform.Domain.Aggregates.Agents;
 using AgentPlatform.Domain.Aggregates.Conversations;
 using AgentPlatform.Domain.Aggregates.ToolDefinitions;
@@ -62,6 +63,11 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
     /// </summary>
     public DbSet<Domain.Aggregates.AgentRoleDefinitions.AgentRoleDefinition> AgentRoleDefinitions =>
         Set<Domain.Aggregates.AgentRoleDefinitions.AgentRoleDefinition>();
+
+    /// <summary>
+    /// Gets the <see cref="DbSet{TEntity}"/> providing access to persisted agent configuration definitions.
+    /// </summary>
+    public DbSet<AgentConfiguration> AgentConfigurations => Set<AgentConfiguration>();
 
     /// <summary>
     /// Returns all aggregate roots currently tracked by the change tracker, used for dispatching domain events on save.

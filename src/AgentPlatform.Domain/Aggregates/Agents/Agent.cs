@@ -29,7 +29,7 @@ public sealed class Agent : ITenantScoped, IAggregateRoot
     /// <summary>
     /// Gets the functional role assigned to the agent.
     /// </summary>
-    public AgentType Role { get; private init; } = null!;
+    public AgentType Role { get; private init; } = null!; // EF Core proxy
 
     /// <summary>
     /// Gets or sets the model endpoint configuration used by the agent for LLM invocations.

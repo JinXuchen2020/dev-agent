@@ -6,6 +6,7 @@ namespace AgentPlatform.Application.Abstractions;
 /// <summary>
 /// Provides operations for managing the lifecycle of a workflow, including starting, pausing, resuming, retrying, and rolling back steps.
 /// </summary>
+[Obsolete("Replaced by IOrchestrationPrimitive (Blueprint C.2). All new orchestration goes through the single primitive with preset routing.")]
 public interface IWorkflowEngine
 {
     /// <summary>

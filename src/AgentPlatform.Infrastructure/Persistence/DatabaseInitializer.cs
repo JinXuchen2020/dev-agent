@@ -1,9 +1,11 @@
 using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Domain.Aggregates.AgentConfigurations;
 using AgentPlatform.Domain.Aggregates.AgentRoleDefinitions;
 using AgentPlatform.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace AgentPlatform.Infrastructure.Persistence;
 
@@ -15,25 +17,31 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
     private readonly AppDbContext _context;
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<DatabaseInitializer> _logger;
+    private readonly TenantSettings _tenantSettings;
+
+    // Default tenant GUID used when no tenant is configured (all-zeros is explicit sentinel)
+    private static readonly Guid DefaultTenantIdSeed = Guid.Parse("00000000-0000-0000-0000-000000000001");
 
     public DatabaseInitializer(
         AppDbContext context,
         IServiceProvider serviceProvider,
-        ILogger<DatabaseInitializer> logger)
+        ILogger<DatabaseInitializer> logger,
+        IOptions<TenantSettings> tenantSettings)
     {
         _context = context;
         _serviceProvider = serviceProvider;
         _logger = logger;
+        _tenantSettings = tenantSettings.Value;
     }
 
-    public async Task InitializeAsync()
+    public async Task InitializeAsync(CancellationToken ct = default)
     {
         try
         {
             _logger.LogInformation("Initializing database...");
 
             // 显式创建数据库和表
-            var created = await _context.Database.EnsureCreatedAsync();
+            var created = await _context.Database.EnsureCreatedAsync(ct);
             if (created)
             {
                 _logger.LogInformation("Database created for the first time.");
@@ -44,11 +52,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
             }
 
             // 初始化种子数据
-            await SeedDataAsync();
-
-            // 保存所有更改
-            var saved = await _context.SaveChangesAsync();
-            _logger.LogInformation("Database initialization completed with {Count} entities saved.", saved);
+            await SeedDataAsync(ct);
         }
         catch (Exception ex)
         {
@@ -57,14 +61,14 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         }
     }
 
-    private async Task SeedDataAsync()
+    private async Task SeedDataAsync(CancellationToken ct = default)
     {
         try
         {
             _logger.LogInformation("Seeding initial data...");
 
             // 检查是否已经有数据
-            var roleCount = await _context.AgentRoleDefinitions.CountAsync();
+            var roleCount = await _context.AgentRoleDefinitions.CountAsync(ct);
             if (roleCount > 0)
             {
                 _logger.LogInformation("Database already contains {Count} agent role definitions, skipping seed", roleCount);
@@ -118,12 +122,64 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
                 )
             };
 
-            await _context.AgentRoleDefinitions.AddRangeAsync(roles);
+            await _context.AgentRoleDefinitions.AddRangeAsync(roles, ct);
             _logger.LogInformation("Added {Count} agent role definitions to context, saving...", roles.Count);
             
             // 调用 SaveChangesAsync 保存到数据库
-            await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync(ct);
             _logger.LogInformation("Successfully seeded {Count} agent role definitions", roles.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to seed data, but continuing with startup");
+            _logger.LogWarning("This may cause issues when querying tables. Please check the database initialization.");
+        }
+
+        // Seed default agent configurations
+        try
+        {
+            var configCount = await _context.AgentConfigurations.CountAsync(ct);
+            if (configCount > 0)
+            {
+                _logger.LogInformation("Database already contains {Count} agent configurations, skipping seed", configCount);
+                return;
+            }
+
+            var defaultTenantId = _tenantSettings.DefaultTenantId != Guid.Empty
+                ? _tenantSettings.DefaultTenantId
+                : DefaultTenantIdSeed;
+            var configurations = new List<AgentConfiguration>
+            {
+                new(
+                    Guid.NewGuid(),
+                    "Default Requirement Agent",
+                    "name: requirement-agent\nsystem_prompt: \"You are a professional requirements analyst...\"\nmodel: deepseek-chat\ntemperature: 0.3",
+                    defaultTenantId,
+                    version: ConfigurationVersion.Initial,
+                    description: "Default configuration for the requirements analyst agent role",
+                    agentTypeCode: "requirement"),
+                new(
+                    Guid.NewGuid(),
+                    "Default Development Agent",
+                    "name: development-agent\nsystem_prompt: \"You are an experienced software engineer...\"\nmodel: deepseek-chat\ntemperature: 0.5",
+                    defaultTenantId,
+                    version: ConfigurationVersion.Initial,
+                    description: "Default configuration for the development agent role",
+                    agentTypeCode: "development"),
+                new(
+                    Guid.NewGuid(),
+                    "Default Architecture Agent",
+                    "name: architecture-agent\nsystem_prompt: \"You are a senior system architect...\"\nmodel: deepseek-chat\ntemperature: 0.4",
+                    defaultTenantId,
+                    version: ConfigurationVersion.Initial,
+                    description: "Default configuration for the architecture agent role",
+                    agentTypeCode: "architecture"),
+            };
+
+            await _context.AgentConfigurations.AddRangeAsync(configurations, ct);
+            _logger.LogInformation("Added {Count} default agent configurations to context, saving...", configurations.Count);
+            await _context.SaveChangesAsync(ct);
+            _logger.LogInformation("Successfully seeded {Count} default agent configurations", configurations.Count);
         }
         catch (Exception ex)
         {

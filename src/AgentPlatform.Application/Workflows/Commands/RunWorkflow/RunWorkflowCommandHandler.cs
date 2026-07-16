@@ -1,31 +1,28 @@
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Domain.Aggregates.Workflows;
-using AgentPlatform.Domain.Repositories;
 using MediatR;
 
 namespace AgentPlatform.Application.Workflows.Commands.RunWorkflow;
 
 internal sealed class RunWorkflowCommandHandler : IRequestHandler<RunWorkflowCommand, Workflow>
 {
-    private readonly IWorkflowRepository _repository;
-    private readonly IWorkflowEngine _workflowEngine;
+    private readonly IOrchestrationPrimitive _primitive;
 
-    public RunWorkflowCommandHandler(
-        IWorkflowRepository repository,
-        IWorkflowEngine workflowEngine)
+    public RunWorkflowCommandHandler(IOrchestrationPrimitive primitive)
     {
-        _repository = repository;
-        _workflowEngine = workflowEngine;
+        _primitive = primitive;
     }
 
     public async Task<Workflow> Handle(RunWorkflowCommand request, CancellationToken ct)
     {
         var workflow = new Workflow(Guid.NewGuid(), request.Name, request.TenantId);
-        workflow.UpdateContext(request.InitialContext);
 
-        _repository.Add(workflow);
-        await _workflowEngine.StartAsync(workflow, ct);
+        if (!string.IsNullOrWhiteSpace(request.InitialContext))
+        {
+            workflow.UpdateContext(request.InitialContext);
+        }
 
-        return workflow;
+        // The orchestration primitive handles per-step persistence internally
+        return await _primitive.RunAsync(workflow, request.Preset, ct);
     }
 }

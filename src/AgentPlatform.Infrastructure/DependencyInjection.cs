@@ -6,10 +6,13 @@ using AgentPlatform.Domain.Aggregates.Workflows.Events;
 using AgentPlatform.Domain.Repositories;
 using AgentPlatform.Infrastructure.Agents;
 using AgentPlatform.Infrastructure.Cache;
+using AgentPlatform.Infrastructure.Configuration;
+using AgentPlatform.Infrastructure.Jobs;
 using AgentPlatform.Infrastructure.Models;
 using AgentPlatform.Infrastructure.Models.RoutingMiddleware;
 using AgentPlatform.Infrastructure.Persistence;
 using AgentPlatform.Infrastructure.Persistence.Repositories;
+using AgentPlatform.Infrastructure.Progress;
 using AgentPlatform.Infrastructure.Sandbox;
 using AgentPlatform.Infrastructure.Tools;
 using AgentPlatform.Infrastructure.VectorStore;
@@ -84,6 +87,8 @@ public static class DependencyInjection
         services.AddScoped<IWorkflowRepository, WorkflowRepository>();
         services.AddScoped<IExecutionLogRepository, ExecutionLogRepository>();
         services.AddScoped<IAgentRoleDefinitionRepository, AgentRoleDefinitionRepository>();
+        services.AddScoped<IAgentConfigurationRepository, AgentConfigurationRepository>();
+        services.AddSingleton<IYamlConfigurationParser, YamlConfigurationParserService>();
         services.AddSingleton<IToolRegistry, InMemoryToolRegistry>();
         services.AddScoped<IVectorStore, PgVectorStore>();
         services.AddScoped<ICodeSandbox, DockerCodeSandbox>();
@@ -115,10 +120,30 @@ public static class DependencyInjection
 
         services.AddScoped<ITenantProvider, TenantProvider>();
         services.AddScoped<IResiliencePipelineProvider, ResiliencePipelineProvider>();
-        services.AddScoped<WorkflowStateMachineEngine>();
-        services.AddScoped<IWorkflowEngine>(sp => sp.GetRequiredService<WorkflowStateMachineEngine>());
-        services.AddScoped<IStateMachineEngine>(sp => sp.GetRequiredService<WorkflowStateMachineEngine>());
+        // ── Orchestration Primitive (Blueprint C.2) ──
+        // Single engine replacing WorkflowStateMachineEngine + AutoGenAgentOrchestrator + IWorkflowEngine
+        services.AddScoped<IOrchestrationPrimitive, OrchestrationPrimitive>();
+        // Legacy: StubWorkflowEngine kept for Phase 1 backward compat only.
+        // Fully replaced by OrchestrationPrimitive. Scheduled for removal in Phase 3 cleanup.
+#pragma warning disable CS0618 // Type is legacy - kept for backward compat
+        services.AddScoped<IWorkflowEngine, StubWorkflowEngine>();
+#pragma warning restore CS0618
+
+        // Obsolete - replaced by IOrchestrationPrimitive (Blueprint C.2).
+        // Registered only to satisfy DI contract while awaiting removal in Phase 3.
+        services.AddScoped<IStateMachineEngine>(sp =>
+            throw new InvalidOperationException(
+                "IStateMachineEngine is obsolete and has been replaced by IOrchestrationPrimitive. " +
+                "Use OrchestrationPreset.Sequential or OrchestrationPreset.Negotiation instead."));
+
+        // Step executors for the engine
         services.AddScoped<IStepExecutor, AgentCallStepExecutor>();
+        services.AddScoped<IStepExecutor, CriticStepExecutor>();
+
+        // Strategy implementations for presets
+        services.AddScoped<ISelectionStrategy, RoleBasedSelectionStrategy>();
+        services.AddScoped<ITerminationCondition, CriticConvergenceTermination>();
+
         services.AddScoped<IDatabaseInitializer, DatabaseInitializer>();
 
         var smSection = configuration.GetSection("StateMachine");
@@ -138,6 +163,9 @@ public static class DependencyInjection
             SseEnabled = bool.TryParse(elSection["SseEnabled"], out var sse) && sse
         };
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(executionLogSettings));
+
+        // Register SSE progress broadcaster as singleton (manages per-workflow channels)
+        services.AddSingleton<IExecutionProgressBroadcaster, ExecutionProgressBroadcaster>();
 
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AppDbContext>());
         services.AddScoped<IModelRouter, ModelRouter>();
@@ -160,12 +188,15 @@ public static class DependencyInjection
             DefaultModelId = agSection["DefaultModelId"] ?? "deepseek-chat"
         };
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(autoGenSettings));
-        services.AddScoped<IAgentOrchestrator, AutoGenAgentOrchestrator>();
+        // IAgentOrchestrator fully replaced by IOrchestrationPrimitive (Blueprint C.2)
 
         services.AddScoped<ToolCallingDispatcher>();
         services.AddScoped<IToolExecutor, NativeToolExecutor>();
         services.AddScoped<IToolExecutor, SkillPackageExecutor>();
         services.AddScoped<IToolExecutor, McpClient>();
+
+        // Register execution log cleanup background job
+        services.AddHostedService<ExecutionLogCleanupJob>();
 
         return services;
     }

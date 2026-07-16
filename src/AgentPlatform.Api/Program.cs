@@ -1,11 +1,13 @@
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using AgentPlatform.Api.Diagnostics;
 using AgentPlatform.Api.Middleware;
 using AgentPlatform.Application;
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Infrastructure;
 using AgentPlatform.Infrastructure.Persistence;
+using OpenTelemetry.Metrics;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -80,6 +82,14 @@ builder.Services.PostConfigure<PricingSettings>(pricing =>
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
+// OpenTelemetry — metrics + tracing
+builder.Services.AddOpenTelemetry()
+    .WithMetrics(metrics => metrics
+        .AddMeter(DiagnosticsConfig.ServiceName)
+        .AddMeter(AgentPlatform.Application.Diagnostics.WorkflowMetrics.MeterName)
+        .AddAspNetCoreInstrumentation()
+        .AddPrometheusExporter());
+
 var app = builder.Build();
 
 // 初始化数据库（仅开发环境）
@@ -102,6 +112,7 @@ app.UseSwaggerUI();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseMiddleware<MetricsMiddleware>();
 
 if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("QuickStart"))
 {
@@ -113,9 +124,9 @@ else
 }
 
 app.UseCors();
-// 阶段二启用: app.UseAuthorization();
 app.MapControllers();
 app.MapHealthChecks("/health");
+app.MapPrometheusScrapingEndpoint("/metrics");
 
 app.Run();
 

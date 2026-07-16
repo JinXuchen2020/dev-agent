@@ -11,18 +11,18 @@ public sealed record AgentType
     /// Gets the unique code identifying this agent role (e.g., "developer", "architect").
     /// This code is used for storage, lookup, and matching in the database and API.
     /// </summary>
-    public string RoleCode { get; init; } = null!;
+    public string RoleCode { get; init; } = null!; // EF Core proxy
 
     /// <summary>
     /// Gets the human-readable display name of this agent role (e.g., "Senior Developer").
     /// Used for UI presentation and logging.
     /// </summary>
-    public string DisplayName { get; init; } = null!;
+    public string DisplayName { get; init; } = null!; // EF Core proxy
 
     /// <summary>
     /// Gets a description of the responsibilities and capabilities of this agent role.
     /// </summary>
-    public string Description { get; init; } = null!;
+    public string Description { get; init; } = null!; // EF Core proxy
 
     /// <summary>
     /// Private parameterless constructor for EF Core materialization.

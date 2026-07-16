@@ -3,6 +3,7 @@
 ## Goal
 - Phase 1 MVP complete: 7 projects scaffolded, DDD clean architecture, MediatR pipeline, routing/cost-control, domain events, ITenantScoped entities, SpecFlow BDD acceptance, ConversationsController through MediatR.
 - Phase 2 complete: Multi-agent workflow with state machine, Redis short-term memory, AutoGen orchestration, ExecutionLog persistence, swappable database, CQRS query endpoints.
+- Phase 3 complete: 平台化 — 可视化编排 (React Flow 拖拽编辑器 + 9 页面全功能前端)、OpenTelemetry 监控 (API/workflow/model 三类指标, Prometheus + Grafana)、自定义 AgentType (AgentRoles/AgentConfigurations CRUD)、ExecutionLog 4 端点查询 + SSE 进度推送、日志清理 Job、CI/CD GitHub Actions、k6 性能基准脚本
 
 ## Constraints & Preferences
 - DDD dependency direction: Api → Application → Domain, Infrastructure → Application, Workflow → Application, Domain zero external dependencies
@@ -35,6 +36,23 @@
 - ✅ DomainEventBus moved to Infrastructure (P1 DDD fix)
 - ✅ WorkflowStateMachineEngine.GetStatusAsync returns actual state (P2 logic fix)
 
+### Done (Phase 3)
+- ✅ ExecutionLog 查询 API — 4 endpoints: 列表/详情/步骤/错误筛选
+- ✅ SSE 进度推送 — IExecutionProgressBroadcaster + Channel-based singleton + WorkflowProgressController SSE endpoint
+- ✅ 日志清理 Job — ExecutionLogCleanupJob (BackgroundService, 24h 间隔, configurable retention)
+- ✅ Workflow CQRS — ListWorkflowsQuery + GetWorkflowQuery + RunWorkflowCommand + WorkflowsController
+- ✅ Frontend React 19 + Vite + Ant D + zustand + React Router + axios — 9 pages with real API calls
+- ✅ React Flow drag-drop workflow editor — WorkflowEditorPage (add steps, connect edges, save & run)
+- ✅ OpenTelemetry metrics — DiagnosticsConfig + MetricsMiddleware + WorkflowMetrics (Application layer) covering §8.1
+- ✅ Prometheus exporter at /metrics — OpenTelemetry.Exporter.Prometheus.AspNetCore registered in Program.cs
+- ✅ CI/CD — .github/workflows/build-and-test.yml (dotnet build + test, npm build)
+- ✅ Performance benchmark — benchmark/workflow-load-test.js (k6, 5-20 concurrent VUs, staged ramp)
+- ✅ AgentRolesPage partitioned display — built-in vs custom roles with separate Card sections
+- ✅ Phase 3 blueprint (phases/phase-3-platformization.md) — all checkboxes marked done, 100%
+- ✅ Metrics: api.requests.total, api.errors.total, api.request.duration_ms (Middleware); model.call.total, model.call.duration_ms (SemanticKernelModelClient); workflow.step.duration_ms, workflow.completed.total (event handlers)
+- ✅ Deploy config: prometheus.yml + grafana-dashboard.json + docker-compose.monitoring.yml
+- ✅ Build: 0 warnings, 0 errors — Tests: 63/63 passing
+
 ### In Progress
 - (none)
 
@@ -60,9 +78,9 @@
 - Scalar/OpenAPI/Swagger: 所有环境默认启用 (已移除环境限制)
 
 ## Next Steps
-- Phase 3: 平台化 — 可视化编排（React Flow）、OpenTelemetry 监控、自定义 AgentType 后端 API、JWT/Identity 安全、ExecutionLog 查询 API + SSE 进度推送、日志清理 Job
+- Phase 4: 前沿特性 — Code Agent、vLLM 深度集成、BDD 全量覆盖、性能优化、JWT/Identity 安全
 - 解决 Phase 2 审查遗留问题：注册分支执行器、持久化重试计数器、真实 AutoGen .NET 集成
-- 蓝图同步: 版本 v1.5, Phase 2 清单已勾选
+- 蓝图同步: 版本 v1.5, Phase 2 清单已勾选, Phase 3 全部完成
 
 ## Critical Context
 - .NET 9, SK 1.30 (IChatCompletionService in Microsoft.SemanticKernel.ChatCompletion, metadata keys: "Usage.InputTokens", "Usage.OutputTokens")

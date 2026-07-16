@@ -15,6 +15,7 @@ public sealed class WorkflowStartedEventHandler
 {
     private readonly IExecutionLogRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IExecutionProgressBroadcaster _broadcaster;
     private readonly ILogger<WorkflowStartedEventHandler> _logger;
 
     /// <summary>
@@ -22,14 +23,17 @@ public sealed class WorkflowStartedEventHandler
     /// </summary>
     /// <param name="repository">The execution log repository for persisting log entries.</param>
     /// <param name="unitOfWork">The unit of work for persisting changes.</param>
+    /// <param name="broadcaster">The progress broadcaster for SSE streaming.</param>
     /// <param name="logger">The logger used to capture workflow start events.</param>
     public WorkflowStartedEventHandler(
         IExecutionLogRepository repository,
         IUnitOfWork unitOfWork,
+        IExecutionProgressBroadcaster broadcaster,
         ILogger<WorkflowStartedEventHandler> logger)
     {
         _repository = repository;
         _unitOfWork = unitOfWork;
+        _broadcaster = broadcaster;
         _logger = logger;
     }
 
@@ -57,5 +61,17 @@ public sealed class WorkflowStartedEventHandler
 
         _logger.LogInformation(
             "Execution log {LogId} created for workflow {WorkflowId}", log.Id, evt.WorkflowId);
+
+        // Broadcast progress for SSE subscribers
+        await _broadcaster.PublishAsync(evt.WorkflowId, new ExecutionProgressEvent(
+            Type: "workflow_started",
+            WorkflowId: evt.WorkflowId,
+            ExecutionLogId: log.Id,
+            StepName: null,
+            StepOrder: null,
+            Status: "running",
+            Result: null,
+            ErrorDetail: null,
+            Timestamp: DateTime.UtcNow), ct);
     }
 }

@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\AgentPlatform.Application\AgentPlatform.Application.csproj" />
     <ProjectReference Include="..\AgentPlatform.Domain\AgentPlatform.Domain.csproj" />
+    <ProjectReference Include="..\AgentPlatform.Infrastructure\AgentPlatform.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

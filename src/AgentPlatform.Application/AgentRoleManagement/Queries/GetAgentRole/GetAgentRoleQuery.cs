@@ -29,6 +29,8 @@ internal sealed class GetAgentRoleQueryHandler(
     public async Task<AgentRoleSummary?> Handle(
         GetAgentRoleQuery request, CancellationToken ct)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.RoleCode);
+
         var role = await repository.GetByRoleCodeAsync(request.RoleCode, ct);
         if (role == null)
             return null;

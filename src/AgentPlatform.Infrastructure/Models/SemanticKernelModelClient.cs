@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Application.Diagnostics;
 using AgentPlatform.Domain.Enums;
 using AgentPlatform.Domain.ValueObjects;
 using Microsoft.Extensions.Configuration;
@@ -128,8 +130,21 @@ internal sealed class SemanticKernelModelClient : IModelClient
         if (!_services.TryGetValue(modelId, out var service))
             throw new ArgumentException($"Model '{modelId}' not registered", nameof(modelId));
 
+        var sw = Stopwatch.StartNew();
+        var provider = modelId.Contains(':') ? modelId.Split(':')[0] : "unknown";
+        var modelName = modelId.Contains(':') ? modelId.Split(':')[1] : modelId;
+
         var chatHistory = ToChatHistory(messages);
         var reply = await service.GetChatMessageContentAsync(chatHistory, cancellationToken: ct);
+        sw.Stop();
+
+        // Record model call metrics
+        WorkflowMetrics.ModelCallCounter.Add(1,
+            new KeyValuePair<string, object?>("provider", provider),
+            new KeyValuePair<string, object?>("model", modelName));
+        WorkflowMetrics.ModelCallDuration.Record(sw.ElapsedMilliseconds,
+            new KeyValuePair<string, object?>("provider", provider),
+            new KeyValuePair<string, object?>("model", modelName));
 
         var promptTokens = 0;
         var completionTokens = 0;

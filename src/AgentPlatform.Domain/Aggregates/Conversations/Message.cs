@@ -49,7 +49,7 @@ public sealed class Message
     /// </summary>
     private Message()
     {
-        Content = null!;
+        Content = null!; // EF Core proxy
     }
 
     /// <summary>

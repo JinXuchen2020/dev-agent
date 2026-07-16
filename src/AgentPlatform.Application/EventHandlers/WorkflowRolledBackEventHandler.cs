@@ -1,4 +1,5 @@
 using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Application.Diagnostics;
 using AgentPlatform.Domain.Aggregates.Workflows.Events;
 using AgentPlatform.Domain.Repositories;
 using MediatR;
@@ -14,6 +15,7 @@ public sealed class WorkflowRolledBackEventHandler
 {
     private readonly IExecutionLogRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IExecutionProgressBroadcaster _broadcaster;
     private readonly ILogger<WorkflowRolledBackEventHandler> _logger;
 
     /// <summary>
@@ -21,14 +23,17 @@ public sealed class WorkflowRolledBackEventHandler
     /// </summary>
     /// <param name="repository">The execution log repository for persisting log entries.</param>
     /// <param name="unitOfWork">The unit of work for persisting changes.</param>
+    /// <param name="broadcaster">The progress broadcaster for SSE streaming.</param>
     /// <param name="logger">The logger used to capture workflow rollback events.</param>
     public WorkflowRolledBackEventHandler(
         IExecutionLogRepository repository,
         IUnitOfWork unitOfWork,
+        IExecutionProgressBroadcaster broadcaster,
         ILogger<WorkflowRolledBackEventHandler> logger)
     {
         _repository = repository;
         _unitOfWork = unitOfWork;
+        _broadcaster = broadcaster;
         _logger = logger;
     }
 
@@ -58,5 +63,21 @@ public sealed class WorkflowRolledBackEventHandler
         _logger.LogWarning(
             "Execution log for workflow {WorkflowId} marked as rolled back (failed step: {FailedStep})",
             evt.WorkflowId, evt.FailedStepName);
+
+        await _broadcaster.PublishAsync(evt.WorkflowId, new ExecutionProgressEvent(
+            Type: "workflow_rolledback",
+            WorkflowId: evt.WorkflowId,
+            ExecutionLogId: log.Id,
+            StepName: evt.FailedStepName,
+            StepOrder: null,
+            Status: "rolledback",
+            Result: null,
+            ErrorDetail: evt.ErrorDetail,
+            Timestamp: DateTime.UtcNow), ct);
+
+        // Record workflow rollback metric
+        WorkflowMetrics.WorkflowCompletedCounter.Add(1,
+            new KeyValuePair<string, object?>("result", "rolledback"),
+            new KeyValuePair<string, object?>("workflow_id", evt.WorkflowId));
     }
 }

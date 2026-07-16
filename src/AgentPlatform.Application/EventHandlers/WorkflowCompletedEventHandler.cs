@@ -1,4 +1,5 @@
 using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Application.Diagnostics;
 using AgentPlatform.Domain.Aggregates.Workflows.Events;
 using AgentPlatform.Domain.Repositories;
 using MediatR;
@@ -14,6 +15,7 @@ public sealed class WorkflowCompletedEventHandler
 {
     private readonly IExecutionLogRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IExecutionProgressBroadcaster _broadcaster;
     private readonly ILogger<WorkflowCompletedEventHandler> _logger;
 
     /// <summary>
@@ -21,14 +23,17 @@ public sealed class WorkflowCompletedEventHandler
     /// </summary>
     /// <param name="repository">The execution log repository for persisting log entries.</param>
     /// <param name="unitOfWork">The unit of work for persisting changes.</param>
+    /// <param name="broadcaster">The progress broadcaster for SSE streaming.</param>
     /// <param name="logger">The logger used to capture workflow completion events.</param>
     public WorkflowCompletedEventHandler(
         IExecutionLogRepository repository,
         IUnitOfWork unitOfWork,
+        IExecutionProgressBroadcaster broadcaster,
         ILogger<WorkflowCompletedEventHandler> logger)
     {
         _repository = repository;
         _unitOfWork = unitOfWork;
+        _broadcaster = broadcaster;
         _logger = logger;
     }
 
@@ -57,5 +62,21 @@ public sealed class WorkflowCompletedEventHandler
 
         _logger.LogInformation(
             "Execution log for workflow {WorkflowId} marked as completed", evt.WorkflowId);
+
+        await _broadcaster.PublishAsync(evt.WorkflowId, new ExecutionProgressEvent(
+            Type: "workflow_completed",
+            WorkflowId: evt.WorkflowId,
+            ExecutionLogId: log.Id,
+            StepName: null,
+            StepOrder: null,
+            Status: "completed",
+            Result: null,
+            ErrorDetail: null,
+            Timestamp: DateTime.UtcNow), ct);
+
+        // Record workflow success metric
+        WorkflowMetrics.WorkflowCompletedCounter.Add(1,
+            new KeyValuePair<string, object?>("result", "success"),
+            new KeyValuePair<string, object?>("workflow_id", evt.WorkflowId));
     }
 }

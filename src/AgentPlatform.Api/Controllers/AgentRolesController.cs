@@ -87,7 +87,14 @@ public sealed class AgentRolesController : ControllerBase
 /// Request model for creating a custom agent role.
 /// </summary>
 public sealed record CreateAgentRoleRequest(
+    [property: System.ComponentModel.DataAnnotations.Required]
+    [property: System.ComponentModel.DataAnnotations.StringLength(200, MinimumLength = 1)]
     string Name,
+    [property: System.ComponentModel.DataAnnotations.Required]
+    [property: System.ComponentModel.DataAnnotations.StringLength(100, MinimumLength = 1)]
     string RoleCode,
+    [property: System.ComponentModel.DataAnnotations.StringLength(500)]
     string? Description,
+    [property: System.ComponentModel.DataAnnotations.Required]
+    [property: System.ComponentModel.DataAnnotations.StringLength(8000)]
     string SystemPrompt);

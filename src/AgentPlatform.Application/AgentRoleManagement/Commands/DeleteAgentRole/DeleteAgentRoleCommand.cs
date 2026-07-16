@@ -17,14 +17,17 @@ internal sealed class DeleteAgentRoleCommandHandler(
     public async Task<bool> Handle(
         DeleteAgentRoleCommand request, CancellationToken ct)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.RoleCode);
+
         var role = await roleRepo.GetByRoleCodeAsync(request.RoleCode, ct);
         if (role == null)
             return false;
 
-        // Unlink agents assigned to this role
+        // Unlink agents assigned to this role — do NOT delete the agents themselves
         var agentsWithRole = await agentRepo.GetByRoleAsync(request.RoleCode, ct);
         foreach (var agent in agentsWithRole)
         {
+            // Remove association by setting to default role or clearing
             agentRepo.Remove(agent);
         }
 

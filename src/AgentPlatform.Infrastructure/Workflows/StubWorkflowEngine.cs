@@ -6,6 +6,7 @@ namespace AgentPlatform.Infrastructure.Workflows;
 /// <summary>
 /// Placeholder workflow engine that simulates workflow lifecycle operations without persistent execution.
 /// </summary>
+[Obsolete("Replaced by OrchestrationPrimitive via IOrchestrationPrimitive (Blueprint C.2).")]
 internal sealed class StubWorkflowEngine : IWorkflowEngine
 {
     /// <summary>
