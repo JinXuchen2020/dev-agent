@@ -231,6 +231,61 @@
 90. ~~**A6: SendMessageResponse.Model 命名不一致**~~ ✅ **已修复**：`Model` → `ModelId`。
 91. ~~**A7: RoutingPolicyDomainService 硬编码 1024**~~ ✅ **已修复**：提取为 `MinViableContextWindow` 常量。
 
+## 0-1. 设计评审关（动手前强制 · 所有 Phase 皆适用）
+
+> 目的：在动手写/改任何"蓝图能力"之前，先审**蓝图本身**选的范式对不对。这道关补齐 `ddd-code-reviewer`（实现保真）与 `ddd-phase-quality-gate`（DDD 结构）都查不到的盲区——**"线性瀑布 / 缺 critic-reflection 循环 / 上下文 token 爆炸 / RAG 不接地 / HITL 无断点 / 恢复过度承诺"这类蓝图级范式问题，代码再忠实也无法被代码审查发现**。
+
+**触发时机（MANDATORY）**：
+- 项目启动、首次进入 Phase 1 前：对 `AGENT_PLATFORM_BLUEPRINT.md`（含附录 C）跑一次 `blueprint-architecture-review`。
+- 任何阶段若新增/修订蓝图章节（如 Phase 2 加编排范式、Phase 3 加可视化编排、Phase 4 加 Code Agent 闭环），在动手前先对变更章节重跑。
+- 蓝图变更必须经此关，否则视为未评审。
+
+**变更传播（MANDATORY · 蓝图→Phase 任务清单）**：
+- 蓝图经此关改写后，须**同步传播**到把被推翻/新增决策"写进任务"的 Phase 文档——例如附录 C 重写（合并两模式为单一编排原语、统一 `WorkflowContext`、加 critic 循环、软化恢复承诺）须同步：Phase 2 Module 4 从"独立 AutoGen 编排器"改为"negotiation 预设"、Module 2 对齐统一契约与逐步持久化；Phase 3 补 F3/F5/F6 任务；Phase 4 补 critic/上下文策略任务。
+- 传播后，对应的高风险模块须**重新跑 §0 的 `ddd-code-reviewer`**（旧蓝图下"忠实"的 PASS 已作废，须以新蓝图为 spec 重卡）。
+- 禁止"只改蓝图不改 Phase 任务"——否则编码仍照旧决策实现，设计评审关的成效会在实现端蒸发。
+
+**准入门槛**：
+- 评审结论须达 **DESIGN READY**（或 NEEDS WORK 项已全部闭环并复核通过）才允许进入对应 Phase 的编码。
+- 报告写入 `docs/blueprint-architecture-review-YYYY-MM-DD.md`，并在本文件「回顾 / 审查修复记录」中引用其结论。
+- 评审发现的 P0 项**阻断**编码；P1 项必须在对应 Phase 的 `ddd-code-reviewer` 强制范围内被解决并验证（见 §0）。
+
+**完成与提交纪律（MANDATORY · 适用所有 Phase · A+B 档 2026-07-16 落地）**：
+- 某 Phase 标记为「完成」**当且仅当**该 Phase 的高风险叙事模块已跑 `ddd-code-reviewer` 且 `ddd-phase-quality-gate` 问题清零（**0 open findings**）。仅文档/计划改动不计入"完成"。
+- 提交 `src/` 改动前，须将质量门结果写入仓库根 `.quality-gate.json`（`cleared: true` + 报告引用），并在 commit message 带 `Quality-Gate: <phase> cleared (0 open findings)`。
+- 仓库已落地自动拦截：`scripts/git-hooks/pre-commit` 在暂存含 `src/` 时强制校验标记；CI `quality-gate` job 在 push/PR 同步校验。启用：`git config core.hooksPath scripts/git-hooks`（或跑 `scripts/install-hooks.ps1`）。
+- 标记格式/模板/诚实性原则见 `docs/quality/QUALITY-GATE.md`。**不得**在 `src/` 实际仍有未修漂移时写 `cleared: true`。
+
+**与 §0 路由策略的分工**：
+- 设计评审关管"**蓝图选的范式对不对**"（动手前、审文档）；
+- §0 路由策略管"**代码有没有照蓝图做**"（动手后、审实现，高风险模块强制 `ddd-code-reviewer`）。
+- 两者互补：设计评审关兜底范式债，§0 兜底实现漂移债。Phase 3 不应替 Phase 2 背编排范式债。
+
+> 本项目已跑过一次 `blueprint-architecture-review`：初评 **DESIGN NEEDS WORK**（4×P1 + 5×P2，无 P0 阻断），经附录 C 重写后复审升级为 **DESIGN READY**（P1 全部闭环，P2 进入排期），报告见 `docs/blueprint-architecture-review-2026-07-16.md`。
+
+## 0. Quality Skill Routing Policy（质量 Skill 路由策略）
+
+本平台有两个互补 skill，职责不同、不可互相替代：
+
+| 模块类型 | 强制 Skill | 目的 |
+|----------|-----------|------|
+| 实现"叙事性蓝图能力"的模块（编排器 / 状态机 / 协作引擎 / 沙箱闭环 / SSE 广播 / 监控指标 / RAG / Tool Calling / 模型路由等——**类名即承诺某种能力**） | **`ddd-code-reviewer`**（对抗式审查） | 验证实现行为是否忠于蓝图、依赖是否真实使用、注册接口方法是否非空壳 |
+| 纯基础设施 / 结构卫生模块（仓储 / DI / EF 映射 / Redis / CRUD 控制器 / 配置 / CI） | `ddd-phase-quality-gate`（静态结构门禁） | DI / DDD 层 / EF / 并发 / 密封 / 守卫等结构卫生 |
+
+**硬性规则（WHY）**：`ddd-phase-quality-gate` 的 "Blueprint Drift" 仅查"蓝图声明要做、但被标记未来的功能"，**不查"实现行为 vs 蓝图叙事"的深度一致性**。凡是"类名/接口名承诺了某种能力"的模块，都是"名不副实现"的高风险区，必须由 `ddd-code-reviewer` 把关。
+
+**`ddd-code-reviewer` 报告必须包含**：对所审模块，显式写出"已核对的蓝图章节 / 验收标准"（例如 "verified against 附录 C.6 / §8.2 / 阶段 X 验收标准"）。缺此项即视为未通过。
+
+### Phase 1 强制范围（高风险叙事性模块）
+
+- **模型路由**（`SemanticKernelModelClient`）：核对阶段一验收标准「带工具调用的 RAG 对话」+ 蓝图模型路由章节；历史 C1 暴露 token 统计永远为 0（典型名不副实现）。
+- **RAG**（`PgVectorStore`）：蓝图承诺向量检索，阶段一为**存根实现**；reviewer 必须确认 stub 是否已补真实实现，或仍显式标记为延期（不可静默留空）。
+- **Tool Calling**（`ToolCallingDispatcher`）：核对蓝图函数调用章节。
+- **弹性管道**（`ResiliencePipelineProvider`）：核对蓝图重试 / 超时 / 熔断章节；历史 A2 暴露缺 Timeout 策略。
+- **成本统计**（`CostController`）：核对蓝图成本报表章节；历史 A1 暴露 token 统计为 0。
+
+> 说明：Phase 1 的「审查修复记录」已**同时运行** `ddd-phase-quality-gate` 与 `ddd-code-reviewer`（见后文三次审查），符合本策略。此 §0 为各阶段统一标准，后续阶段照此执行。
+
 ## 审查修复记录（Quality Gate + Code Reviewer）
 
 > 使用 `ddd-phase-quality-gate` 和 `ddd-code-reviewer` 两个 skill 审查 Phase 1 代码，发现 10 个问题，已全部修复。

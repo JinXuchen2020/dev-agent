@@ -1,0 +1,45 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [main, develop]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.github/**'
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Restore .NET dependencies
+        run: dotnet restore src/AgentPlatform.sln
+
+      - name: Build .NET solution
+        run: dotnet build src/AgentPlatform.sln --no-restore --configuration Release
+
+      - name: Run .NET tests
+        run: dotnet test src/AgentPlatform.sln --no-build --configuration Release --verbosity normal
+
+      - name: Install frontend dependencies
+        working-directory: src/AgentPlatform.Web
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: src/AgentPlatform.Web
+        run: npm run build

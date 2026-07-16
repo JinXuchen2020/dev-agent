@@ -1,0 +1,20 @@
+#!/bin/sh
+# commit-msg hook — 提交信息须带质量结论标记（dev-agent 项目约定）
+#
+# 规则：若本次提交改动 src/，commit message 必须含一行
+#   Quality-Gate: <phase> cleared (0 open findings)
+# 与 pre-commit 的 .quality-gate.json 校验互补（文件标记 + 信息标记双保险）。
+
+commit_msg_file="$1"
+
+if git diff --cached --name-only | grep -q '^src/'; then
+  if ! grep -iq 'Quality-Gate:' "$commit_msg_file"; then
+    echo "⛔ 提交信息缺少质量结论标记。涉及 src/ 的改动须在 message 中含一行："
+    echo "   Quality-Gate: <phase> cleared (0 open findings)"
+    echo "   例如：Quality-Gate: phase-2 cleared (0 open findings)"
+    echo "   标记约定见 docs/quality/QUALITY-GATE.md"
+    exit 1
+  fi
+fi
+
+exit 0

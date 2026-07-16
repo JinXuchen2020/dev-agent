@@ -21,76 +21,63 @@
 ```
 
 <a name="c.2"></a>
-### C.2 顺序管线协作（阶段二主模式）
+### C.2 编排原语与策略预设（阶段二核心）
 
-6 个 Agent 按**顺序管线（Pipeline）**逐级传递上下文：
+平台只保留**一个编排原语（Orchestration Primitive）**：一个带可配置 `selectionStrategy` + `terminationCondition` 的执行引擎。所有协作模式都是该原语的**预设（preset）**，而非并列子系统：
+
+- **`sequential` 预设（默认快路径）**：固定顺序的 selection + `termination: afterStep(N)`。即原"顺序管线"——确定性、低成本、易重放。但它只是协商拓扑的一个**退化特例**，不再作为"兄弟范式"独立存在。
+- **`negotiation` 预设（协商）**：LLM 驱动的 selection + 基于 critic 反馈的 termination（详见 C.5 / C.6）。用于需要 peer 评审 / 辩论的复杂任务。
+
+> **关键决策（修正 F1 / F4）**：废除"状态机模式 vs 群聊模式"的二分法。原 `WorkflowStateMachineEngine`（C.2/C.3）与 `AutoGenAgentOrchestrator`（C.5）合并为**同一引擎的两个预设**，共享唯一 `WorkflowContext` 契约（C.3）。这从根上消除了"双上下文契约"漂移。
 
 ```
 用户输入："我需要一个电商平台的订单管理模块"
-  │
+  │  编排原语（selectionStrategy + terminationCondition）
   ▼
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│ 需求分析师     │ ──→ │ 产品经理      │ ──→ │ 架构师        │
-│              │     │              │     │              │
-│ 输出：需求文档  │     │ 输出：用户故事  │     │ 输出：技术方案  │
-│ - 功能点列表   │     │ - 验收标准    │     │ - 模块划分     │
-│ - 约束条件     │     │ - 优先级      │     │ - 数据模型     │
-│ - 业务规则     │     │ - 用户流程    │     │ - 接口定义     │
+│ 需求分析师     │ ──→ │ 产品经理      │ ──→ │ 架构师        │   ← sequential 预设：固定顺序
+│  (WorkflowContext 注入)            │
 └──────────────┘     └──────────────┘     └──────┬───────┘
                                                 │
                     ┌──────────────┐     ┌───────▼───────┐     ┌──────────────┐
                     │ 技术文档工程师  │ ←── │ 测试工程师      │ ←── │ 开发工程师     │
-                    │              │     │              │     │              │
-                    │ 输出：文档     │     │ 输出：测试报告  │     │ 输出：代码     │
-                    │ - API 文档    │     │ - 测试用例     │     │ - 源代码文件   │
-                    │ - 使用手册    │     │ - 测试结果     │     │ - 单元测试     │
-                    │ - 部署说明    │     │ - 缺陷报告    │     │ - 构建配置     │
+                    │  (critic 循环见 C.6)              │
                     └──────────────┘     └──────────────┘     └──────────────┘
 ```
 
-**核心原则：每个 Agent 的输出是下一个 Agent 的输入。**
+**核心原则：每个 Agent 消费统一的 `WorkflowContext`，产物以结构化 artifact 沉淀，而非把自然语言历史逐级传递。**
 
 <a name="c.3"></a>
-### C.3 上下文传递机制
+### C.3 上下文契约（统一 WorkflowContext）
 
-通过 `StepContext` 和 `StepResult` 的 Payload 字段实现上下文管道：
-
-```csharp
-// Step1：需求分析师执行
-var step1Context = new StepContext(workflowId, step1Id, order: 1, inputPayload: 用户原始需求);
-var step1Result = await requirementsAnalyst.ExecuteAsync(step1Context);
-// step1Result.OutputPayload = JSON 格式的需求分析报告
-
-// Step2：产品经理接收需求分析报告作为输入
-var step2Context = new StepContext(workflowId, step2Id, order: 2,
-    inputPayload: step1Result.OutputPayload);   // ← 上一轮的输出 = 这一轮的输入
-var step2Result = await productManager.ExecuteAsync(step2Context);
-// step2Result.OutputPayload = JSON 格式的用户故事 + 验收标准
-
-// 依此类推，像管道一样逐级传递
-```
-
-数据流全景：
-
-```
-用户需求(文本)
-  → [需求分析 JSON]
-  → [用户故事 JSON]
-  → [技术方案 JSON]
-  → [代码 JSON]
-  → [测试报告 JSON]
-  → [文档 JSON]
-```
-
-自研状态机内部的顺序调度逻辑：
+所有步骤（无论 `sequential` 还是 `negotiation` 预设）通过唯一的 **`WorkflowContext`** 对象传递上下文，取代原 `StepContext` / `StepResult.OutputPayload` 双轨（修正 F4）：
 
 ```csharp
-// CustomWorkflowEngine 内部逻辑（简化）
+public sealed class WorkflowContext
+{
+    public Guid WorkflowId { get; init; }
+    public int CurrentStepOrder { get; init; }
+    public IReadOnlyDictionary<string, StepArtifact> Artifacts { get; init; } // 各步结构化产物（JSON）
+    public Blackboard Blackboard { get; init; }        // 共享工作区（C.3.1）
+    public RetrievalContext Retrieval { get; init; }   // RAG 召回物（F5）
+    public StepHistory Summary { get; init; }          // 逐步压缩摘要（C.3.1，非全量历史）
+}
+```
+
+编排原语的统一调度逻辑（消费 `WorkflowContext`，不再 `previousResult?.OutputPayload`）：
+
+```csharp
+// OrchestrationPrimitive 内部逻辑（简化）
 foreach (var step in workflow.Steps.OrderBy(s => s.Order))
 {
-    var input = previousResult?.OutputPayload ?? workflow.Context;
-    var context = new StepContext(workflow.Id, step.Id, step.Order, input);
-    var result = await _stepExecutor.ExecuteAsync(context, ct);
+    var ctx = new WorkflowContext(
+        workflowId: workflow.Id,
+        currentStepOrder: step.Order,
+        artifacts: _store.GetArtifacts(workflow.Id),
+        blackboard: _store.GetBlackboard(workflow.Id),
+        retrieval: _rag.RetrieveFor(step),                       // F5：RAG 注入
+        summary: _store.GetCompressedHistory(workflow.Id, cap: MaxContextTokens)); // C.3.1
+    var result = await _stepExecutor.ExecuteAsync(ctx, ct);
 
     if (result.Outcome == StepOutcome.Failed)
     {
@@ -98,11 +85,19 @@ foreach (var step in workflow.Steps.OrderBy(s => s.Order))
         break;
     }
 
-    previousResult = result;
-    await _mediator.Publish(
-        new WorkflowStepCompleted(workflow.Id, step.Id, step.Order, result.OutputPayload));
+    await _store.PersistStepAsync(workflow.Id, step.Order, result, ct); // 逐步持久化（C.7）
+    await _mediator.Publish(new WorkflowStepCompleted(workflow.Id, step.Id, step.Order, result.Artifact));
 }
 ```
+
+#### C.3.1 上下文伸缩策略（Context Scaling，修正 F3）
+
+为防 token 随轮数线性爆炸，统一采用：
+
+- **共享工作区（Blackboard）**：步骤间通过结构化 artifact 交换，而非把整段自然语言历史往前传。
+- **逐步摘要压缩**：`Summary` 仅保留压缩后的历史（按 `MaxContextTokens` 封顶），单 Agent 接收量有上限。
+- **检索增强上下文（RAG）**：生成前检索相关知识注入 `Retrieval`，不依赖对话历史记忆（F5）。
+- **单 Agent 接收量封顶**：超出部分截断或检索，绝不无界堆历史。
 
 <a name="c.4"></a>
 ### C.4 分支/并行协作（阶段三扩展模式）
@@ -115,43 +110,35 @@ foreach (var step in workflow.Steps.OrderBy(s => s.Order))
                                      └──→ 文档工程师（先写初稿，与开发并行）
 ```
 
-- **自研状态机**：通过 `StepContext` 的分支标记实现，引擎维护多个并行游标
+- **编排原语**：通过 `WorkflowContext` 的分支标记实现，引擎维护多个并行游标
 - **CoreWF**：通过 `Parallel Activity` 原生支持，迁移后自动获得并行编排能力
 
 <a name="c.5"></a>
-### C.5 AutoGen.NET 编排层
+### C.5 协商预设（negotiation preset）
 
-AutoGen.NET 在架构中承担 **Agent 间对话协商** 角色（可选，阶段二引入）：
+`negotiation` 预设让多个 Agent 围绕同一 `WorkflowContext` 进行 peer 协商，由可配置的 selection / termination 策略驱动：
 
-```
-AutoGen.NET 核心能力：
-├── Agent 间多轮对话（不只是传递 JSON，而是自然语言协商）
-├── Group Chat（多个 Agent 加入群组讨论）
-├── 工具调用委托（Agent 可以把工具调用委托给另一个 Agent）
-└── Human-in-the-loop（关键节点等待用户确认）
-```
+- **selection strategy**：决定下一发言者（按角色能力 / 缺陷归属路由），**不再是 `SequentialGroupChatManager` 顺序发言**——顺序发言是 `sequential` 预设的行为，不是协商。
+- **termination condition**：基于 critic 反馈收敛（见 C.6），而非固定轮数。
+- **工具委托 / Human-in-the-loop**：作为协商中的标准能力（HITL 断点设计见 C.6）。
 
-AutoGen.NET 在三层架构中的位置：
+三层架构（修正）：
 
 ```
 ┌───────────────────────────────┐
-│  工作流调度层（自研/CoreWF）     │  ← 管"谁先谁后、什么时候跳过"
+│  编排原语（单一引擎）            │  selectionStrategy + terminationCondition
+│  · sequential 预设（快路径）     │
+│  · negotiation 预设（协商）      │
 └──────────────┬────────────────┘
-               │ 调度
+               │ 每个 Agent 内部
                ▼
 ┌───────────────────────────────┐
-│  AutoGen.NET 编排层（可选）     │  ← 管"Agent 之间怎么对话协商"
-└──────────────┬────────────────┘
-               │ 分配
-               ▼
-┌───────────────────────────────┐
-│  Semantic Kernel (SK)          │  ← 管"怎么调 LLM + 工具"
-│  每个 Agent 内部都用 SK        │
+│  Semantic Kernel (SK)          │  调 LLM + 工具（RAG 召回物经 WorkflowContext 注入）
 └───────────────────────────────┘
 ```
 
 ```csharp
-// AutoGen.NET 的 Agent 注册（阶段二实现）
+// negotiation 预设的 Agent 注册（阶段二实现）
 var agents = new List<IAgent>
 {
     new AssistantAgent("requirements-analyst", analystPrompt, modelClient),
@@ -162,60 +149,71 @@ var agents = new List<IAgent>
     new AssistantAgent("technical-writer", writerPrompt, modelClient),
 };
 
-// Group Chat 模式——所有 Agent 加入群组，按策略发言
-var groupChat = new GroupChat(
-    agents,
-    admin: agents[0],                         // 需求分析师为管理员
-    groupChatManager: new SequentialGroupChatManager()  // 顺序发言策略
-);
+// negotiation 预设：真实 selection + 基于 critic 的 termination
+var orchestration = orchestrationPrimitive
+    .WithPreset(OrchestrationPreset.Negotiation)
+    .WithSelection(new RoleBasedSelectionStrategy())      // 非 SequentialGroupChatManager
+    .WithTermination(new CriticConvergenceTermination());  // 见 C.6
 
-// 流水线：每个 Agent 处理后自动传给下一个
-var workflow = await groupChat.RunAsync(
-    "请分析这个需求并产出完整的架构设计 + 代码 + 测试 + 文档");
+var workflow = await orchestration.RunAsync(
+    "请分析这个需求并产出完整的架构设计 + 代码 + 测试 + 文档", context);
 ```
 
+> AutoGen.NET 可作 negotiation 预设的底层实现库，但它**不是独立的编排层**；若选用，必须验证其真实符号存在（`AssistantAgent` / `GroupChat` 等），禁止"类名含 AutoGen 却零符号"的空壳（实现保真项，见 `review-checklist.md` Section C）。
+
 <a name="c.6"></a>
-### C.6 失败回退与重试
+### C.6 失败回退、重试与 Critic 循环
+
+#### Critic 循环（新增，修正 F2）
+
+普通步骤之外引入 **critic 步**：架构师评审开发产物、测试员返回缺陷清单，反馈以**结构化 diff** 形式精准路由回对应 Agent（**范围化返修**），而非"退一步整轮重跑"：
+
+```
+开发 ✅ → critic(架构师) ❌「接口缺鉴权」
+        │ 范围化返修（仅开发对应文件）
+        ▼
+开发(修订) ✅ → critic ✅ → 测试 ✅
+```
 
 #### 重试场景（NeedsRetry）
 
 ```
 需求分析 ✅ → 产品 ✅ → 架构 ✅ → 开发 ✅ → 测试 ❌
                                            │
-                                           ▼ 重试（退回开发修复）
-                                      开发修复 → 测试 ✅ → 文档 ✅
+                                           ▼ 退回开发（范围化修复）
+                                      开发(修订) ✅ → 测试 ✅ → 文档 ✅
 ```
 
-#### 回滚场景（NeedsRollback）
+#### 回滚场景（NeedsRollback，精准回退指定步骤，非全量重置）
 
 ```
 需求分析 ✅ → 产品 ✅ → 架构 ❌
                          │
-                         ▼ 回滚到产品，重新定义需求
+                         ▼ 回滚到**产品**步骤（精准目标）
                     产品(修订) ✅ → 架构 ✅ → ...
 ```
 
-#### 重试/回滚代码逻辑
+#### 重试/回滚代码逻辑（精准回退，非全量重置）
 
 ```csharp
 if (result.Outcome == StepOutcome.NeedsRetry)
 {
-    // 退回到上一步，让 Agent 修复后重试
-    var previousStep = workflow.Steps.First(s => s.Order == step.Order - 1);
-    await RollbackAsync(workflow.Id, previousStep.Order);
+    // 退回到上一步，让 Agent 范围化修复后重试
+    var target = workflow.Steps.First(s => s.Order == step.Order - 1);
+    await RollbackToAsync(workflow.Id, target.Order); // 仅重置该步及之后受影响步
     // MediatR 事件通知相关 Agent 重新执行
 }
 
 if (result.Outcome == StepOutcome.NeedsRollback)
 {
     // 不可恢复错误，回滚到指定步骤，触发 Human-in-the-loop
-    await RollbackAsync(workflow.Id, targetStepOrder);
+    await RollbackToAsync(workflow.Id, targetStepOrder); // 精准目标，非全量 Pending 重置
     await _mediator.Publish(new HumanInterventionRequired(workflow.Id, step.Id, result.ErrorMessage));
 }
 ```
 
 <a name="c.7"></a>
-### C.7 完整数据流全景图
+### C.7 完整数据流与可恢复性（修正，可验证非绝对承诺）
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -223,29 +221,29 @@ if (result.Outcome == StepOutcome.NeedsRollback)
 └────────────────────────────┬─────────────────────────────────────────┘
                              ▼
 ┌──────────────────────────────────────────────────────────────────────┐
-│  CustomWorkflowEngine（自研状态机）                                     │
+│  编排原语（单一引擎）                                                    │
 │  ├── 创建 Workflow 实例（状态: Pending → Running）                      │
-│  ├── 分配 Step1 给 RequirementsAnalyst Agent                           │
-│  └── 持久化状态到 Redis + PostgreSQL                                    │
+│  ├── 按预设（sequential / negotiation）分配 Step 给对应 Agent           │
+│  └── 每步完成后**立即落库**（PostgreSQL）                                 │
 └────────────────────────────┬─────────────────────────────────────────┘
                              ▼
 ┌──────────────────────────────────────────────────────────────────────┐
-│  IStepExecutor.ExecuteAsync()                                         │
-│  ├── 通过 Semantic Kernel 调用 LLM（带 System Prompt + 历史上下文）        │
+│  IStepExecutor.ExecuteAsync(WorkflowContext)                          │
+│  ├── 通过 Semantic Kernel 调用 LLM（System Prompt + WorkflowContext 注入）│
 │  ├── LLM 可能触发 Tool Calling（搜索、代码执行等）                        │
-│  ├── 返回 StepResult（Success + 需求分析 JSON）                        │
+│  ├── 返回 StepResult（Success + 结构化 artifact）                      │
 │  └── 记录 TokenUsage 到审计日志                                          │
 └────────────────────────────┬─────────────────────────────────────────┘
                              ▼
 ┌──────────────────────────────────────────────────────────────────────┐
 │  MediatR 发布 WorkflowStepCompleted 事件                                │
 │  ├── EventHandler 1：更新 Workflow 当前步骤状态为 Completed              │
-│  ├── EventHandler 2：持久化步骤结果到 PostgreSQL                         │
+│  ├── EventHandler 2：持久化步骤结果到 PostgreSQL（逐步持久化）            │
 │  ├── EventHandler 3：累计 TokenUsage                                    │
-│  └── EventHandler 4：触发下一步 Step2（ProductManager）                 │
+│  └── EventHandler 4：触发下一步（按预设的 selection 策略）               │
 └────────────────────────────┬─────────────────────────────────────────┘
                              ▼
-                      重复 Step2~6，直到所有步骤完成
+                      重复各步，直到 termination condition 满足
                              ▼
 ┌──────────────────────────────────────────────────────────────────────┐
 │  Workflow 状态 → Completed                                             │
@@ -255,7 +253,13 @@ if (result.Outcome == StepOutcome.NeedsRollback)
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-> **一句话总结**：6 个 Agent 通过顺序管线协作，每个 Agent 的 LLM 输出（JSON）是下一个 Agent 的输入，自研状态机负责调度顺序/重试/回滚，MediatR 领域事件负责步骤间解耦通信，AutoGen.NET 提供高级对话协商能力（可选），Semantic Kernel 负责底层 LLM 调用和工具执行。整条链路的状态全量持久化到 Redis + PostgreSQL，任何一步崩溃都能恢复。
+> **持久化与恢复（可验证，非绝对承诺）**：
+> - 每个步骤结果在完成后**立即落库**（PostgreSQL），运行态不依赖内存 `ConcurrentDictionary`。
+> - 进程崩溃后，从库里**恢复未完成任务**，从中断步继续，而非丢失在途工作流。
+> - **必须有 kill+restart 集成测试**证明：杀掉执行中进程，重启后从中断步恢复且结果一致。
+> - 禁止写"任何一步崩溃都能恢复"这类无法验证的绝对措辞；恢复能力由上述测试证明（修正 F9）。
+
+> **一句话总结**：6 个 Agent 通过编排原语的预设（`sequential` 快路径 / `negotiation` 协商）协作，统一消费 `WorkflowContext` 契约，编排原语负责调度顺序 / 重试 / 回滚与 critic 循环，MediatR 领域事件负责步骤间解耦通信，Semantic Kernel 负责底层 LLM 调用和工具执行。每步结果逐步持久化，恢复能力由 kill+restart 集成测试证明。
 
 <a name="c.8"></a>
 ### C.8 Agent 角色可扩展性：从固定枚举到自定义角色

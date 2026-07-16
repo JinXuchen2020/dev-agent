@@ -69,5 +69,30 @@ dotnet user-secrets set "OpenAI:Key" "sk-your-key-here"
 |------|------|------|
 | Phase 1 | 基础 MVP — 路由、RAG、Tool Calling、成本报表 | ✅ 完成 |
 | Phase 2 | 多智能体工作流 — 状态机、Redis、AutoGen 编排、ExecutionLog | ✅ 完成 |
-| Phase 3 | 平台化 — 可视化编排、监控、自定义 AgentType | 📋 计划 |
+| Phase 3 | 平台化 — 可视化编排、监控、自定义 AgentType | ✅ 完成 |
 | Phase 4 | 前沿特性 — Code Agent、压测、BDD 全量 | 📋 计划 |
+
+## 质量治理流程
+
+本平台有**三道质量关**贯穿所有阶段，形成「动手前审范式 → 动手后审实现 → 结构卫生」的闭环：
+
+| 关 | 时机 | 审什么 | 负责 Skill | 规范出处 |
+|----|------|--------|-----------|---------|
+| **设计评审关** | 动手写/改任何「蓝图能力」之前 | 蓝图范式对不对（线性瀑布 / 缺 critic 循环 / 上下文爆炸 / RAG 不接地 / HITL 无断点 / 恢复过度承诺） | `blueprint-architecture-review` | phase-1 §0-1 |
+| **§0 路由策略** | 动手后，高风险模块合入前 | 代码有没有照蓝图做（「名不副实现」高风险区强制 reviewer） | `ddd-code-reviewer`（高风险）/ `ddd-phase-quality-gate`（结构） | 各 phase §0 |
+| **结构门禁** | 各阶段 | DDD 卫生（DI / 分层 / EF / 并发 / 密封 / 守卫） | `ddd-phase-quality-gate` | 各 phase §0 |
+
+**关键约定**
+- 每个 Phase 只保留**一个**文件（`phase-N-<主题>.md`）；质量门禁清单**就地写入**该文档小节，不再单独生成 `phase-N-checklist.md`。
+- 设计评审关结论须达 **DESIGN READY** 才许进入对应 Phase 编码：P0 项阻断、P1 项须在对应 Phase 的 `ddd-code-reviewer` 强制范围内闭环。
+- `ddd-code-reviewer` 报告必须显式写出「已核对的蓝图章节」（如 "verified against 附录 C.6 / §8.2"），缺此项视为未通过。
+- **责任边界**：漂移问题归「写代码的 Phase」（如编排器漂移归 Phase 2）；范式问题归「设计评审关」，Phase 3 不应替 Phase 2 背范式债。
+
+**提交纪律（MANDATORY · A+B 档 · 2026-07-16 落地）**
+- **Phase 完成定义**：某 Phase 标记为「完成」= 该 Phase 的高风险叙事模块已跑 `ddd-code-reviewer` 且 `ddd-phase-quality-gate` 问题清零（**0 open findings**）。仅文档/计划改动不计入。
+- **质量结论标记**：每次提交 `src/` 改动前，须将质量门结果写入仓库根 `.quality-gate.json`（`cleared: true` + 报告引用），并在 commit message 带一行 `Quality-Gate: <phase> cleared (0 open findings)`。
+- **自动拦截（已落地）**：`scripts/git-hooks/pre-commit` 在暂存含 `src/` 时强制校验 `.quality-gate.json` 已暂存且 `cleared: true`；`commit-msg` 校验 message 含 `Quality-Gate:`。CI（`ci.yml` 的 `quality-gate` job）在 push/PR 含 `src/` 改动时同步校验。启用：`git config core.hooksPath scripts/git-hooks`（或跑 `scripts/install-hooks.ps1`）。
+- **"至少跑三轮"说明**：两个 quality skill 是交互式的，钩子无法精确判定"跑了 3 轮"；实际可行的卡点是"**reviewer 报告存在且 0 open findings 才放行**"。建议把质量循环跑到 0 open（技能自身 retry 逻辑通常自然多轮），再写标记。
+- 标记与模板约定见 `docs/quality/QUALITY-GATE.md`。
+
+> 本项目已跑过一次设计评审：初评 **DESIGN NEEDS WORK**（4×P1 + 5×P2，无 P0 阻断），经附录 C 重写后复审升级为 **DESIGN READY**（P1 全部闭环，P2 进入排期），报告见 `docs/blueprint-architecture-review-2026-07-16.md`。

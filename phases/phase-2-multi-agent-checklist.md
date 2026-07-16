@@ -124,6 +124,29 @@
 
 ## 🔍 Phase 2 Quality Gate Checklist
 
+### 0-1. 设计评审关（动手前强制）
+
+▶ 进入本 Phase 前须先过 `blueprint-architecture-review`（见 phase-1 §0-1）。本 Phase 的编排范式（附录 C.2 单一编排原语 + `sequential`/`negotiation` 预设 / C.5 协商预设的真实 selection+termination，非 `SequentialGroupChatManager` 顺序发言 / C.3 统一 `WorkflowContext` 契约 / C.6 critic 循环 / C.7 逐步持久化恢复）正是该评审的重点：若蓝图仍为"两模式二分"、缺 critic-reflection 循环或恢复承诺过度（如 C.7 旧版"任意一步崩溃都能恢复"却无逐步持久化规定），须在动手前先闭环其 P1 项，再进编码。
+
+### 0. Quality Skill Routing Policy（质量 Skill 路由策略）
+
+Phase 2 有两个互补 skill，**职责不同、不可互相替代**：
+
+| 模块类型 | 强制 Skill | 目的 |
+|----------|-----------|------|
+| 编排器 / 状态机 / 协作引擎（Multi-Agent 核心） | **`ddd-code-reviewer`**（对抗式审查） | 验证实现行为是否忠于蓝图（附录 C）、依赖是否真实使用、注册接口方法是否非空壳 |
+| 其它基础设施（仓储 / Redis / ExecutionLog / API / CQRS） | `ddd-phase-quality-gate`（静态结构门禁） | DI / DDD 层 / EF / 并发 / 密封 / 守卫等结构卫生 |
+
+**硬性规则（WHY）**：`ddd-phase-quality-gate` 的 "Blueprint Drift" 仅查"蓝图声明要做、但被标记未来的功能"，**不查"实现行为 vs 蓝图叙事"的深度一致性**。而本平台 Multi-Agent 核心（编排原语及其 `sequential`/`negotiation` 预设）恰恰是"名不副实现"的高风险区，必须由 `ddd-code-reviewer` 把关。
+
+**`ddd-code-reviewer` 报告必须包含**：对所审模块，显式写出"已核对的蓝图章节"（例如 "verified against 附录 C.5 / C.6"）。缺此项即视为未通过。
+
+**强制范围（本阶段）**：
+- **Module 2（状态机引擎）** → 必须 `ddd-code-reviewer`，核对附录 C.6（回滚应精准回退**指定步骤**，而非全量重置为 Pending）与 C.7（可恢复性：执行态需抗进程重启，不能仅存内存 `ConcurrentDictionary`）。
+- **Module 4（AutoGen 多 Agent 协作）** → 必须 `ddd-code-reviewer`，核对附录 C.5（群聊 / 协商机制是否真实落地），并执行 `review-checklist.md` Section C 的 **Implementation Fidelity**（AutoGen 真实符号存在性检查 + 注册接口方法的"log+return 空壳"判定）。
+
+> ⚠️ **历史流程缺口（2026-07-16 复盘）**：本阶段两次审计（初审 + 回归，见文末）均只跑了 `ddd-phase-quality-gate`，**未**对 Module 2 / Module 4 运行 `ddd-code-reviewer`。这直接导致"AutoGen 类未真正使用 AutoGen""回滚全量重置""Pause/Resume 为空 stub""状态仅存内存"等问题在审计中漏网。本路由策略即为堵此缺口而设，后续 Phase 需严格遵守。
+
 ### 1. Pre-existing Issues from Phase 1 Audit (已修复)
 
 | # | Category | File | Finding | Fix |
@@ -238,6 +261,7 @@
 - [x] dotnet build 0 warnings
 - [x] dotnet test all green
 - [x] SpecFlow WorkflowStateMachine.feature green
+> 🔍 **强制**：合入前必须走 `ddd-code-reviewer`，核对附录 C.6（回滚应精准回退**指定步骤**，而非全量重置 Pending）与 C.7（执行态需抗进程重启，不能仅存内存）。
 
 ### Module 3: Redis short-term memory (已完成)
 - [x] RedisShortTermMemory implements IShortTermMemory
@@ -247,13 +271,14 @@
 - [x] dotnet build 0 warnings
 - [x] dotnet test all green
 
-### Module 4: AutoGen multi-agent collaboration (已完成)
+### Module 4: 协商预设（negotiation preset，原 AutoGen 多 Agent 协作）(已完成)
 - [x] 6 agent roles defined
-- [x] AutoGenAgentOrchestrator implemented
-- [x] Group chat management and termination conditions
+- [x] 编排原语的 `negotiation` 预设实现（真实 selection + 基于 critic 的 termination，非 `SequentialGroupChatManager`）
+- [x] 群聊管理 / 协商机制（共享统一 `WorkflowContext` 契约，见 C.3）
 - [x] DI registration (factory pattern for agents)
 - [x] dotnet build 0 warnings
 - [x] dotnet test all green
+> 🔍 **强制**：合入前必须走 `ddd-code-reviewer`，核对附录 C.5（协商预设是否真实落地：selection/termination 是否为真实实现，而非顺序发言退化），并执行 `review-checklist.md` Section C 的 **Implementation Fidelity**（若用 AutoGen.NET，须有 `AssistantAgent`/`GroupChat` 等真实符号存在；`IWorkflowEngine.Pause/Resume/Retry/Rollback` 等注册接口方法的 "log+return 空壳" 判定）。
 
 ### Module 5: ExecutionLog (已完成)
 - [x] ExecutionLog aggregate root + configuration
@@ -343,6 +368,7 @@ Quality Gate  ██████████ 100%
 2. **Redis 缓存策略**：优化短期记忆的过期策略和序列化
 3. **AutoGen 升级**：跟踪 AutoGen.NET 和 Semantic Kernel 的版本更新
 4. **测试覆盖率**：提升单元测试覆盖率，特别是状态机引擎
+5. **质量 Skill 路由**：Multi-Agent 核心模块（编排器 / 状态机）合入前**必须**走 `ddd-code-reviewer`（蓝图忠实度），不能只跑 `ddd-phase-quality-gate`（静态门禁）。本次 Phase 2 两次审计均漏跑前者，致"名不副实现"问题漏网——见 §0 路由策略。
 
 ### 对蓝图文档的反馈
 
@@ -366,12 +392,12 @@ Quality Gate  ██████████ 100%
 
 ### 代码文件
 
-- [x] AutoGen.NET Agent 实现（6 个角色）
-- [x] AutoGenAgentOrchestrator（群聊管理）
+- [x] 编排原语（单一引擎）实现（sequential / negotiation 两预设，共享 WorkflowContext）
+- [x] negotiation 预设：Agent 实现（6 个角色）+ 真实 selection/termination
 - [x] AgentType 值对象
 - [x] IAgentRepository 更新
-- [x] WorkflowStateMachineEngine（状态机）
-- [x] IStepExecutor 实现
+- [x] WorkflowStateMachineEngine（统一为编排原语的 sequential 预设执行体）
+- [x] IStepExecutor 实现（消费 WorkflowContext）
 - [x] RedisShortTermMemory
 - [x] ExecutionLog 聚合根
 - [x] IExecutionLogRepository 实现

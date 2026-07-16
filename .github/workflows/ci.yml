@@ -42,3 +42,41 @@ jobs:
       - name: Run integration tests
         if: false  # Integration tests need Docker. Enable when Docker is available on runner.
         run: dotnet test src/AgentPlatform.sln --no-build --configuration Release --filter "FullyQualifiedName~IntegrationTests"
+
+  quality-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # need history to diff against base
+
+      - name: Determine base ref
+        id: base
+        run: |
+          if [ -n "${{ github.event.pull_request.base.sha }}" ]; then
+            echo "ref=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ github.event.before }}" ] && git cat-file -e "${{ github.event.before }}^{commit}" 2>/dev/null; then
+            echo "ref=${{ github.event.before }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=HEAD~1" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check quality gate marker
+        run: |
+          BASE="${{ steps.base.outputs.ref }}"
+          CHANGED=$(git diff --name-only "$BASE" HEAD | grep '^src/' || true)
+          if [ -n "$CHANGED" ]; then
+            echo "⛔ 检测到 src/ 改动，校验质量结论标记 .quality-gate.json ..."
+            if [ ! -f .quality-gate.json ]; then
+              echo "❌ 缺少 .quality-gate.json（质量结论标记）。请先跑 ddd-code-reviewer + ddd-phase-quality-gate 至 0 open findings 并提交该标记。"
+              echo "   约定见 docs/quality/QUALITY-GATE.md"
+              exit 1
+            fi
+            if ! grep -q '"cleared": *true' .quality-gate.json; then
+              echo "❌ .quality-gate.json 中 cleared 不为 true（仍有未修复问题）。"
+              exit 1
+            fi
+            echo "✅ 质量门通过：.quality-gate.json cleared:true（src/ 改动已带质量结论标记）"
+          else
+            echo "✅ 本次事件未改 src/，跳过质量门。"
+          fi
