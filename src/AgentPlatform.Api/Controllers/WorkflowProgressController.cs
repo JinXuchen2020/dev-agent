@@ -48,7 +48,7 @@ public sealed class WorkflowProgressController : ControllerBase
         Response.Headers.CacheControl = "no-cache";
         Response.Headers["X-Accel-Buffering"] = "no";
 
-        var (_, reader) = _broadcaster.Subscribe(id);
+        var (subscriberId, reader) = _broadcaster.Subscribe(id);
 
         try
         {
@@ -70,6 +70,11 @@ public sealed class WorkflowProgressController : ControllerBase
         catch (OperationCanceledException)
         {
             // Client disconnected — graceful cleanup
+        }
+        finally
+        {
+            // Always clean up subscriber channel to prevent memory leak
+            _broadcaster.Unsubscribe(id, subscriberId);
         }
     }
 }

@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useRef } from 'react';
+import React, { useCallback, useState, useRef, useEffect } from 'react';
 import {
   ReactFlow,
   addEdge,
@@ -14,10 +14,10 @@ import {
   MiniMap,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Button, Typography, Card, Space, Modal, Input, message } from 'antd';
+import { Button, Typography, Card, Space, Modal, Input, message, Spin } from 'antd';
 import { PlusOutlined, SaveOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
-import { runWorkflow } from '../services/api';
+import { runWorkflow, getWorkflow } from '../services/api';
 
 const { Title } = Typography;
 
@@ -33,7 +33,35 @@ const WorkflowEditorPage: React.FC = () => {
   const [name, setName] = useState('');
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
   const nodeIdCounter = useRef(1);
+
+  // Load existing workflow data when editing
+  useEffect(() => {
+    if (!id) return;
+    setLoading(true);
+    getWorkflow(id)
+      .then((wf) => {
+        setName(wf.name);
+        if (wf.steps.length > 0) {
+          const stepNodes: Node[] = [
+            { id: 'start', type: 'input', position: { x: 250, y: 0 }, data: { label: 'Start' } },
+          ];
+          wf.steps.forEach((s, i) => {
+            stepNodes.push({
+              id: `step-${s.order}`,
+              type: 'default',
+              position: { x: 200 + (i % 3) * 150, y: Math.floor(i / 3) * 150 + 100 },
+              data: { label: s.stepName },
+            });
+          });
+          setNodes(stepNodes);
+          nodeIdCounter.current = wf.steps.length + 1;
+        }
+      })
+      .catch(() => message.error('Failed to load workflow'))
+      .finally(() => setLoading(false));
+  }, [id]);
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     setNodes((nds) => applyNodeChanges(changes, nds));
@@ -70,7 +98,7 @@ const WorkflowEditorPage: React.FC = () => {
         .filter((n) => n.id.startsWith('step-'))
         .map((n) => n.data.label as string);
       const initialContext = JSON.stringify({ steps: stepNames, edges: edges.map((e) => ({ from: e.source, to: e.target })) });
-      await runWorkflow({ name, initialContext });
+      await runWorkflow({ name, initialContext, steps: stepNames });
       message.success('Workflow created successfully');
       setSaveModalOpen(false);
       navigate('/workflows');
@@ -80,6 +108,8 @@ const WorkflowEditorPage: React.FC = () => {
       setSaving(false);
     }
   };
+
+  if (loading) return <Spin style={{ display: 'block', margin: '100px auto' }} />;
 
   return (
     <div style={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column' }}>

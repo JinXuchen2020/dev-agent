@@ -67,7 +67,8 @@ public sealed class WorkflowsController : ControllerBase
         var command = new RunWorkflowCommand(
             request.Name,
             request.InitialContext,
-            TenantId: Guid.Empty); // Phase 1: single tenant
+            TenantId: Guid.Empty, // Phase 1: single tenant
+            Steps: request.Steps);
 
         var result = await _mediator.Send(command, ct);
         return Ok(result);
@@ -79,4 +80,5 @@ public sealed class WorkflowsController : ControllerBase
 /// </summary>
 public sealed record RunWorkflowRequest(
     string Name,
-    string InitialContext);
+    string InitialContext,
+    IReadOnlyList<string>? Steps = null);

@@ -13,10 +13,12 @@ namespace AgentPlatform.Application.Workflows.Commands.RunWorkflow;
 /// <param name="Name">The display name of the workflow.</param>
 /// <param name="InitialContext">The initial context data to seed the workflow with.</param>
 /// <param name="TenantId">The unique identifier of the tenant that owns the workflow.</param>
+/// <param name="Steps">Optional list of step names to create in the workflow.</param>
 /// <param name="Preset">The orchestration preset to use (sequential = fast path, negotiation = critic loop).</param>
 public record RunWorkflowCommand(
     [Required] string Name,
     [Required] string InitialContext,
     Guid TenantId,
+    IReadOnlyList<string>? Steps = null,
     OrchestrationPreset Preset = OrchestrationPreset.Sequential
 ) : IRequest<Workflow>;

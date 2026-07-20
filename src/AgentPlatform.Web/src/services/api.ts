@@ -33,7 +33,7 @@ export const getWorkflows = (params?: { status?: string; skip?: number; take?: n
   api.get<{ items: Workflow[]; totalCount: number }>('/workflows', { params }).then((r) => r.data);
 export const getWorkflow = (id: string) =>
   api.get<WorkflowDetail>(`/workflows/${id}`).then((r) => r.data);
-export const runWorkflow = (data: { name: string; initialContext: string }) =>
+export const runWorkflow = (data: { name: string; initialContext: string; steps?: string[] }) =>
   api.post<Workflow>('/workflows', data).then((r) => r.data);
 
 // Execution Logs

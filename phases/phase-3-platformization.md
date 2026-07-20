@@ -164,7 +164,7 @@ New interfaces this phase:
 - [x] All async methods pass `CancellationToken`
 - [x] All implementation classes marked `internal sealed`
 - [x] dotnet build — 0 warnings, 0 errors
-- [x] dotnet test — all passing (63/63)
+- [x] dotnet test — all passing (81/81)
 
 ---
 
@@ -187,6 +187,7 @@ Module 2: SSE 进度推送
   - [x] dotnet build 0 warnings
   - [x] dotnet test all green
 > 🔍 **强制**：合入前必须走 `ddd-code-reviewer`，核对阶段三验收标准「SSE 进度推送」+ 蓝图对应章节；重点验证 `ExecutionProgressBroadcaster` 订阅/取消订阅无内存泄漏（历史 P1 已暴露 Subscribe 无取消）。
+> ✅ **已完成**：2026-07-20 第二轮补审已覆盖（见「DDD 对抗性代码审查修复记录 · 第二轮」P0 项）。`WorkflowProgressController` 捕获 `subscriberId` 并在 `try/finally` 调 `Unsubscribe`，断连/完成/异常三路径均清理；独立复评（2026-07-20）grep 确认消费者侧有真实调用点，SSE 订阅泄漏已修复。
 
 Module 3: 日志清理 Job
   - [x] ExecutionLogCleanupJob (BackgroundService)
@@ -209,6 +210,7 @@ Module 5: React Flow 工作流编辑器
   - [x] Save and execute workflow
   - [x] npm build succeeds
 > 🔍 **强制**：合入前必须走 `ddd-code-reviewer`，核对阶段三验收标准「Web 界面拖拽编排工作流」；重点验证拖拽保存/执行是否真连通状态机、50+ 步大工作流不崩。
+> ✅ **已完成**：2026-07-20 第二轮补审已覆盖（见「DDD 对抗性代码审查修复记录 · 第二轮」P1 项：编辑模式加载现有工作流 + `RunWorkflowRequest.Steps` 落库，拖拽保存/执行真连通状态机）。
 
 Module 6: OpenTelemetry 监控
   - [x] DiagnosticsConfig (Api layer metrics)
@@ -219,6 +221,7 @@ Module 6: OpenTelemetry 监控
   - [x] dotnet build 0 warnings
   - [x] dotnet test all green
 > 🔍 **强制**：合入前必须走 `ddd-code-reviewer`，核对蓝图 §8.1/§8.2 全部指标（api/workflow/model 三类）；重点验证指标真实埋点、非空转。
+> ✅ **已完成**：2026-07-20 第二轮补审已覆盖（见「DDD 对抗性代码审查修复记录 · 第二轮」P1 项：`ActiveStepsHistogram` 已真实 `Record`，其余 7 个指标均确认埋点非空转）。
 
 Module 7: 自定义 AgentType (AgentRoles CRUD)
   - [x] AgentRoleDefinition aggregate root
@@ -248,7 +251,7 @@ Module 9: CI/CD + 性能基准
 After all modules complete:
 
 - [x] Full `dotnet build` — 0 warnings, 0 errors
-- [x] Full `dotnet test` — all passing (63/63)
+- [x] Full `dotnet test` — all passing (81/81)
 - [x] Architecture tests pass (6/6)
 - [x] Application unit tests pass (13/13)
 - [x] SpecFlow BDD tests pass (41/41)
@@ -283,7 +286,7 @@ After all modules complete:
 - **Module 6 OpenTelemetry 监控**：核对蓝图 §8.1 / §8.2 全部指标（api / workflow / model 三类）；重点验证指标真实埋点、非空转。
 - Module 7 自定义 AgentType（CRUD）属标准基础设施，走 `ddd-phase-quality-gate` 即可。
 
-> 说明：本阶段两份审查记录互补——下方「DDD 对抗性代码审查修复记录」（已跑 `ddd-code-reviewer`）覆盖状态机 / 广播器 / 迁移；「Audit Findings」（跑 `ddd-phase-quality-gate`）覆盖控制器 / 接口结构卫生。Module 5/6 此前仅过 quality-gate，建议补一轮 reviewer。
+> 说明：本阶段两份审查记录互补——下方「DDD 对抗性代码审查修复记录」（已跑 `ddd-code-reviewer`）覆盖状态机 / 广播器 / 迁移；「Audit Findings」（跑 `ddd-phase-quality-gate`）覆盖控制器 / 接口结构卫生。Module 5/6 此前仅过 quality-gate，已于 2026-07-20 第二轮补审闭环（见「DDD 对抗性代码审查修复记录 · 第二轮」）。
 
 ### 蓝图对齐新增项（来自 2026-07-16 设计评审，待排期）
 
@@ -298,9 +301,11 @@ After all modules complete:
 
 ## DDD 对抗性代码审查修复记录
 
+### 第一轮 (2026-07-16)
+
 审查时间: 2026-07-16 | 审查工具: ddd-code-reviewer
 
-### 修复清单
+#### 修复清单
 
 | 严重级 | 文件 | 问题 | 修复 |
 |--------|------|------|------|
@@ -313,11 +318,51 @@ After all modules complete:
 | P2 | `Cache/InMemoryShortTermMemory.cs` | `GetAsync` 未检查 `CancellationToken` | 添加 `ct.ThrowIfCancellationRequested()` |
 | P3 | `Api/Program.cs` | 过时注释 `// 阶段二启用: app.UseAuthorization();` | 已移除 |
 
-### 构建与测试验证
+#### 构建与测试验证
 
 - **dotnet build**: ✅ 0 warnings, 0 errors
 - **dotnet test**: ✅ 63/63 passed (ArchitectureTests 6, Application.Tests 13, SpecFlowTests 41, IntegrationTests 3)
 - **dotnet list package --vulnerable**: ✅ No vulnerable packages found
+
+### 第二轮 (2026-07-20) — Module 2/5/6 高风险管理模块补审
+
+审查时间: 2026-07-20 | 审查工具: ddd-code-reviewer | 范围: Phase 3 高风险叙事模块
+
+#### 审查范围已验证的蓝图章节
+
+- **附录 C.2**：单一编排原语 `IOrchestrationPrimitive`，顺序/协商双预设
+- **附录 C.6**：精准回滚语义（通过 step Order 而非 StepName）、重试循环边界修正
+- **附录 C.7**：可恢复性（Skip completed steps on resume，ResolvePreset 保持预设稳定）
+- **§8.1**：全部 3 类指标（api / workflow / model）验证
+- **§8.2**：AppMetrics 埋点策略（Decorator 模式 + SemanticKernelModelClient 直接埋点）
+- **阶段三验收标准**：SSE 进度推送、Web 界面拖拽编排工作流、OpenTelemetry 指标埋点
+
+#### 修复清单
+
+| 严重级 | 文件 | 问题 | 修复 |
+|--------|------|------|------|
+| P0 | `Api/Controllers/WorkflowProgressController.cs:51` | `Subscribe` 返回的 `subscriberId` 被丢弃（`_`），客户端断开时 `Unsubscribe` 未调用 → 频道永久驻留 `ConcurrentDictionary` 导致内存泄漏 | 捕获 subscriberId；在 `try/finally` 块中调用 `Unsubscribe(id, subscriberId)`，确保所有退出路径（正常 / 异常 / 取消）均清理 |
+| P0 | `Web/src/pages/WorkflowDetailPage.tsx` | 前端未连接 SSE `EventSource`，后端 `step_progress` 事件无消费者，实时进度面板不工作 | 添加 `useEffect` 创建 `EventSource` 监听 `workflow_id/progress` 端点；实时更新 `liveSteps` 状态；终端事件触发页面 reload |
+| P1 | `Application/Diagnostics/WorkflowMetrics.cs:27` | `ActiveStepsHistogram` 定义了 `workflow.active_steps` 指标但从未记录，属于空转的死指标 | 在 `OrchestrationPrimitive.ExecuteStepWithRetryAsync` 中步骤开始和结束时分别记录 1 和 0，附带 step_name/workflow_id 标签 |
+| P1 | `Web/src/pages/WorkflowEditorPage.tsx` | 编辑模式下（URL 带 `:id` 参数）未加载现有工作流数据，始终从空画布开始 | 添加 `useEffect` 通过 `getWorkflow(id)` 加载；将步骤转换为 React Flow 节点；解析步骤名称到 `nodeIdCounter` |
+| P1 | `Api/Controllers/WorkflowsController.cs` + `Application/Workflows/Commands/RunWorkflow/` | 前端 `WorkflowEditorPage` 保存时将步骤埋在 `initialContext` JSON 字符串中，后端不解析导致创建的工作流零步骤 | `RunWorkflowRequest` 新增可选 `Steps` 字段；`RunWorkflowCommand` 新增 `Steps` 属性；Handler 遍历 `Steps` 创建 `WorkflowStep` 并添加至工作流 |
+| P2 | `Infrastructure/Workflows/OrchestrationPrimitive.cs:452-472` | `RollbackCompletedStepsAsync` 通过 `StepName` 查找失败步（不唯一），与蓝图 C.6 精准回滚目标要求不符 | 签名改为 `(workflow, failedStepOrder, failedStepName, errorDetail, ct)`；用 `Order >= failedStepOrder` 精准回滚 |
+
+#### 构建与测试验证
+
+- **dotnet build**: ✅ 0 warnings, 0 errors
+- **dotnet test**: ✅ 81/81 passed (ArchitectureTests 6, Application.Tests 31, SpecFlowTests 41, IntegrationTests 3)
+- **已验证的测试项目**：架构约束、应用单元测试、BDD 验收、集成测试
+
+### 独立复评（2026-07-20）— Phase 3 质量现状核实
+
+独立于上述 `ddd-code-reviewer` 运行之外的再次核实（详见 `docs/quality/phase-3-reevaluation-2-2026-07-20.md`），重点验证"首轮复评发现的问题是否真修复"：
+
+- **P1 SSE 订阅泄漏**：✅ 已修复。`WorkflowProgressController.cs:51` 捕获 `subscriberId`；`try/finally` 调 `Unsubscribe`，断连/完成/异常三路径均清理。grep 确认消费者侧有真实调用点（不再是死代码）。
+- **P3 死指标 `workflow.active_steps`**：✅ 已修复。`OrchestrationPrimitive.cs:392,417` 已 `ActiveStepsHistogram.Record(...)`。
+- **P2 回归测试缺口**：⚠️ **OPEN（未闭环）**。SSE 清理修复**无任何 `.cs` 测试锁定**——全仓无测试引用 `Unsubscribe` / `StreamProgress` / `Channel`，与加固后 `ddd-code-reviewer` Section H2「长生命周期资源须有断连/取消/异常退出路径测试」直接冲突。需补"订阅 → 模拟断连 → 断言 channel 移除"测试。
+- **构建/测试实证**：`dotnet build` 0 warning / 0 error；`dotnet test` 81/81 绿。
+- **版本控制状态**：上述修复**尚未提交**（`git status` 显示一批 ` M`），且 `.quality-gate.json` 仍指向 `phase-2`。闭环收尾需：补 SSE 清理测试 + 将质量门切到 `phase-3` 并提交。
 
 ## Audit Findings (Phase-3 Quality Gate, 2026-07-16)
 
@@ -329,9 +374,44 @@ Issues found and fixed during Phase 3 quality gate audit (`ddd-phase-quality-gat
 | P3 | 5 (Missing CancellationToken) | `IDatabaseInitializer.cs:11` | Interface method missing CancellationToken parameter | Added `CancellationToken ct = default` |
 | P3 | 5 (Missing CancellationToken) | `DatabaseInitializer.cs` | Implementation and helper methods missing CancellationToken propagation | Added `ct` parameter and propagated through all EF Core calls |
 
+## Audit Findings (Phase-3 Quality Gate Re-Audit, 2026-07-20)
+
+Full 12-category re-audit of all `src/` directories. Phase 3 infrastructure focus: API controllers, EF Core migrations, configuration, CI/CD, and frontend build.
+
+| Severity | Category | File | Finding | Fix Applied |
+|----------|----------|------|---------|-------------|
+| — | All 12 categories | — | No actionable findings. All categories passed. | N/A |
+
+### Detailed Results by Category
+
+| Category | Result | Notes |
+|----------|--------|-------|
+| 1. DI Registration Gaps ✅ | PASS | 23 interfaces in `Application.Abstractions`; all registered in `DependencyInjection.cs`. `IAgentOrchestrator` is `[Obsolete]` with no production consumers — registered as planned tech debt (waiver below). |
+| 2. DDD Layer Violations ✅ | PASS | Zero `using AgentPlatform.Infrastructure` in Application layer. Zero `public interface I` in Infrastructure. Domain `.csproj` has zero `<PackageReference>` entries. |
+| 3. EF Core Mapping Gaps ✅ | PASS | All 7 aggregate roots (Agent, Conversation, Workflow, ExecutionLog, ToolDefinition, AgentRoleDefinition, AgentConfiguration) have corresponding `IEntityTypeConfiguration<T>` in Infrastructure. |
+| 4. Hardcoded Values ✅ | PASS | Only seed-data sentinel GUIDs and IOptions-default model names found — all acceptable. No magic numbers in business logic. |
+| 5. Missing CancellationToken ✅ | PASS | All async methods accept `CancellationToken`. `next()` in `UnitOfWorkBehavior.cs` is correct MediatR 12 API (delegate takes no params). |
+| 6. Missing Modifiers ✅ | PASS | All implementation classes `internal sealed` (Infrastructure) or `public sealed` (Application). |
+| 7. Concurrency Risks ✅ | PASS | `CostController` (Singleton) uses `lock` for mutable state. `ExecutionProgressBroadcaster` uses `ConcurrentDictionary`. No `decimal` accumulators. |
+| 8. Missing Null Guards ✅ | PASS | Public methods use `ArgumentNullException.ThrowIfNull`. All `null!` suppressions have `// EF Core proxy` comments. |
+| 9. API Infrastructure ✅ | PASS | `UseExceptionHandler`, `ProblemDetails`, `AddCors`/`UseCors`, `MapHealthChecks` present in `Program.cs`. All 7 controllers inject only `IMediator` (plus `ITenantProvider`/`IOptions<T>` for cross-cutting concerns). |
+| 10. Blueprint Drift ✅ | PASS | JWT/Identity marked as future phase. OpenTelemetry metrics + Prometheus exporter present. CI/CD workflows (ci.yml + build-and-test.yml) exist. |
+| 11. Missing XML Documentation ✅ | PASS | All 7 controllers have `/// <summary>` on class and per-action methods with `<param>` tags. Application.Abstractions interfaces fully documented. |
+| 12. Swagger/API Documentation ✅ | PASS | `Swashbuckle.AspNetCore` + `Microsoft.AspNetCore.OpenApi` packages. `AddOpenApi`, `AddSwaggerGen`, `UseSwaggerUI`, `MapScalarApiReference` configured. `IncludeXmlComments` for both Api and Application assemblies. `GenerateDocumentationFile` enabled. |
+
 ### Waivers
 
-None.
+| Severity | File | Finding | Waiver Reason | Risk Accepted | Target Phase |
+|----------|------|---------|--------------|---------------|-------------|
+| P2 | `Infrastructure/Agents/AutoGenAgentOrchestrator.cs` | Dead code — class implements `IAgentOrchestrator` but neither is registered in DI | Both class and interface are `[Obsolete]`, replaced by `IOrchestrationPrimitive`. Planned cleanup deferred to avoid breaking SpecFlow test doubles (`TestAgentOrchestrator`). | Zero — no production code resolves IAgentOrchestrator; DI registration for `IOrchestrationPrimitive` exists. | Phase 4 |
+
+### Gate Status: PASS
+[P0: 0 | P1: 0 | P2: 1 (waived: 1) | P3: 0 (waived: 0)]
+
+### Build & Test Verification ✅
+- `dotnet build`: 0 warnings, 0 errors
+- `dotnet test`: 81/81 passed (ArchitectureTests 6, Application.Tests 31, SpecFlowTests 41, IntegrationTests 3)
+- `dotnet list package --vulnerable`: No vulnerable packages (verified via CI)
 
 ## Phase 3 High-Risk Predictions
 
@@ -363,7 +443,8 @@ Based on Phase 1-2 patterns, these are most likely to require multi-round fixes:
 
 - **开始日期**：2026-07-13
 - **完成日期**：2026-07-15
-- **完成度**：██████████ 100%
+- **完成度**：██████████ 100%（功能交付）
+- **QA 状态**：2026-07-20 独立复评 — 首轮问题已修复（P1 SSE 泄漏、P3 死指标），但有 1 项 P2 回归测试缺口（SSE 清理无测试锁定）未闭环；相关修复尚未提交，质量门仍指向 phase-2。详见「独立复评（2026-07-20）」节。
 
 ## 回顾（完成后填写）
 

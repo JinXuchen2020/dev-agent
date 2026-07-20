@@ -1,5 +1,6 @@
 using System.Text;
 using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Application.Diagnostics;
 using AgentPlatform.Domain.Aggregates.Workflows;
 using AgentPlatform.Domain.Aggregates.Workflows.Events;
 using AgentPlatform.Domain.Enums;
@@ -188,10 +189,10 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
 
         await _eventBus.PublishAsync(
             new WorkflowRolledBack(workflow.Id, workflow.Name,
-                $"Rolled back to step {targetStepOrder}",
-                $"Target step order: {targetStepOrder}", workflow.TenantId), ct);
+                $"Rolled back to step order {targetStepOrder}",
+                $"Precise rollback to step order {targetStepOrder}", workflow.TenantId), ct);
 
-        _logger.LogInformation("Workflow {WorkflowId} rolled back to step {TargetStepOrder}",
+        _logger.LogInformation("Workflow {WorkflowId} rolled back to step order {TargetStepOrder} (Blueprint C.6 precision rollback)",
             workflowId, targetStepOrder);
     }
 
@@ -262,7 +263,7 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
                     await _eventBus.PublishAsync(
                         new StepFailed(workflow.Id, step.Id, step.StepName, step.Order,
                             result.ErrorMessage ?? "Retry exhausted", result.Duration), ct);
-                    await RollbackCompletedStepsAsync(workflow, step.StepName,
+                    await RollbackCompletedStepsAsync(workflow, step.Order, step.StepName,
                         result.ErrorMessage ?? "Retry exhausted", ct);
                     return;
 
@@ -270,7 +271,7 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
                     await _eventBus.PublishAsync(
                         new StepFailed(workflow.Id, step.Id, step.StepName, step.Order,
                             result.ErrorMessage, result.Duration), ct);
-                    await RollbackCompletedStepsAsync(workflow, step.StepName,
+                    await RollbackCompletedStepsAsync(workflow, step.Order, step.StepName,
                         result.ErrorMessage ?? "Unrecoverable error", ct);
                     return;
 
@@ -344,7 +345,7 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
                     await _eventBus.PublishAsync(
                         new StepFailed(workflow.Id, nextStep.Id, nextStep.StepName, nextStep.Order,
                             result.ErrorMessage, result.Duration), ct);
-                    await RollbackCompletedStepsAsync(workflow, nextStep.StepName,
+                    await RollbackCompletedStepsAsync(workflow, nextStep.Order, nextStep.StepName,
                         result.ErrorMessage ?? "Unrecoverable in negotiation", ct);
                     return;
 
@@ -387,6 +388,11 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
             _logger.LogInformation("Executing step {StepName} (attempt {Attempt}/{MaxAttempts})",
                 step.StepName, attempt, maxAttempts);
 
+            // Record active step metric (tracks step concurrency distribution)
+            WorkflowMetrics.ActiveStepsHistogram.Record(1,
+                new KeyValuePair<string, object?>("step_name", step.StepName),
+                new KeyValuePair<string, object?>("workflow_id", workflow.Id));
+
             var executor = ResolveExecutor(step);
             if (executor == null)
             {
@@ -406,6 +412,11 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
                 lastResult = await executor.ExecuteAsync(step, ctx, timeoutCts.Token);
                 var duration = DateTime.UtcNow - startTime;
                 lastResult = lastResult with { Duration = duration };
+
+                // Record step completion (active steps = 0 for this step)
+                WorkflowMetrics.ActiveStepsHistogram.Record(0,
+                    new KeyValuePair<string, object?>("step_name", step.StepName),
+                    new KeyValuePair<string, object?>("workflow_id", workflow.Id));
 
                 if (lastResult.Outcome == StepOutcome.Success)
                     return lastResult;
@@ -450,14 +461,12 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
     }
 
     private async Task RollbackCompletedStepsAsync(
-        Workflow workflow, string failedStepName, string errorDetail, CancellationToken ct)
+        Workflow workflow, int failedStepOrder, string failedStepName, string errorDetail, CancellationToken ct)
     {
-        // Precise rollback: find the failed step's order and reset ALL steps from
-        // that point onward (Blueprint C.6), regardless of their current state.
-        var failedStep = workflow.Steps.FirstOrDefault(s => s.StepName == failedStepName);
-        int rollbackFromOrder = failedStep?.Order ?? 0;
-
-        foreach (var step in workflow.Steps.Where(s => s.Order >= rollbackFromOrder))
+        // Precise rollback: reset ALL steps from the failed step onward
+        // (Blueprint C.6), regardless of their current state. Uses step Order
+        // for precision (StepName is not guaranteed unique).
+        foreach (var step in workflow.Steps.Where(s => s.Order >= failedStepOrder))
         {
             step.SetState(WorkflowState.Pending);
             _logger.LogInformation("Rolled back step {StepName} (order {Order})", step.StepName, step.Order);
@@ -468,7 +477,10 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
         await _unitOfWork.SaveChangesAsync(ct);
 
         await _eventBus.PublishAsync(
-            new WorkflowRolledBack(workflow.Id, workflow.Name, failedStepName, errorDetail, workflow.TenantId), ct);
+            new WorkflowRolledBack(workflow.Id, workflow.Name, failedStepName,
+                $"Rolled back from step order {failedStepOrder}: {errorDetail}", workflow.TenantId), ct);
+        _logger.LogInformation("Workflow {WorkflowId} rolled back from step order {FailedStepOrder}: {ErrorDetail}",
+            workflow.Id, failedStepOrder, errorDetail);
     }
 
     // ──────────── Context Building ────────────
