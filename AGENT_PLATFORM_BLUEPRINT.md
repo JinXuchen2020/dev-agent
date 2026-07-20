@@ -84,7 +84,7 @@
 | 开源模型部署 | vLLM | **保留 Python** vLLM，C# 走 OpenAI 兼容接口调用 | 100% |
 | 有状态工作流 | LangGraph | 自研状态机 + MediatR 领域事件 / CoreWF | 75% |
 | 多 Agent 协作 | CrewAI | AutoGen.NET v0.4.0-dev-1 (prerelease) / SK Agent 模式 | 80% |
-| 向量数据库 | Chroma | PGVector (PostgreSQL 扩展) | 100% |
+| 向量数据库 | Chroma | PGVector (PostgreSQL 扩展) | Stub（硬编码返回，未接地；真实 PGVector 排期 Phase 4） |
 | 后端接口 | FastAPI | ASP.NET Core Web API | 100% |
 | 前端 | Streamlit | **React** (TypeScript + Vite) + Ant Design；桌面形态可选 **Tauri 2.0**（详见附录 G） | 100% |
 | 代码沙箱 | Docker SDK | Docker.DotNet | 100% |
@@ -283,7 +283,7 @@ Scenario Outline: 主模型超时后降级到备用模型
 
 > 每个阶段的详细学习目标、验收标准、进度追踪见 [`phases/`](./phases/) 目录下的独立文档。
 > - [阶段一：基础 MVP](./phases/phase-1-baseline-mvp.md) · [阶段二：多智能体工作流](./phases/phase-2-multi-agent.md)
-> - [阶段三：平台化与模型优化](./phases/phase-3-platformization.md) · [阶段四：前沿特性与收尾](./phases/phase-4-advanced-features.md)
+> - [阶段三：平台化与模型优化](./phases/phase-3-platformization.md) · [阶段四：知识接地与加固](./phases/phase-4-grounding.md) · [阶段五：前沿特性与收尾](./phases/phase-5-advanced-features.md)
 
 ### 阶段一 · 基础 MVP（1–2 周）
 
@@ -294,7 +294,7 @@ Scenario Outline: 主模型超时后降级到备用模型
 - [x] **模型路由**：用 Semantic Kernel 封装 `IModelClient`，实现 `SemanticKernelModelClient`
 - [x] 自定义路由中间件：降级、重试（Polly）、负载、成本统计（token + 费用报表）
 - [x] **vLLM**：独立部署为服务，以 OpenAI 兼容接口接入 SK
-- [x] **RAG**：SK Memory + PGVector，实现文档入库与召回（`PgVectorStore` 为 Stub，Phase 2 实现真实 PGVector）
+- [x] **RAG 接线**：SK Memory + `IVectorStore` 已接入上下文（`WorkflowContext.Retrieval` 生成前注入召回物）。⚠️ 但 `PgVectorStore` 仍为 Stub：`SearchAsync` 返回硬编码 doc-1/doc-2、`Ingest/Delete` 为 no-op，**未接地真实向量库**。真实 PGVector 实现已排期 Phase 4（见 `phase-4-grounding.md` F5）。
 - [x] **Tool Calling**：SK Plugin 原生实现，定义 `ToolDefinition` 聚合
 - [x] 写第一个 SpecFlow 验收场景：模型降级
 

@@ -5,7 +5,9 @@ namespace AgentPlatform.Infrastructure.VectorStore;
 
 /// <summary>
 /// PostgreSQL pgvector-backed implementation of <see cref="IVectorStore"/> for document ingestion and similarity search.
+/// NOTE: this is currently a STUB — it is NOT grounded to a real vector database (see <see cref="ObsoleteAttribute"/>).
 /// </summary>
+[Obsolete("RAG vector store is a STUB and is NOT grounded to a real vector database: SearchAsync returns hardcoded doc-1/doc-2 and Ingest/Delete are no-ops. Replace with a real pgvector-backed implementation (tracked in Phase 4) before relying on RAG.", false)]
 internal sealed class PgVectorStore : IVectorStore
 {
     private readonly ILogger<PgVectorStore> _logger;
@@ -20,7 +22,7 @@ internal sealed class PgVectorStore : IVectorStore
     }
 
     /// <summary>
-    /// Ingests a document into the specified vector collection so it can be returned by subsequent searches.
+    /// STUB: logs and returns without embedding or persisting. Documents are NOT stored and will never appear in SearchAsync.
     /// </summary>
     /// <param name="collectionName">The name of the collection to ingest the document into.</param>
     /// <param name="documentId">The unique identifier of the document.</param>
@@ -39,7 +41,7 @@ internal sealed class PgVectorStore : IVectorStore
     }
 
     /// <summary>
-    /// Searches the specified vector collection for documents similar to the supplied query.
+    /// STUB: returns hardcoded placeholder results (doc-1/doc-2). Does NOT perform real embedding or similarity search.
     /// </summary>
     /// <param name="collectionName">The name of the collection to search.</param>
     /// <param name="query">The natural-language query to match against stored documents.</param>
@@ -63,7 +65,7 @@ internal sealed class PgVectorStore : IVectorStore
     }
 
     /// <summary>
-    /// Deletes a document from the specified vector collection.
+    /// STUB: logs and returns without deleting anything. No-op.
     /// </summary>
     /// <param name="collectionName">The name of the collection containing the document.</param>
     /// <param name="documentId">The unique identifier of the document to delete.</param>

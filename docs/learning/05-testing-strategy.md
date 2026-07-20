@@ -8,7 +8,7 @@
 
 ```
          ┌──────────┐
-         │   E2E    │  ← 没有。Phase 4 补
+         │   E2E    │  ← 没有。Phase 5 补
          │ (手动)   │
         ┌┴──────────┴┐
         │ Integration │  ← Testcontainers 脚手架就绪，测试用例待 Phase 2

@@ -11,8 +11,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgentPlatform.Infrastructur
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgentPlatform.Api", "AgentPlatform.Api\AgentPlatform.Api.csproj", "{725A6B76-5E73-4659-A2B3-1E415314A16A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgentPlatform.Workflow", "AgentPlatform.Workflow\AgentPlatform.Workflow.csproj", "{8517699E-5A19-43EE-BFC0-5DA1D944ABD3}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgentPlatform.SpecFlowTests", "AgentPlatform.SpecFlowTests\AgentPlatform.SpecFlowTests.csproj", "{194B7CF0-F92F-4A34-B2ED-046C2F6E1096}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgentPlatform.ArchitectureTests", "AgentPlatform.ArchitectureTests\AgentPlatform.ArchitectureTests.csproj", "{60BBAA51-0654-447B-B0DE-F060D591AE57}"
@@ -79,18 +77,6 @@ Global
 		{725A6B76-5E73-4659-A2B3-1E415314A16A}.Release|x64.Build.0 = Release|Any CPU
 		{725A6B76-5E73-4659-A2B3-1E415314A16A}.Release|x86.ActiveCfg = Release|Any CPU
 		{725A6B76-5E73-4659-A2B3-1E415314A16A}.Release|x86.Build.0 = Release|Any CPU
-		{8517699E-5A19-43EE-BFC0-5DA1D944ABD3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{8517699E-5A19-43EE-BFC0-5DA1D944ABD3}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{8517699E-5A19-43EE-BFC0-5DA1D944ABD3}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{8517699E-5A19-43EE-BFC0-5DA1D944ABD3}.Debug|x64.Build.0 = Debug|Any CPU
-		{8517699E-5A19-43EE-BFC0-5DA1D944ABD3}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{8517699E-5A19-43EE-BFC0-5DA1D944ABD3}.Debug|x86.Build.0 = Debug|Any CPU
-		{8517699E-5A19-43EE-BFC0-5DA1D944ABD3}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{8517699E-5A19-43EE-BFC0-5DA1D944ABD3}.Release|Any CPU.Build.0 = Release|Any CPU
-		{8517699E-5A19-43EE-BFC0-5DA1D944ABD3}.Release|x64.ActiveCfg = Release|Any CPU
-		{8517699E-5A19-43EE-BFC0-5DA1D944ABD3}.Release|x64.Build.0 = Release|Any CPU
-		{8517699E-5A19-43EE-BFC0-5DA1D944ABD3}.Release|x86.ActiveCfg = Release|Any CPU
-		{8517699E-5A19-43EE-BFC0-5DA1D944ABD3}.Release|x86.Build.0 = Release|Any CPU
 		{194B7CF0-F92F-4A34-B2ED-046C2F6E1096}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{194B7CF0-F92F-4A34-B2ED-046C2F6E1096}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{194B7CF0-F92F-4A34-B2ED-046C2F6E1096}.Debug|x64.ActiveCfg = Debug|Any CPU

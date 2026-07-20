@@ -70,7 +70,8 @@ dotnet user-secrets set "OpenAI:Key" "sk-your-key-here"
 | Phase 1 | 基础 MVP — 路由、RAG、Tool Calling、成本报表 | ✅ 完成 |
 | Phase 2 | 多智能体工作流 — 状态机、Redis、AutoGen 编排、ExecutionLog | ✅ 完成 |
 | Phase 3 | 平台化 — 可视化编排、监控、自定义 AgentType | ✅ 完成 |
-| Phase 4 | 前沿特性 — Code Agent、压测、BDD 全量 | 📋 计划 |
+| Phase 4 | 知识接地与加固 — RAG 真接地、Critic fail-loud、DB 分页、真 tokenizer | 📋 计划 |
+| Phase 5 | 前沿特性 — Code Agent、压测、BDD 全量 | 📋 计划 |
 
 ## 质量治理流程
 

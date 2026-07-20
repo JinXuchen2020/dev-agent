@@ -1,4 +1,4 @@
-# 07. 项目演进：Phase 1 → 4 的设计思路
+# 07. 项目演进：Phase 1 → 5 的设计思路
 
 > 目标：理解为什么阶段是这个顺序，每个阶段解决什么问题，不做什么事。
 
@@ -6,19 +6,13 @@
 
 ## 7.1 阶段性概览
 
-```
-Phase 1                    Phase 2                    Phase 3                    Phase 4
-基础 MVP                   多智能体工作流              平台化                     前沿特性
-┌─────────────────┐       ┌──────────────────┐       ┌──────────────────┐       ┌──────────────────┐
-│ 骨架 + 抽象     │       │ 真实业务逻辑     │       │ 前端 + 监控      │       │ 优化 + 补齐      │
-│                 │       │                  │       │                  │       │                  │
-│ • 6 项目脚手架  │       │ • 状态机引擎      │       │ • React Web UI   │       │ • Code Agent     │
-│ • DDD 分层      │       │ • Redis 缓存      │       │ • Grafana 大盘   │       │ • Research Agent │
-│ • 模型路由      │       │ • AutoGen Agent   │       │ • React Flow     │       │ • 性能压测       │
-│ • SpecFlow BDD  │       │ • 真实 PGVector   │       │ • OpenTelemetry  │       │ • 文档收尾       │
-│ • 全部 Stub     │       │ • ExecutionLog    │       │ • CI/CD          │       │                  │
-└─────────────────┘       └──────────────────┘       └──────────────────┘       └──────────────────┘
-```
+| Phase | 名称 | 定位 | 关键内容 |
+|-------|------|------|----------|
+| Phase 1 | 基础 MVP | 骨架 + 抽象（全 Stub） | 6 项目脚手架、DDD 分层、模型路由、SpecFlow BDD |
+| Phase 2 | 多智能体工作流 | 真实业务逻辑 | 状态机引擎、Redis 缓存、AutoGen Agent、真实 PGVector、ExecutionLog |
+| Phase 3 | 平台化 | 前端 + 监控 | React Web UI、Grafana 大盘、React Flow、OpenTelemetry、CI/CD |
+| Phase 4 | 知识接地与加固（上线前必做） | 把声称完成实为存根的能力落地 | RAG 接真 PGVector、Critic fail-loud、DB 端分页、真 tokenizer 压缩 |
+| Phase 5 | 前沿特性与收尾 | 优化 + 亮点 | Code Agent、Research Agent、性能压测、BDD 全量、简历作品集 |
 
 ## 7.2 为什么 Phase 1 全部用 Stub
 
@@ -32,9 +26,9 @@ Stub 组件清单：
 │ 模型调用           │ StubModelClient          │ 架构验证不需要真模型          │
 │ 数据库             │ SQLite（代替 PostgreSQL）  │ 本地开发，不用启动 Docker      │
 │ 缓存               │ InMemoryShortTermMemory   │ 一个 ConcurrentDictionary     │
-│ 向量库             │ PgVectorStore Stub        │ Phase 2 才需要真实向量检索     │
+│ 向量库             │ PgVectorStore Stub        │ 仍为 Stub（Phase 2/3 未落地）；真实 PGVector 排期 Phase 4 │
 │ 工作流引擎         │ StubWorkflowEngine        │ Phase 2 才实现状态机           │
-│ 代码沙箱           │ DockerCodeSandbox Stub    │ Phase 4 才需要真实沙箱         │
+│ 代码沙箱           │ DockerCodeSandbox Stub    │ Phase 5 才需要真实沙箱         │
 │ 工具执行器         │ NativeToolExecutor Stub   │ 返回常数字符串                │
 │ Agent 编排        │ AutoGenAgentOrchestrator   │ Phase 2 才配置 AutoGen.NET    │
 │ 用户认证           │ 跳过 JWT/Identity         │ Phase 2 按蓝图实现            │
@@ -53,7 +47,7 @@ Blue 里写的是"多智能体"——但本质是**把 Phase 1 的 Stub 替换�
 | Phase 1 | Phase 2 |
 |---------|---------|
 | `StubModelClient` | `IModelClient` 接真实 API（已有 `SemanticKernelModelClient`） |
-| `PgVectorStore Stub` | PGVector 真实向量检索 |
+| `PgVectorStore Stub` | PGVector 真实向量检索（排期 Phase 4，当前仍为 Stub） |
 | `InMemoryShortTermMemory` | RedisShortTermMemory |
 | `StubWorkflowEngine` | 自研状态机（分支/重试/回滚） |
 | `AutoGenAgentOrchestrator Stub` | AutoGen.NET 真实协作 |
@@ -76,7 +70,7 @@ Phase 2 跑通了核心逻辑，但**只有 API 没有 UI，只有日志没有�
 
 ---
 
-## 7.5 Phase 4 为什么是"前沿特性"
+## 7.5 Phase 5 为什么是"前沿特性"
 
 最后阶段补齐"有亮点但非核心"的功能：
 
@@ -92,12 +86,12 @@ Phase 2 跑通了核心逻辑，但**只有 API 没有 UI，只有日志没有�
 
 ## 7.6 设计原则变化
 
-| 原则 | Phase 1 | Phase 2 | Phase 3 | Phase 4 |
-|------|---------|---------|---------|---------|
-| **测试策略** | Architecture + BDD | + Unit (状态机) | + Integration | + Stryker |
-| **性能目标** | 不关心 | 不关心 | 基准：P95 < 30s | 优化：P95 < 10s |
-| **安全** | 跳过 | 基本 | 完整 | 审计 |
-| **文档** | 蓝图 + 阶段文档 | + 学习文档 | + API 文档 | + 简历作品集 |
+| 原则 | Phase 1 | Phase 2 | Phase 3 | Phase 4（加固） | Phase 5（前沿） |
+|------|---------|---------|---------|-----------------|----------------|
+| **测试策略** | Architecture + BDD | + Unit (状态机) | + Integration | + ddd-code-reviewer (RAG/Critic) | + Stryker |
+| **性能目标** | 不关心 | 不关心 | 基准：P95 < 30s | 复盘：DB 端分页 | 优化：P95 < 10s |
+| **安全** | 跳过 | 基本 | 完整 | Critic 闸保真 | 审计 |
+| **文档** | 蓝图 + 阶段文档 | + 学习文档 | + API 文档 | RAG 落地说明 | + 简历作品集 |
 
 ---
 
@@ -113,7 +107,7 @@ Phase 2 跑通了核心逻辑，但**只有 API 没有 UI，只有日志没有�
 第三步：加 UI + 监控（Phase 3）
   └─ API 稳定后再写前端，没有监控不上线
 
-第四步：优化 + 亮点（Phase 4）
+第五步：优化 + 亮点（Phase 5）
   └─ 性能、安全、文档、CV 亮点
 ```
 
@@ -125,4 +119,4 @@ Phase 2 跑通了核心逻辑，但**只有 API 没有 UI，只有日志没有�
 - `phases/phase-1-baseline-mvp.md`
 - `phases/phase-2-multi-agent.md`
 - `phases/phase-3-platformization.md`
-- `phases/phase-4-advanced-features.md`
+- `phases/phase-5-advanced-features.md`

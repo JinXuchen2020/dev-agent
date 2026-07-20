@@ -78,7 +78,7 @@
 - Scalar/OpenAPI/Swagger: 所有环境默认启用 (已移除环境限制)
 
 ## Next Steps
-- Phase 4: 前沿特性 — Code Agent、vLLM 深度集成、BDD 全量覆盖、性能优化、JWT/Identity 安全
+- Phase 5: 前沿特性 — Code Agent、vLLM 深度集成、BDD 全量覆盖、性能优化、JWT/Identity 安全
 - 解决 Phase 2 审查遗留问题：注册分支执行器、持久化重试计数器、真实 AutoGen .NET 集成
 - 蓝图同步: 版本 v1.5, Phase 2 清单已勾选, Phase 3 全部完成
 

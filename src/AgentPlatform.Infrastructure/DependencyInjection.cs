@@ -4,7 +4,6 @@ using AgentPlatform.Application.Routing.Services;
 using AgentPlatform.Application.Tools;
 using AgentPlatform.Domain.Aggregates.Workflows.Events;
 using AgentPlatform.Domain.Repositories;
-using AgentPlatform.Infrastructure.Agents;
 using AgentPlatform.Infrastructure.Cache;
 using AgentPlatform.Infrastructure.Configuration;
 using AgentPlatform.Infrastructure.Jobs;
@@ -90,7 +89,9 @@ public static class DependencyInjection
         services.AddScoped<IAgentConfigurationRepository, AgentConfigurationRepository>();
         services.AddSingleton<IYamlConfigurationParser, YamlConfigurationParserService>();
         services.AddSingleton<IToolRegistry, InMemoryToolRegistry>();
+#pragma warning disable CS0618 // PgVectorStore is an explicit [Obsolete] stub (RAG not grounded)
         services.AddScoped<IVectorStore, PgVectorStore>();
+#pragma warning restore CS0618
         services.AddScoped<ICodeSandbox, DockerCodeSandbox>();
 
         var cacheProvider = configuration.GetSection("Cache:Provider").Value;
@@ -121,13 +122,9 @@ public static class DependencyInjection
         services.AddScoped<ITenantProvider, TenantProvider>();
         services.AddScoped<IResiliencePipelineProvider, ResiliencePipelineProvider>();
         // ── Orchestration Primitive (Blueprint C.2) ──
-        // Single engine replacing WorkflowStateMachineEngine + AutoGenAgentOrchestrator + IWorkflowEngine
+        // Single engine: OrchestrationPrimitive replaced the legacy WorkflowStateMachineEngine,
+        // AutoGenAgentOrchestrator and StubWorkflowEngine.
         services.AddScoped<IOrchestrationPrimitive, OrchestrationPrimitive>();
-        // Legacy: StubWorkflowEngine kept for Phase 1 backward compat only.
-        // Fully replaced by OrchestrationPrimitive. Scheduled for removal in Phase 3 cleanup.
-#pragma warning disable CS0618 // Type is legacy - kept for backward compat
-        services.AddScoped<IWorkflowEngine, StubWorkflowEngine>();
-#pragma warning restore CS0618
 
         // Obsolete - replaced by IOrchestrationPrimitive (Blueprint C.2).
         // Registered only to satisfy DI contract while awaiting removal in Phase 3.
@@ -180,18 +177,8 @@ public static class DependencyInjection
         services.AddScoped<INotificationHandler<DomainEventNotification<WorkflowCompleted>>, WorkflowCompletedEventHandler>();
         services.AddScoped<INotificationHandler<DomainEventNotification<WorkflowRolledBack>>, WorkflowRolledBackEventHandler>();
 
-        var agSection = configuration.GetSection("AutoGen");
-        var autoGenSettings = new AutoGenSettings
-        {
-            MaxRounds = int.TryParse(agSection["MaxRounds"], out var rounds) ? rounds : 20,
-            MaxIdleIntervalSeconds = int.TryParse(agSection["MaxIdleIntervalSeconds"], out var idle) ? idle : 30,
-            MaxRetryAttempts = int.TryParse(agSection["MaxRetryAttempts"], out var retry) ? retry : 3,
-            DefaultModelId = agSection["DefaultModelId"] ?? "deepseek-chat"
-        };
-        services.AddSingleton(Microsoft.Extensions.Options.Options.Create(autoGenSettings));
-        // IAgentOrchestrator fully replaced by IOrchestrationPrimitive (Blueprint C.2)
-        // AutoGenSettings is dead configuration — kept only for the [Obsolete] AutoGenAgentOrchestrator.
-        // When that class is removed in Phase 3, remove this registration block as well.
+        // AutoGenAgentOrchestrator + AutoGenSettings removed (Phase 3 cleanup): the [Obsolete]
+        // orchestrator and its dead config block are gone; OrchestrationPrimitive is the only engine.
 
         services.AddScoped<ToolCallingDispatcher>();
         services.AddScoped<IToolExecutor, NativeToolExecutor>();
