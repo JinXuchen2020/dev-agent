@@ -31,4 +31,21 @@ public sealed class StateMachineSettings
     /// Default: "deepseek-chat"
     /// </summary>
     public string DefaultModelId { get; set; } = "deepseek-chat";
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the critic step's rejection can be overridden
+    /// (silently approved) when the critic model throws an exception or returns invalid JSON.
+    /// When false (default), any critic model failure produces Approved=false (reject / fail-loud),
+    /// ensuring quality gates are never silently bypassed.
+    /// Default: false
+    /// </summary>
+    public bool AllowCriticOverride { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets the maximum token budget for the compressed step summary
+    /// passed to each workflow step (Blueprint C.3.1).
+    /// Prevents unbounded context window growth.
+    /// Default: 8000
+    /// </summary>
+    public int MaxSummaryTokens { get; set; } = 8000;
 }

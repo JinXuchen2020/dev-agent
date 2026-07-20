@@ -237,7 +237,7 @@
 
 **触发时机（MANDATORY）**：
 - 项目启动、首次进入 Phase 1 前：对 `AGENT_PLATFORM_BLUEPRINT.md`（含附录 C）跑一次 `blueprint-architecture-review`。
-- 任何阶段若新增/修订蓝图章节（如 Phase 2 加编排范式、Phase 3 加可视化编排、Phase 5 加 Code Agent 闭环），在动手前先对变更章节重跑。
+- 任何阶段若新增/修订蓝图章节（如 Phase 2 加编排范式、Phase 3 加可视化编排、Phase 6 加 Code Agent 闭环），在动手前先对变更章节重跑。
 - 蓝图变更必须经此关，否则视为未评审。
 
 **变更传播（MANDATORY · 蓝图→Phase 任务清单）**：

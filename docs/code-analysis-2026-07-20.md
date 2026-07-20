@@ -10,13 +10,16 @@
 
 > 直接读源码 + 实测 `.quality-gate.json`，修正早前基于过期 `phase-3` 文档的判断。
 
+> ⚠️ **2026-07-20 复检更正**：本报告初版（同日早些时候）基于当时读取的 `PgVectorStore` 存根版本，判定「RAG 假接地 / Critic 静默通过 / 内存分页 / 无真 tokenizer」为缺点、Phase 4 为 0%。**复检当前磁盘代码发现 Phase 4（知识接地与加固）已全部落地**（见 `phase-4-grounding.md` 质量门报告，40/40 测试通过）。以下完成度表已按复检结果修正；原「缺点」一节中上述 4 项均已不成立，唯余 Phase 6 的沙箱/检索类缺口（安全类缺口已归 Phase 5 安全加固，launch-blocking）。
+
 | 阶段 | 完成度 | 依据 |
 |------|--------|------|
 | Phase 1 基线 MVP | **100%** | 91 项回顾修复 + 设计/代码/结构三轮审查 |
 | Phase 2 多 Agent 协作 | **100%** | 9 模块 / 70+ 源文件 / SpecFlow 63/63 绿 |
 | Phase 3 平台化 | **100%** | 质量门已切 `phase-3` 且 `cleared`（2026-07-20 11:35），86/86 绿 |
-| Phase 4 加固 | **0%** | RAG 真接地、Critic fail-loud、DB 分页、真 tokenizer 均 `[ ]` 未启动（上线前必做） |
-| Phase 5 高级特性 | **0%** | Code/Research Agent、压测、BDD 全量均 `[ ]` 未启动 |
+| Phase 4 加固（知识接地） | **100%** | `phase-4-grounding.md` 质量门 PASS：RAG 真 PGVector、Critic fail-loud、DB 端分页、真 tokenizer、CI 全绿 |
+| Phase 5 安全加固 | **0%** | 无 Authentication/JWT/RBAC、TenantProvider 硬编码 DefaultTenantId、无限流/审计/Key 加密（launch-blocking） |
+| Phase 6 前沿特性 | **0%** | Code Agent 沙箱仍为 no-op Stub、Research Agent 未实现、压测/BDD 全量未启动 |
 
 **关键修正**：早前依据过期 `phase-3-platformization.md` 判定的「SSE 测试缺口」不实。实测
 `WorkflowProgressController.StreamProgress` 已 `finally { _broadcaster.Unsubscribe(id, subscriberId); }`，
@@ -75,7 +78,7 @@
 2. **P0 清理死代码**（本次完成：空项目 + 3 个废弃类 + 配置块）。
 3. **P1 改 Critic fallback 为 fail-loud**。
 4. **P1 数据库端分页**（EF `IQueryable` 链式，去除内存全表加载）。
-5. **P2 启动 Phase 5**：Code Agent（Docker 沙箱闭环）、Research Agent（SerpAPI）。
+5. **P2 启动 Phase 6**：Code Agent（Docker 沙箱闭环）、Research Agent（SerpAPI）。
 6. **P2 前端厚化 + 压缩接真 tokenizer**。
 
 ---

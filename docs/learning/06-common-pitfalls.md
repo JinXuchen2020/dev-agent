@@ -2,6 +2,25 @@
 
 > 目标：这些坑你一定会踩，提前知道省一天时间。所有记录来自 phase-1-baseline-mvp.md 踩坑表。
 
+> **一句话**：26 个真实踩坑 + 一句诊断口诀，编译错/运行炸/数据写不进/并发不准/环境不对时先翻这篇。
+
+---
+
+## 6.0 按症状查因（报错先翻这张）
+
+> 不知道从哪查时，先用口诀（§6.8）定位大方向，再用下表精确到坑号。
+
+| 你遇到的症状 | 先查方向（口诀） | 对应坑 |
+|--------------|------------------|--------|
+| 编译报错：API / 类型找不到 | 查版本号 & using | #1 AddMediatR、#2 FinishReason、#3 IChatCompletionService、#4 Scalar using |
+| 编译报错：类型歧义 / 重复定义 | 同名类型 / 枚举定义 | #5 AgentRole、#6 MessageRole、#8 RoutingPolicy 两份 |
+| 运行时炸：服务不生效 | 查 DI 注册 | #7 IToolRegistry、#13 Decorator、#15 仓储未生效 |
+| 数据写不进 / 映射异常 | 查 EF Core 映射 | #9 Messages、#10 OwnsMany、#11 列名、#12 提供者选错、#16 IOptions 默认 |
+| 并发不准 / 偶发炸 | 查 lock + 线程安全 | #14 `_todaySpent`、#21 decimal、#22 Dictionary、#23 跨天不重置 |
+| 环境 / 配置不对 | 查 launch-profile & 配置 | #17 `--configuration`、#18 HTTPS、#19 Scalar 不显示、#20 TenantId |
+| 弹性管道 / 重试异常 | 查 Polly 用法 | #24 非泛型、#25 层暴露、#26 未使用 |
+| 架构违规（编译不报） | 查 ArchitectureTests | 教训见 #5/#6/#8，用架构测试自动拦截 |
+
 ---
 
 ## 6.1 NuGet / 版本相关
@@ -101,6 +120,14 @@
 环境不对 → 查 launch-profile + --configuration
 跨天不重置 → 查 Singleton 状态重置逻辑
 ```
+
+---
+
+## 复盘自测
+
+- 编译报错、运行期炸、数据写不进、并发不准、环境不对，分别先查什么？（背出口诀）
+- 架构违规为什么编译不报错？靠什么拦截？
+- 为什么 DI 注册后要第一时间写个空测试验证解析成功？
 
 ---
 

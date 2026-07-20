@@ -1,4 +1,5 @@
 using AgentPlatform.Domain.Aggregates.Workflows;
+using AgentPlatform.Domain.Enums;
 using AgentPlatform.Domain.Repositories;
 using Microsoft.EntityFrameworkCore;
 
@@ -42,6 +43,42 @@ internal sealed class WorkflowRepository : IWorkflowRepository
         return await _context.Workflows
             .Where(w => w.TenantId == tenantId)
             .ToListAsync(ct);
+    }
+
+    /// <summary>
+    /// Queries workflows with server-side pagination and optional status filter.
+    /// Executes filtering, ordering, skip/take, and count all at the database level.
+    /// </summary>
+    /// <param name="tenantId">The tenant identifier to filter workflows by.</param>
+    /// <param name="status">Optional filter by workflow state.</param>
+    /// <param name="skip">Number of records to skip.</param>
+    /// <param name="take">Number of records to take.</param>
+    /// <param name="ct">A token to monitor for cancellation requests.</param>
+    /// <returns>A tuple with the paginated items and total count.</returns>
+    public async Task<(IReadOnlyList<Workflow> Items, int TotalCount)> QueryAsync(
+        Guid tenantId,
+        WorkflowState? status = null,
+        int skip = 0,
+        int take = 20,
+        CancellationToken ct = default)
+    {
+        var query = _context.Workflows
+            .Where(w => w.TenantId == tenantId)
+            .AsQueryable();
+
+        if (status.HasValue)
+            query = query.Where(w => w.CurrentState == status.Value);
+
+        var totalCount = await query.CountAsync(ct);
+
+        var items = await query
+            .Include(w => w.Steps)
+            .OrderByDescending(w => w.CreatedAt)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(ct);
+
+        return (items, totalCount);
     }
 
     /// <summary>

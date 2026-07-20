@@ -56,21 +56,13 @@ internal sealed class ListWorkflowsQueryHandler(
         var tenantId = tenantProvider.GetTenantId();
         var take = Math.Min(request.Take, 100);
 
-        var allWorkflows = await repository.GetByTenantAsync(tenantId, ct);
+        var (items, totalCount) = await repository.QueryAsync(
+            tenantId, request.Status, request.Skip, take, ct);
 
-        var filtered = request.Status.HasValue
-            ? allWorkflows.Where(w => w.CurrentState == request.Status.Value)
-            : (IEnumerable<Domain.Aggregates.Workflows.Workflow>)allWorkflows;
-
-        var totalCount = filtered.Count();
-        var items = filtered
-            .OrderByDescending(w => w.CreatedAt)
-            .Skip(request.Skip)
-            .Take(take)
-            .Select(w => new WorkflowSummary(
+        return new WorkflowListResponse(
+            items.Select(w => new WorkflowSummary(
                 w.Id, w.Name, w.CurrentState, w.Steps.Count, w.CreatedAt, w.UpdatedAt))
-            .ToList();
-
-        return new WorkflowListResponse(items, totalCount);
+            .ToList(),
+            totalCount);
     }
 }

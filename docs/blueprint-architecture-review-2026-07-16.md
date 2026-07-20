@@ -58,7 +58,7 @@
 - **Recommendation**：按角色区分工具集/知识源/权限，使每个 Agent 具备独特能力。
 
 #### F8 — 质量闭环是文档级（P2，附录 C.6 / C.7）
-- **Observation**：C.6/C.7 中"测试工程师"产出测试**报告/缺陷报告**，流水线出口是"产出…测试报告"而非"测试通过"。真实执行留到 Phase 5 沙箱。
+- **Observation**：C.6/C.7 中"测试工程师"产出测试**报告/缺陷报告**，流水线出口是"产出…测试报告"而非"测试通过"。真实执行留到 Phase 6 沙箱。
 - **Why it matters**：核心流水线质量门是声明式（生成报告）而非验证式（跑通），容易"纸面通过"。
 - **Recommendation**：区分文档生成步与执行验证步，标注哪些门是声明 vs 已证实。
 
@@ -100,7 +100,7 @@
 | F9 恢复过度承诺 | P2→已软化 | C.7 改为「每步落库 + 中断步恢复 + kill+restart 测试证明」，删绝对措辞 | ✅ 闭环 |
 
 **残余 P2（进入 Phase 排期，非阻断）**：
-- F5 RAG 接地 / F6 HITL 断点 / F8 质量闭环硬化 → 已在 `phase-3-platformization.md`「蓝图对齐新增项」与 `phase-5-advanced-features.md` 任务清单排入，合入前强制 `ddd-code-reviewer`。
+- F5 RAG 接地 / F6 HITL 断点 / F8 质量闭环硬化 → 已在 `phase-3-platformization.md`「蓝图对齐新增项」与 `phase-6-frontier-features.md` 任务清单排入，合入前强制 `ddd-code-reviewer`。
 - F7 角色保真 → 仍偏 System Prompt 区分；建议后续按角色补工具集/知识源（可在 Phase 3 自定义 AgentType 时一并做）。
 
 **下游动作（MANDATORY）**：

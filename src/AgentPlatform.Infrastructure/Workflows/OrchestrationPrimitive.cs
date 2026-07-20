@@ -29,6 +29,7 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
     private readonly ILogger<OrchestrationPrimitive> _logger;
     private readonly StateMachineSettings _settings;
     private readonly IVectorStore _vectorStore;
+    private readonly ITokenCounter _tokenCounter;
 
     // Tracks in-flight runs so PauseAsync can interrupt them (Blueprint C.7: mid-execution pause).
     private static readonly ConcurrentDictionary<Guid, CancellationTokenSource> s_runningCts = new();
@@ -45,7 +46,8 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
         IServiceProvider serviceProvider,
         IOptions<StateMachineSettings> settings,
         ILogger<OrchestrationPrimitive> logger,
-        IVectorStore vectorStore)
+        IVectorStore vectorStore,
+        ITokenCounter tokenCounter)
     {
         _repository = repository;
         _unitOfWork = unitOfWork;
@@ -54,6 +56,7 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
         _logger = logger;
         _settings = settings.Value;
         _vectorStore = vectorStore;
+        _tokenCounter = tokenCounter;
     }
 
     public async Task<Workflow> RunAsync(Workflow workflow, OrchestrationPreset preset, CancellationToken ct = default)
@@ -532,12 +535,12 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
 
         // Build compressed summary from completed step artifacts (Blueprint C.3.1)
         var summaries = new Dictionary<int, string>();
-        const int maxSummaryTokens = 8000;
+        var maxSummaryTokens = _settings.MaxSummaryTokens;
         var estimatedTokens = 0;
         foreach (var step in allSteps.Where(s => s.State == WorkflowState.Completed && !string.IsNullOrEmpty(s.Result)))
         {
             var summary = $"[{step.Order}] {step.StepName}: {Truncate(step.Result!, 200)}";
-            var estimatedStepTokens = summary.Length / 2;
+            var estimatedStepTokens = _tokenCounter.CountTokens(summary);
             if (estimatedTokens + estimatedStepTokens > maxSummaryTokens)
                 break;
             summaries[step.Order] = summary;
@@ -554,7 +557,8 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
             Summary = new StepHistory
             {
                 Summaries = summaries,
-                MaxTokens = maxSummaryTokens
+                MaxTokens = maxSummaryTokens,
+                EstimatedTokenCount = estimatedTokens
             },
             TenantId = workflow.TenantId
         };

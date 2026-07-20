@@ -15,12 +15,15 @@ using AgentPlatform.Infrastructure.Progress;
 using AgentPlatform.Infrastructure.Sandbox;
 using AgentPlatform.Infrastructure.Tools;
 using AgentPlatform.Infrastructure.VectorStore;
+using AgentPlatform.Infrastructure.Tokenizers;
 using AgentPlatform.Infrastructure.Workflows;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.Embeddings;
 using StackExchange.Redis;
 #if USE_POSTGRESQL
 using Npgsql.EntityFrameworkCore.PostgreSQL;
@@ -89,9 +92,31 @@ public static class DependencyInjection
         services.AddScoped<IAgentConfigurationRepository, AgentConfigurationRepository>();
         services.AddSingleton<IYamlConfigurationParser, YamlConfigurationParserService>();
         services.AddSingleton<IToolRegistry, InMemoryToolRegistry>();
-#pragma warning disable CS0618 // PgVectorStore is an explicit [Obsolete] stub (RAG not grounded)
+
+        // Register Semantic Kernel text embedding service used by PgVectorStore.
+        // Uses the same OpenAI key as the chat completion service.
+#pragma warning disable SKEXP0001 // ITextEmbeddingGenerationService is experimental in SK 1.x
+        services.AddSingleton<ITextEmbeddingGenerationService>(sp =>
+        {
+            var configuration = sp.GetRequiredService<IConfiguration>();
+            var apiKey = configuration["OpenAI:Key"];
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                throw new InvalidOperationException(
+                    "OpenAI:Key is required for text embedding generation in PgVectorStore.");
+            }
+
+#pragma warning disable SKEXP0010 // AddOpenAITextEmbeddingGeneration is experimental in SK 1.x
+            var kernel = Kernel.CreateBuilder()
+                .AddOpenAITextEmbeddingGeneration("text-embedding-3-small", apiKey)
+                .Build();
+#pragma warning restore SKEXP0010
+
+            return kernel.GetRequiredService<ITextEmbeddingGenerationService>();
+        });
+#pragma warning restore SKEXP0001
+
         services.AddScoped<IVectorStore, PgVectorStore>();
-#pragma warning restore CS0618
         services.AddScoped<ICodeSandbox, DockerCodeSandbox>();
 
         var cacheProvider = configuration.GetSection("Cache:Provider").Value;
@@ -121,6 +146,9 @@ public static class DependencyInjection
 
         services.AddScoped<ITenantProvider, TenantProvider>();
         services.AddScoped<IResiliencePipelineProvider, ResiliencePipelineProvider>();
+        // Token counter singleton — stateless, safe to share across all workflows.
+        services.AddSingleton<ITokenCounter, TokenCounter>();
+
         // ── Orchestration Primitive (Blueprint C.2) ──
         // Single engine: OrchestrationPrimitive replaced the legacy WorkflowStateMachineEngine,
         // AutoGenAgentOrchestrator and StubWorkflowEngine.
@@ -149,7 +177,9 @@ public static class DependencyInjection
             MaxRetryAttempts = int.TryParse(smSection["MaxRetryAttempts"], out var maxRetry) ? maxRetry : 3,
             StepTimeoutSeconds = int.TryParse(smSection["StepTimeoutSeconds"], out var timeout) ? timeout : 120,
             RetryDelayMs = int.TryParse(smSection["RetryDelayMs"], out var delayMs) ? delayMs : 1000,
-            DefaultModelId = smSection["DefaultModelId"] ?? "deepseek-chat"
+            DefaultModelId = smSection["DefaultModelId"] ?? "deepseek-chat",
+            MaxSummaryTokens = int.TryParse(smSection["MaxSummaryTokens"], out var maxTokens) ? maxTokens : 8000,
+            AllowCriticOverride = bool.TryParse(smSection["AllowCriticOverride"], out var allowOverride) && allowOverride
         };
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(stateMachineSettings));
 

@@ -117,15 +117,19 @@ public sealed record StepHistory
     public required IReadOnlyDictionary<int, string> Summaries { get; init; } = new Dictionary<int, string>();
 
     /// <summary>The maximum token budget for this history (prevents unbounded growth).</summary>
-    public required int MaxTokens { get; init; } = 8000;
+    public required int MaxTokens { get; init; }
+
+    /// <summary>
+    /// Total estimated token count of all summaries combined.
+    /// Populated by <c>ITokenCounter</c> at construction time in the orchestration layer.
+    /// </summary>
+    public int EstimatedTokenCount { get; init; }
 
     /// <summary>Empty history singleton.</summary>
     public static StepHistory Empty => new()
     {
         Summaries = new Dictionary<int, string>(),
-        MaxTokens = 8000
+        MaxTokens = 8000,
+        EstimatedTokenCount = 0
     };
-
-    /// <summary>Estimated token count of all summaries combined.</summary>
-    public int EstimatedTokenCount => Summaries.Values.Sum(s => s.Length / 2); // rough char→token estimate
 }

@@ -2,6 +2,8 @@
 
 > 目标：理解 Command/Query 分离、Pipeline Behavior 的执行顺序、UnitOfWork 怎么自动 SaveChanges。
 
+> **一句话**：用 `ICommand<T>` 标记区分读写，让 UnitOfWorkBehavior 自动存盘；Query 走同一套 MediatR 但不触发保存。
+
 ---
 
 ## 3.1 CQRS 的基本概念
@@ -409,6 +411,14 @@ Controller 映射为响应对象
 **区别：**
 - Command：走 `UnitOfWorkBehavior`，触发 `SaveChangesAsync`
 - Query：不触发任何 Behavior，直接执行 Handler
+
+---
+
+## 复盘自测
+
+- `ICommand<T>` 标记接口解决什么问题？没有它 UnitOfWork 会怎样？
+- Query 为什么不触发 `SaveChangesAsync`？
+- Controller 为什么只注入 `IMediator`、不直接调 Repository？
 
 ---
 

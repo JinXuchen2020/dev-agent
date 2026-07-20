@@ -70,8 +70,26 @@ dotnet user-secrets set "OpenAI:Key" "sk-your-key-here"
 | Phase 1 | 基础 MVP — 路由、RAG、Tool Calling、成本报表 | ✅ 完成 |
 | Phase 2 | 多智能体工作流 — 状态机、Redis、AutoGen 编排、ExecutionLog | ✅ 完成 |
 | Phase 3 | 平台化 — 可视化编排、监控、自定义 AgentType | ✅ 完成 |
-| Phase 4 | 知识接地与加固 — RAG 真接地、Critic fail-loud、DB 分页、真 tokenizer | 📋 计划 |
-| Phase 5 | 前沿特性 — Code Agent、压测、BDD 全量 | 📋 计划 |
+| Phase 4 | 知识接地与加固 — RAG 真接地、Critic fail-loud、DB 分页、真 tokenizer | ✅ 完成 |
+| Phase 5 | 安全加固（launch-blocking）— 认证 / RBAC / 真实多租户 / 限流 / 审计 / Key 加密 | 📋 计划 |
+| Phase 6 | 前沿特性 — Code Agent、压测、BDD 全量 | 📋 计划 |
+
+## 学习资料
+
+本项目配套一套**通俗化学习笔记**，把各阶段的设计决策、踩坑与复盘拆成「导读 → 分章 → 速记卡」三层，方便日后复盘：
+
+- 📚 **总入口**：[`docs/learning/00-学习导读.md`](./docs/learning/00-学习导读.md) — 阅读顺序、速查表、纠错记录
+- 🗂️ **分章笔记**：
+  - [`01-ddd-in-practice.md`](./docs/learning/01-ddd-in-practice.md) — DDD 实战
+  - [`02-clean-architecture.md`](./docs/learning/02-clean-architecture.md) — 整洁架构
+  - [`03-mediatr-cqrs.md`](./docs/learning/03-mediatr-cqrs.md) — MediatR / CQRS
+  - [`04-ef-core-aggregates.md`](./docs/learning/04-ef-core-aggregates.md) — EF Core 聚合
+  - [`05-testing-strategy.md`](./docs/learning/05-testing-strategy.md) — 测试策略
+  - [`06-common-pitfalls.md`](./docs/learning/06-common-pitfalls.md) — 常见坑（含「按症状查因」表）
+  - [`07-project-evolution.md`](./docs/learning/07-project-evolution.md) — 项目演进
+  - [`08-decision-log.md`](./docs/learning/08-decision-log.md) — 决策日志
+  - [`09-phase4-grounding-learnings.md`](./docs/learning/09-phase4-grounding-learnings.md) — Phase 4 知识接地（含「按能力查因」表）
+- 🃏 **速记卡**：[`docs/learning/cheatsheet-复盘速记.md`](./docs/learning/cheatsheet-复盘速记.md)（文字版）/ [`docs/learning/cheatsheet-复盘速记.png`](./docs/learning/cheatsheet-复盘速记.png)（图片版，可一键保存手机常看）
 
 ## 质量治理流程
 

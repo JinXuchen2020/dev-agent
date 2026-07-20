@@ -34,21 +34,17 @@ internal sealed class GetExecutionLogStepsQueryHandler(
     public async Task<ExecutionLogStepsResponse?> Handle(
         GetExecutionLogStepsQuery request, CancellationToken ct)
     {
-        var log = await repository.GetByIdAsync(request.ExecutionLogId, ct);
-        if (log == null)
+        var take = Math.Min(request.Take, 100);
+
+        var result = await repository.QueryStepsAsync(
+            request.ExecutionLogId, request.Status, request.Skip, take, ct);
+
+        if (result == null)
             return null;
 
-        var entries = log.Entries.AsEnumerable();
-
-        if (request.Status.HasValue)
-            entries = entries.Where(e => e.Status == request.Status.Value);
-
-        var totalCount = entries.Count();
+        var (entries, totalCount) = result.Value;
 
         var items = entries
-            .OrderBy(e => e.StepOrder)
-            .Skip(request.Skip)
-            .Take(Math.Min(request.Take, 100))
             .Select(e => new ExecutionLogStepEntry(
                 e.Id,
                 e.StepName,

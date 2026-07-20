@@ -388,6 +388,28 @@ public class ExecutionLogSteps
             return Task.FromResult((items, totalCount));
         }
 
+        public Task<(IReadOnlyList<ExecutionLogEntry> Items, int TotalCount)?> QueryStepsAsync(
+            Guid executionLogId,
+            WorkflowState? status = null,
+            int skip = 0,
+            int take = 50,
+            CancellationToken ct = default)
+        {
+            if (!_store.TryGetValue(executionLogId, out var log))
+                return Task.FromResult<(IReadOnlyList<ExecutionLogEntry> Items, int TotalCount)?>(null);
+
+            var query = log.Entries.AsEnumerable();
+
+            if (status.HasValue)
+                query = query.Where(e => e.Status == status.Value);
+
+            var filtered = query.OrderBy(e => e.StepOrder).ToList();
+            var totalCount = filtered.Count;
+            var items = filtered.Skip(skip).Take(take).ToList() as IReadOnlyList<ExecutionLogEntry>;
+
+            return Task.FromResult<(IReadOnlyList<ExecutionLogEntry> Items, int TotalCount)?>((items, totalCount));
+        }
+
         public void Add(ExecutionLog log)
         {
             _store.TryAdd(log.Id, log);

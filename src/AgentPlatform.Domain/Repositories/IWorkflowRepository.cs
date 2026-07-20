@@ -1,4 +1,5 @@
 using AgentPlatform.Domain.Aggregates.Workflows;
+using AgentPlatform.Domain.Enums;
 
 namespace AgentPlatform.Domain.Repositories;
 
@@ -22,6 +23,22 @@ public interface IWorkflowRepository
     /// <param name="ct">A cancellation token to cancel the asynchronous operation.</param>
     /// <returns>A read-only list of workflows for the tenant.</returns>
     Task<IReadOnlyList<Workflow>> GetByTenantAsync(Guid tenantId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Queries workflows with server-side pagination and optional status filter.
+    /// </summary>
+    /// <param name="tenantId">The tenant identifier to filter workflows by.</param>
+    /// <param name="status">Optional filter by workflow state.</param>
+    /// <param name="skip">Number of records to skip.</param>
+    /// <param name="take">Number of records to take.</param>
+    /// <param name="ct">A cancellation token.</param>
+    /// <returns>A tuple with the paginated items and total count.</returns>
+    Task<(IReadOnlyList<Workflow> Items, int TotalCount)> QueryAsync(
+        Guid tenantId,
+        WorkflowState? status = null,
+        int skip = 0,
+        int take = 20,
+        CancellationToken ct = default);
 
     /// <summary>
     /// Adds a new workflow to the repository.

@@ -1,6 +1,8 @@
-# 07. 项目演进：Phase 1 → 5 的设计思路
+# 07. 项目演进：Phase 1 → 6 的设计思路
 
 > 目标：理解为什么阶段是这个顺序，每个阶段解决什么问题，不做什么事。
+
+> **一句话**：Phase 1→6 的顺序是「先骨架、再逻辑、后 UI/监控、补接地、补安全、做亮点」，每步都为下一步铺路。
 
 ---
 
@@ -12,7 +14,8 @@
 | Phase 2 | 多智能体工作流 | 真实业务逻辑 | 状态机引擎、Redis 缓存、AutoGen Agent、真实 PGVector、ExecutionLog |
 | Phase 3 | 平台化 | 前端 + 监控 | React Web UI、Grafana 大盘、React Flow、OpenTelemetry、CI/CD |
 | Phase 4 | 知识接地与加固（上线前必做） | 把声称完成实为存根的能力落地 | RAG 接真 PGVector、Critic fail-loud、DB 端分页、真 tokenizer 压缩 |
-| Phase 5 | 前沿特性与收尾 | 优化 + 亮点 | Code Agent、Research Agent、性能压测、BDD 全量、简历作品集 |
+| Phase 5 | 安全加固（launch-blocking） | 把声称要做的认证/多租户落地 | JWT/API-Key 认证、RBAC、真实多租户、限流、审计、API Key 加密 |
+| Phase 6 | 前沿特性与收尾 | 优化 + 亮点 | Code Agent、Research Agent、性能压测、BDD 全量、简历作品集 |
 
 ## 7.2 为什么 Phase 1 全部用 Stub
 
@@ -26,12 +29,12 @@ Stub 组件清单：
 │ 模型调用           │ StubModelClient          │ 架构验证不需要真模型          │
 │ 数据库             │ SQLite（代替 PostgreSQL）  │ 本地开发，不用启动 Docker      │
 │ 缓存               │ InMemoryShortTermMemory   │ 一个 ConcurrentDictionary     │
-│ 向量库             │ PgVectorStore Stub        │ 仍为 Stub（Phase 2/3 未落地）；真实 PGVector 排期 Phase 4 │
+│ 向量库             │ PgVectorStore（Phase 4 已接真 PGVector）│ Phase 1 为 Stub，Phase 4 落地真实向量检索 │
 │ 工作流引擎         │ StubWorkflowEngine        │ Phase 2 才实现状态机           │
-│ 代码沙箱           │ DockerCodeSandbox Stub    │ Phase 5 才需要真实沙箱         │
+│ 代码沙箱           │ DockerCodeSandbox Stub    │ Phase 6 才需要真实沙箱         │
 │ 工具执行器         │ NativeToolExecutor Stub   │ 返回常数字符串                │
 │ Agent 编排        │ AutoGenAgentOrchestrator   │ Phase 2 才配置 AutoGen.NET    │
-│ 用户认证           │ 跳过 JWT/Identity         │ Phase 2 按蓝图实现            │
+│ 用户认证           │ 跳过 JWT/Identity         │ Phase 5（安全加固）按蓝图实现  │
 │ 通知 / 告警        │ 空实现                    │ Phase 3 监控才需要            │
 └────────────────────┴──────────────────────────┴──────────────────────────────┘
 ```
@@ -47,7 +50,7 @@ Blue 里写的是"多智能体"——但本质是**把 Phase 1 的 Stub 替换�
 | Phase 1 | Phase 2 |
 |---------|---------|
 | `StubModelClient` | `IModelClient` 接真实 API（已有 `SemanticKernelModelClient`） |
-| `PgVectorStore Stub` | PGVector 真实向量检索（排期 Phase 4，当前仍为 Stub） |
+| `PgVectorStore` | PGVector 真实向量检索（已在 Phase 4 落地） |
 | `InMemoryShortTermMemory` | RedisShortTermMemory |
 | `StubWorkflowEngine` | 自研状态机（分支/重试/回滚） |
 | `AutoGenAgentOrchestrator Stub` | AutoGen.NET 真实协作 |
@@ -70,7 +73,17 @@ Phase 2 跑通了核心逻辑，但**只有 API 没有 UI，只有日志没有�
 
 ---
 
-## 7.5 Phase 5 为什么是"前沿特性"
+## 7.5 为什么 Phase 5 是"安全加固"（launch-blocking）
+
+蓝图 §9 铁律写"安全是第一优先级，不是以后再补"，但实测落地时整层安全被遗漏、延到了本阶段——所以 Phase 5 不是"加功能"，而是把**早该有、声称有、实际没有**的安全底座补齐：
+
+- **为什么单独成阶段、且 launch-blocking**：安全是运营前置门槛，不是亮点功能。埋进"前沿特性"会被持续排挤，所以独立成 Phase 5 并作为任何多用户/对外部署前的硬门槛。
+- **为什么工作量可控**：多租户隔离的数据库层（EF Global Query Filter + `ITenantScoped`）早已建好，只差 `TenantProvider` 从硬编码 `DefaultTenantId` 改为按请求解析——属于"小而高杠杆"的改动，配上最小鉴权即可激活。
+- **包含项**：JWT/API-Key 认证、RBAC、真实多租户、限流、Prompt 注入防护、审计日志、API Key 加密。内部上线若完整 Phase 5 未完，至少先落"最小 API-Key 网关 + TenantProvider 解析"兜底。
+
+---
+
+## 7.6 Phase 6 为什么是"前沿特性"
 
 最后阶段补齐"有亮点但非核心"的功能：
 
@@ -84,18 +97,18 @@ Phase 2 跑通了核心逻辑，但**只有 API 没有 UI，只有日志没有�
 
 ---
 
-## 7.6 设计原则变化
+## 7.7 设计原则变化
 
-| 原则 | Phase 1 | Phase 2 | Phase 3 | Phase 4（加固） | Phase 5（前沿） |
-|------|---------|---------|---------|-----------------|----------------|
-| **测试策略** | Architecture + BDD | + Unit (状态机) | + Integration | + ddd-code-reviewer (RAG/Critic) | + Stryker |
-| **性能目标** | 不关心 | 不关心 | 基准：P95 < 30s | 复盘：DB 端分页 | 优化：P95 < 10s |
-| **安全** | 跳过 | 基本 | 完整 | Critic 闸保真 | 审计 |
-| **文档** | 蓝图 + 阶段文档 | + 学习文档 | + API 文档 | RAG 落地说明 | + 简历作品集 |
+| 原则 | Phase 1 | Phase 2 | Phase 3 | Phase 4（加固） | Phase 5（安全） | Phase 6（前沿） |
+|------|---------|---------|---------|-----------------|-----------------|----------------|
+| **测试策略** | Architecture + BDD | + Unit (状态机) | + Integration | + ddd-code-reviewer (RAG/Critic) | 安全模块 ddd-code-reviewer | + Stryker |
+| **性能目标** | 不关心 | 不关心 | 基准：P95 < 30s | 复盘：DB 端分页 | — | 优化：P95 < 10s |
+| **安全** | 跳过 | 基本 | 完整 | Critic 闸保真 | 认证/RBAC/真实多租户/限流/审计/Key 加密 | 沙箱逃逸防护 |
+| **文档** | 蓝图 + 阶段文档 | + 学习文档 | + API 文档 | RAG 落地说明 | 安全设计说明 | + 简历作品集 |
 
 ---
 
-## 7.7 如果你自己做项目，这个演进顺序值得借鉴
+## 7.8 如果你自己做项目，这个演进顺序值得借鉴
 
 ```
 第一步：搭骨架（Phase 1）
@@ -107,9 +120,23 @@ Phase 2 跑通了核心逻辑，但**只有 API 没有 UI，只有日志没有�
 第三步：加 UI + 监控（Phase 3）
   └─ API 稳定后再写前端，没有监控不上线
 
-第五步：优化 + 亮点（Phase 5）
-  └─ 性能、安全、文档、CV 亮点
+第四步：补接地（Phase 4）
+  └─ 把声称完成实为存根的能力真正落地
+
+第五步：补安全（Phase 5，launch-blocking）
+  └─ 认证、真实多租户、RBAC、限流、审计、Key 加密
+
+第六步：优化 + 亮点（Phase 6）
+  └─ 性能、文档、CV 亮点
 ```
+
+---
+
+## 复盘自测
+
+- 为什么 Phase 1 全部用 Stub，而不是直接写实实现？
+- 为什么 Phase 3 才做前端，而不是更早？
+- Phase 5（安全）和 Phase 6（前沿）的本质区别是什么？
 
 ---
 
@@ -119,4 +146,5 @@ Phase 2 跑通了核心逻辑，但**只有 API 没有 UI，只有日志没有�
 - `phases/phase-1-baseline-mvp.md`
 - `phases/phase-2-multi-agent.md`
 - `phases/phase-3-platformization.md`
-- `phases/phase-5-advanced-features.md`
+- `phases/phase-5-security-hardening.md`
+- `phases/phase-6-frontier-features.md`

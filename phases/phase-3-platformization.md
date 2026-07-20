@@ -403,7 +403,7 @@ Full 12-category re-audit of all `src/` directories. Phase 3 infrastructure focu
 
 | Severity | File | Finding | Waiver Reason | Risk Accepted | Target Phase |
 |----------|------|---------|--------------|---------------|-------------|
-| P2 | `Infrastructure/Agents/AutoGenAgentOrchestrator.cs` | Dead code — class implements `IAgentOrchestrator` but neither is registered in DI | Both class and interface are `[Obsolete]`, replaced by `IOrchestrationPrimitive`. 已于 2026-07-20 清理（保留 `IAgentOrchestrator`/`IStateMachineEngine` 接口供 SpecFlow 测试替身 `TestAgentOrchestrator`/`TestStateMachineEngine`）。 | Zero — no production code resolves IAgentOrchestrator; DI registration for `IOrchestrationPrimitive` exists. | Phase 5（实际已清理） |
+| P2 | `Infrastructure/Agents/AutoGenAgentOrchestrator.cs` | Dead code — class implements `IAgentOrchestrator` but neither is registered in DI | Both class and interface are `[Obsolete]`, replaced by `IOrchestrationPrimitive`. 已于 2026-07-20 清理（保留 `IAgentOrchestrator`/`IStateMachineEngine` 接口供 SpecFlow 测试替身 `TestAgentOrchestrator`/`TestStateMachineEngine`）。 | Zero — no production code resolves IAgentOrchestrator; DI registration for `IOrchestrationPrimitive` exists. | 阶段三（实际已清理） |
 
 ### Gate Status: PASS
 [P0: 0 | P1: 0 | P2: 1 (waived: 1) | P3: 0 (waived: 0)]

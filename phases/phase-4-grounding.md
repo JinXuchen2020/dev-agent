@@ -72,9 +72,96 @@
 
 ## 进度
 
-- **开始日期**：
+- **开始日期**：2026-07-20
 - **完成日期**：
-- **完成度**：█░░░░░░░░░ 0%
+- **完成度**：██████████ 100%（5 个子任务并行完成）
+
+| 任务 | 状态 | 详情 |
+|------|------|------|
+| RAG 接地（PGVector 真实检索） | ✅ | 真实 pgvector Ingest/Search/Delete + SK ITextEmbeddingGenerationService |
+| Critic 质量闸 fail-loud | ✅ | AllowCriticOverride=false 时异常→Approved=false；Phase 4 验收标准通过 |
+| DB 端分页（ListWorkflows / GetExecutionLogSteps） | ✅ | IQueryable Where/OrderBy/Skip/Take 数据库端分页 |
+| 上下文压缩接真 tokenizer | ✅ | ITokenCounter 多语种字符计数 + MaxSummaryTokens 配置化 |
+| CI 编译验证 | ✅ | Build 0 warnings/0 errors，Tests 40/40 passed |
+
+## Phase 4 Quality Gate Report (2026-07-20)
+
+### Gate Status: PASS
+[P0: 0 | P1: 0 | P2: 0 | P3: 1 (fixed: 1)]
+
+### Mode: Audit
+
+| Severity | Category | File | Finding | Fix |
+|----------|----------|------|---------|-----|
+| P3 | 配置文档 | `appsettings.json`, `appsettings.QuickStart.json`, `appsettings.PostgreSQL.json` | `MaxSummaryTokens` 未在任何 appsettings 的 `StateMachine` 节中声明，虽默认值 8000 正常工作，但新 Phase 4 配置不可见 | 已在全部 3 个 appsettings 中添加 `"MaxSummaryTokens": 8000` |
+
+### Waivers
+None — all findings fixed.
+
+### Audit Detail by Category
+
+**1. DI Registration Gaps** — ✅ PASS
+- `ITokenCounter` → `TokenCounter` (Singleton, line 150) — stateless, correct lifetime
+- `IVectorStore` → `PgVectorStore` (Scoped, line 119) — holds per-scope NpgsqlDataSource
+- `ITextEmbeddingGenerationService` (Singleton, SK kernel)
+- All 24 interfaces in Application.Abstractions have registered implementations
+
+**2. DDD Layer Compliance** — ✅ PASS
+- `ITokenCounter` in `Application.Abstractions` — correct
+- `TokenCounter` in `Infrastructure/Tokenizers` — depends on Abstractions only
+- `PgVectorStore` in `Infrastructure/VectorStore` — depends on Abstractions only
+- No `using AgentPlatform.Infrastructure` in Application layer
+- No `public interface` defined in Infrastructure
+- Domain csproj has zero external packages
+
+**3. EF Core Mapping** — ✅ PASS
+- `WorkflowRepository.QueryAsync`: IQueryable → Where → OrderByDescending → Skip → Take → CountAsync + ToListAsync — correct database-side pagination
+- `ExecutionLogRepository.QueryStepsAsync`: Set<ExecutionLogEntry>() with shadow FK `ExecutionLogId` via EF.Property — correct owned-entity query pattern for EF Core 9
+- No `ToList()`/`AsEnumerable()` before pagination in either method
+
+**4. Hardcoded Values** — ✅ PASS
+- `StepHistory.EstimatedTokenCount`: uses `_tokenCounter.CountTokens(summary)` (line 543) — no longer `s.Length/2`
+- `MaxSummaryTokens`: from `StateMachineSettings.MaxSummaryTokens` / config (`smSection["MaxSummaryTokens"]`) — configurable via IOptions
+- `PgVectorStore`: no hardcoded `doc-1`/`doc-2` — real embedding + pgvector operations
+
+**5. CancellationToken** — ✅ PASS
+- All async methods across Phase 4 files have and propagate `CancellationToken`
+- `PgVectorStore`: IngestDocumentAsync/SearchAsync/DeleteDocumentAsync → `ct=default`
+- `CriticStepExecutor.ExecuteAsync` → `CancellationToken ct` (required)
+- `WorkflowRepository.QueryAsync` → `ct=default`
+- `ExecutionLogRepository.QueryStepsAsync` → `ct=default`
+
+**6. Sealing & Naming** — ✅ PASS
+- `TokenCounter`: `internal sealed` ✅
+- `PgVectorStore`: `internal sealed` ✅
+- `CriticStepExecutor`: `internal sealed` ✅
+- `DocumentEmbedding`: `public sealed` ✅
+- `WorkflowRepository`: `internal sealed` ✅
+- `ExecutionLogRepository`: `internal sealed` ✅
+- `ListWorkflowsQueryHandler`: `internal sealed` ✅
+- `GetExecutionLogStepsQueryHandler`: `internal sealed` ✅
+- Naming consistent with existing codebase conventions
+
+**7. Concurrency** — ✅ PASS
+- `OrchestrationPrimitive`: `ConcurrentDictionary` for `s_runningCts` + `s_resolvedPresets`
+- `PgVectorStore`: SemaphoreSlim double-checked locking for `EnsureTableExistsAsync`
+- Repositories are Scoped — no shared mutable state between requests
+- `PgVectorStore`: NpgsqlDataSource with OpenConnectionAsync — proper connection management
+
+**8. API/Infrastructure Gaps** — ✅ PASS
+- `PgVectorStore` embedding failure propagates to caller (caller can handle/retry)
+- `BuildWorkflowContext` wraps SearchAsync in try-catch → degrades to empty context
+- `CriticStepExecutor` exception handling correct:
+  - Inner catch: model failure → approve if AllowCriticOverride, reject otherwise (fail-loud)
+  - Outer catch: OperationCanceledException rethrown, unexpected → RetryableFailure
+- `PgVectorStore` implements `IDisposable` → disposes `_dataSource` + `_initLock`
+
+**9-12. API Infrastructure / Blueprint Drift / XML Docs / Swagger** — Pre-existing (no Phase 4 changes to API layer)
+
+### Recommendation
+Gate PASS. No blocking issues. Phase 4 code is structurally clean. Proceed to narrative review via `ddd-code-reviewer` for high-risk modules (PGVector RAG, Critic fail-loud, token-based context compression).
+
+---
 
 ## 回顾（完成后填写）
 

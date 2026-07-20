@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using AgentPlatform.Domain.Aggregates.ExecutionLogs;
 using AgentPlatform.Domain.Enums;
 using AgentPlatform.Domain.Repositories;
@@ -76,5 +77,48 @@ internal sealed class ExecutionLogRepository : IExecutionLogRepository
     public void Update(ExecutionLog log)
     {
         _context.Set<ExecutionLog>().Update(log);
+    }
+
+    /// <summary>
+    /// Queries execution log entries (steps) with server-side pagination and optional status filter.
+    /// Queries the <c>ExecutionLogEntries</c> table directly without loading the parent aggregate.
+    /// Returns <c>null</c> if the parent <see cref="ExecutionLog"/> does not exist.
+    /// </summary>
+    public async Task<(IReadOnlyList<ExecutionLogEntry> Items, int TotalCount)?> QueryStepsAsync(
+        Guid executionLogId,
+        WorkflowState? status = null,
+        int skip = 0,
+        int take = 50,
+        CancellationToken ct = default)
+    {
+        // Lightweight existence check (no Include of Entries)
+        var logExists = await _context.Set<ExecutionLog>()
+            .AnyAsync(x => x.Id == executionLogId, ct);
+
+        if (!logExists)
+            return null;
+
+        // Query the ExecutionLogEntries table directly via the owned entity's shadow FK
+        var query = _context.Set<ExecutionLogEntry>()
+            .Where(BuildEntryLogIdFilter(executionLogId))
+            .AsQueryable();
+
+        if (status.HasValue)
+            query = query.Where(e => e.Status == status.Value);
+
+        var totalCount = await query.CountAsync(ct);
+
+        var items = await query
+            .OrderBy(e => e.StepOrder)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(ct);
+
+        return (items, totalCount);
+    }
+
+    private static Expression<Func<ExecutionLogEntry, bool>> BuildEntryLogIdFilter(Guid executionLogId)
+    {
+        return e => EF.Property<Guid>(e, "ExecutionLogId") == executionLogId;
     }
 }

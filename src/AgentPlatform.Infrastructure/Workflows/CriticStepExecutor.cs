@@ -78,22 +78,41 @@ internal sealed class CriticStepExecutor : IStepExecutor
             {
                 var modelId = _settings.DefaultModelId;
                 var response = await _modelClient.ChatAsync(modelId, messages, ct);
-                reviewResult = ParseReviewResult(response.Content, lastArtifact.StepName);
+                reviewResult = ParseReviewResult(response.Content, lastArtifact.StepName, _settings.AllowCriticOverride);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // Model unavailable — fall back to a safe approval with warning
-                _logger.LogWarning(ex,
-                    "Critic model unavailable for step {StepName}, falling back to approval",
-                    step.StepName);
-                reviewResult = new CriticReviewResult
+                if (_settings.AllowCriticOverride)
                 {
-                    Approved = true,
-                    StepName = lastArtifact.StepName,
-                    Feedback = "Auto-approved (critic model unavailable).",
-                    ReworkTarget = null,
-                    Diff = null
-                };
+                    // AllowOverride=true → silently approve (legacy behavior)
+                    _logger.LogWarning(ex,
+                        "Critic model unavailable for step {StepName}, AllowCriticOverride=true — approving",
+                        step.StepName);
+                    reviewResult = new CriticReviewResult
+                    {
+                        Approved = true,
+                        StepName = lastArtifact.StepName,
+                        Feedback = "Auto-approved (critic model unavailable, AllowCriticOverride=true).",
+                        ReworkTarget = null,
+                        Diff = null
+                    };
+                }
+                else
+                {
+                    // AllowOverride=false (default) → fail-loud: produce a rejection so the
+                    // CriticConvergenceTermination keeps the negotiation loop running
+                    _logger.LogError(ex,
+                        "Critic model threw for step {StepName}, AllowCriticOverride=false — rejecting (fail-loud)",
+                        step.StepName);
+                    reviewResult = new CriticReviewResult
+                    {
+                        Approved = false,
+                        StepName = lastArtifact.StepName,
+                        Feedback = $"Rejected (critic model error): {ex.Message}",
+                        ReworkTarget = lastArtifact.StepName,
+                        Diff = $"Critic model threw: {ex.Message}"
+                    };
+                }
             }
 
             var artifactJson = JsonSerializer.Serialize(reviewResult);
@@ -116,27 +135,45 @@ internal sealed class CriticStepExecutor : IStepExecutor
         }
     }
 
-    private static CriticReviewResult ParseReviewResult(string content, string fallbackStepName)
+    private static CriticReviewResult ParseReviewResult(string content, string fallbackStepName, bool allowOverride)
     {
         try
         {
             var result = JsonSerializer.Deserialize<CriticReviewResult>(content);
-            if (result != null && !string.IsNullOrEmpty(result.StepName))
+            if (result != null)
+            {
+                // Accept valid JSON; use fallback StepName when the response did not include one.
+                if (string.IsNullOrEmpty(result.StepName))
+                    result = result with { StepName = fallbackStepName };
                 return result;
+            }
         }
         catch (JsonException)
         {
-            // Not valid JSON — fall through to parsing as plain text
+            // Not valid JSON — fall through to default handling
         }
 
-        // If the model returned free text instead of JSON, create a default result
+        if (allowOverride)
+        {
+            // AllowOverride=true → silently approve on unparseable response (legacy behavior)
+            return new CriticReviewResult
+            {
+                Approved = true,
+                StepName = fallbackStepName,
+                Feedback = content.Length > 500 ? content[..500] : content,
+                ReworkTarget = null,
+                Diff = null
+            };
+        }
+
+        // AllowOverride=false (default) → reject: unparseable critic response counts as rejection
         return new CriticReviewResult
         {
-            Approved = true,
+            Approved = false,
             StepName = fallbackStepName,
-            Feedback = content.Length > 500 ? content[..500] : content,
-            ReworkTarget = null,
-            Diff = null
+            Feedback = $"Invalid critic response (unparseable JSON): {content[..Math.Min(content.Length, 200)]}",
+            ReworkTarget = fallbackStepName,
+            Diff = "Critic response was not valid JSON"
         };
     }
 

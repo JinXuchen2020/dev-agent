@@ -380,8 +380,8 @@ Quality Gate  ██████████ 100%
 
 ## 📚 参考文档
 
-- `docs/learning/03-mediatr-cqrs-and-ef-core.md` - MediatR + CQRS + EF Core 综合指南
-- `docs/learning/04-ef-core-aggregates.md` - EF Core 聚合根映射指南
+- `docs/learning/03-mediatr-cqrs.md` - MediatR 管道 + CQRS 指南
+- `docs/learning/04-ef-core-aggregates.md` - EF Core 聚合根映射指南（§4.8 数据库初始化见 `02-clean-architecture.md` §2.7）
 - `docs/database-conditional-compilation.md` - 可插拔数据库架构文档
 - `docs/database-initialization-fix.md` - SQLite 初始化问题修复
 - `docs/database-swapping-guide.md` - 数据库切换指南

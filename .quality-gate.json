@@ -1,9 +1,9 @@
 {
-  "phase": "phase-3",
-  "reviewer": "ddd-code-reviewer PASSED (2026-07-20 第二轮补审闭环)",
+  "phase": "phase-4",
+  "reviewer": "ddd-code-reviewer PASSED (2026-07-20 Phase 4 评审闭环)",
   "structureGate": "ddd-phase-quality-gate 0 open",
   "cleared": true,
-  "updatedAt": "2026-07-20T18:00:00+08:00",
-  "reportRef": "phases/phase-3-platformization.md",
-  "note": "Phase 3 独立复评 (2026-07-20) 结论闭环：P1 SSE 订阅泄漏（控制器捕获 subscriberId + finally Unsubscribe）已修复并新增 5 个回归测试锁定（broadcaster 单元 3 + controller 断连/终态清理集成 2，全量 86/86 绿）；P3 死指标 workflow.active_steps 已 Record；文档漂移已同步。质量门从 phase-2 切至 phase-3。"
+  "updatedAt": "2026-07-20T22:00:00+08:00",
+  "reportRef": "phases/phase-4-grounding.md",
+  "note": "Phase 4 (知识接地与上线前加固) 评审闭环：PGVector 真实向量检索替换 stub、Critic fail-loud 质量闸（AllowCriticOverride=false 时模型异常→Approved=false）、ListWorkflows/GetExecutionLogSteps 数据库端 IQueryable 分页、ITokenCounter 真实 token 计数 + MaxSummaryTokens 配置化。3 auto-fixes 已应用：PgVectorStore IDisposable、embedding dimension 参数化、ParseReviewResult StepName 空处理。Build 0 warnings, Tests 34/34 passed。"
 }

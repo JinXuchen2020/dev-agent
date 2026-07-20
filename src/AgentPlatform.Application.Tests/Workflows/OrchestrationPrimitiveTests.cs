@@ -19,6 +19,7 @@ public sealed class OrchestrationPrimitiveTests
     private readonly IServiceProvider _serviceProvider = Substitute.For<IServiceProvider>();
     private readonly ILogger<OrchestrationPrimitive> _logger = Substitute.For<ILogger<OrchestrationPrimitive>>();
     private readonly IVectorStore _vectorStore = Substitute.For<IVectorStore>();
+    private readonly ITokenCounter _tokenCounter = Substitute.For<ITokenCounter>();
     private readonly StateMachineSettings _settings = new()
     {
         MaxRetryAttempts = 2,
@@ -32,7 +33,7 @@ public sealed class OrchestrationPrimitiveTests
     {
         _primitive = new OrchestrationPrimitive(
             _repository, _unitOfWork, _eventBus, _serviceProvider,
-            Options.Create(_settings), _logger, _vectorStore);
+            Options.Create(_settings), _logger, _vectorStore, _tokenCounter);
     }
 
     private static Workflow CreateWorkflow(string name = "test-workflow", int stepCount = 3)

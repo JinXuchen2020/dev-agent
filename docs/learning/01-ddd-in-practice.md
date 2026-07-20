@@ -2,6 +2,8 @@
 
 > 目标：不是重复 DDD 书上的概念，而是回答 "DDD 的每个概念在 .NET 代码里长什么样？为什么这么写？不这么写会有什么问题？"
 
+> **一句话**：DDD 不是概念背诵，而是「聚合根管孩子、值对象不可变、事件不散落、仓储假装数据库不存在」在 C# 里的具体写法。
+
 ---
 
 ## 1.1 聚合根（Aggregate Root）：管好自己的孩子
@@ -215,6 +217,14 @@ internal sealed class AgentRepository : IAgentRepository
 | 领域事件在 Controller 里发布 | 事件散落，事务边界模糊 | 聚合根自持 `_domainEvents`，UoW 自动分发 |
 | 仓储实现在 Application 层 | 违反依赖方向，编译不报错但架构坏了 | 实现在 Infrastructure |
 | Domain 层引用第三方 NuGet | 哪天换库 Domain 跟着改 | Domain 零 PackageReference |
+
+---
+
+## 复盘自测
+
+- 聚合根为什么所有属性用 `private set`？不用会有什么后果？
+- 值对象（如 `Money`）为什么用 `record` 而不是 `class`？
+- 领域事件为什么由聚合根自持 `_domainEvents`、再由 UnitOfWork 分发，而不是直接在 Controller 里发？
 
 ---
 

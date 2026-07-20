@@ -45,6 +45,24 @@ public interface IExecutionLogRepository
         CancellationToken ct = default);
 
     /// <summary>
+    /// Queries execution log entries (steps) with server-side pagination and optional status filter.
+    /// Queries the entries table directly without loading the parent aggregate.
+    /// Returns <c>null</c> if the parent <see cref="ExecutionLog"/> does not exist.
+    /// </summary>
+    /// <param name="executionLogId">The execution log identifier to filter entries by.</param>
+    /// <param name="status">Optional filter by step status.</param>
+    /// <param name="skip">Number of records to skip.</param>
+    /// <param name="take">Number of records to take.</param>
+    /// <param name="ct">A cancellation token.</param>
+    /// <returns>A tuple with the paginated entries and total count, or <c>null</c> if the execution log does not exist.</returns>
+    Task<(IReadOnlyList<ExecutionLogEntry> Items, int TotalCount)?> QueryStepsAsync(
+        Guid executionLogId,
+        WorkflowState? status = null,
+        int skip = 0,
+        int take = 50,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Adds a new execution log to the repository.
     /// </summary>
     /// <param name="log">The execution log aggregate to add.</param>

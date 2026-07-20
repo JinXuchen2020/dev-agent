@@ -2,6 +2,8 @@
 
 > 目标：理解 "依赖方向向内" 到底是什么意思，为什么少写一个项目会出问题。
 
+> **一句话**：依赖方向永远向内——Domain 零依赖、接口定义在 Application、实现在 Infrastructure、DI 注册集中收口；编译器不拦架构违规，所以靠 ArchTests。
+
 ---
 
 ## 2.1 项目关系图
@@ -165,6 +167,36 @@ Assert.DoesNotContain("AgentPlatform.Infrastructure", content);
 2. **加新 ORM** → 新实现在 Infrastructure，实现已有接口就行
 3. **换模型 Provider** → `StubModelClient` ↔ `SemanticKernelModelClient` 通过配置切换，代码一处不改
 4. **写单元测试** → new 聚合根不需要数据库，不需要 mock
+
+---
+
+## 2.7 数据库初始化与种子（QuickStart 实务）
+
+`DatabaseInitializer` 在 QuickStart（SQLite）下建库 + 种子数据，踩过一个典型坑：
+
+**现象**：日志显示所有 `CREATE TABLE` 都成功，但紧接着查询报 `SQLite Error 1: 'no such table'`。
+
+**根因**：SQLite 的 `EnsureCreatedAsync()` 建表后事务没立即提交，同一 `DbContext` 立刻查询就读不到。
+
+**正确时序**（见 `Infrastructure/Persistence/DatabaseInitializer.cs`）：
+
+```csharp
+var created = await _context.Database.EnsureCreatedAsync(); // 1. 先建表
+await SeedDataAsync();                                       // 2. 再种子（触发提交）
+await _context.SaveChangesAsync();                          // 3. 最后统一保存
+```
+
+**连接串细节**：QuickStart 用 `Data Source=agent_platform.db;Cache=Private`——`Cache=Private` 让每个 `DbContext` 独立缓存，避免 `Cache=Shared` 的事务隔离问题。
+
+**复盘一句话**：建表、种子、保存要分三步且顺序不能乱；连接串的 `Cache` 模式直接影响并发正确性。
+
+---
+
+## 复盘自测
+
+- 为什么 Domain 项目必须零 `PackageReference`？加了 EF Core 会怎样？
+- 为什么 Application 不能引用 Infrastructure，但 Api 可以？
+- 接口（如 `IModelClient`）应该定义在哪一层？实现和注册又各在哪？
 
 ---
 

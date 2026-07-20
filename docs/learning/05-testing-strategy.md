@@ -2,23 +2,25 @@
 
 > 目标：理解这个项目的测试金字塔为什么这样搭，每种测试解决什么问题，不解决什么问题。
 
+> **一句话**：测试金字塔最底层是 ArchitectureTests——它补的是「C# 编译器不管、但架构会烂」的缺口，ROI 最高。
+
 ---
 
 ## 5.1 测试金字塔（当前状态）
 
 ```
          ┌──────────┐
-         │   E2E    │  ← 没有。Phase 5 补
+         │   E2E    │  ← 没有。Phase 6 补
          │ (手动)   │
         ┌┴──────────┴┐
-        │ Integration │  ← Testcontainers 脚手架就绪，测试用例待 Phase 2
+        │ Integration │  ← 真实依赖测试已落地（PgVectorStore/PG、进度清理）
         │ (少量)     │
        ┌┴────────────┴┐
-       │  BDD SpecFlow │  ← 17 个场景。验证业务行为
+       │  BDD SpecFlow │  ← 多场景，验证业务行为
        │ (中量)       │
       ┌┴───────────────┴┐
-      │ Unit (xUnit)    │  ← 没有独立的 Unit Test 项目
-      │ (少量)          │     业务逻辑靠 BDD 步骤覆盖
+      │ Unit (xUnit)    │  ← Application.Tests 已建立
+      │ (少量)          │     覆盖复杂逻辑边界
      ┌┴─────────────────┴┐
      │ ArchitectureTests  │  ← 6 个测试，每次 build 自动跑
      │ (编译级约束)       │
@@ -102,9 +104,9 @@ BDD 场景验证了"成本报表返回正确花费"，但以下边界情况 BDD 
 
 这些需要 Unit Test，不需要数据库，不需要启动 API。
 
-### 建议
+### 补充方向
 
-Phase 2 有复杂业务逻辑（状态机、Agent 协作）时加 Unit Test 项目：
+复杂业务逻辑（状态机、Agent 协作、成本预算）优先补 Unit Test：
 
 ```
 src/AgentPlatform.Application.Tests/
@@ -166,6 +168,14 @@ AutoGenAgentOrchestrator    → 多个 Agent 真的能协作完成对话？
 | Integration | 高 | 10s+ | 基础设施交互错误 | 每个外部依赖 2-3 个 |
 
 **结论：** ArchitectureTests 是投入产出比最高的 — 写一次，每次 build 自动执行，永远不修。
+
+---
+
+## 复盘自测
+
+- 为什么 ArchitectureTests 要放在测试金字塔最底层？它补了什么编译器补不了的缺口？
+- BDD 验证了什么、不验证什么？
+- 什么情况下必须写 Integration Test 而不是 Unit/BDD？
 
 ---
 
