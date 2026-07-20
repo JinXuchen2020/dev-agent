@@ -178,7 +178,9 @@ public class MultiAgentPipelineSteps
     /// Test implementation of <see cref="IAgentOrchestrator"/> that simulates
     /// the multi-agent pipeline behavior for SpecFlow testing.
     /// </summary>
+#pragma warning disable CS0618 // IAgentOrchestrator is [Obsolete] in production but still valid for test doubles
     private sealed class TestAgentOrchestrator : IAgentOrchestrator
+#pragma warning restore CS0618
     {
         private readonly IReadOnlyList<string> _roleNames;
         private readonly HashSet<string> _unavailableRoles;

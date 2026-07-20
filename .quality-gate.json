@@ -3,6 +3,7 @@
   "reviewer": "ddd-code-reviewer PASSED",
   "structureGate": "ddd-phase-quality-gate 0 open",
   "cleared": true,
-  "updatedAt": "2026-07-16T18:00:00+08:00",
-  "reportRef": "docs/quality/phase-2-gate.md"
+  "updatedAt": "2026-07-20T09:49:00+08:00",
+  "reportRef": "phases/phase-2-multi-agent-checklist.md",
+  "note": "Revision 2: 3 P2s resolved — Retry off-by-one (MaxRetryAttempts now = TOTAL attempts; explicit for-loop), DetectPreset fragility (s_resolvedPresets cache so Resume/Retry reuse stable preset), BuildWorkflowContext sync block + silent swallow (now async + awaits with real ct + LogWarning). 31/31 Application.Tests green, 0 open findings. P1s (resume skip-Completed + mid-exec Pause + crash-recovery test) fixed in rev 1."
 }

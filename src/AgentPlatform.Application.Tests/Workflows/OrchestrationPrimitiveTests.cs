@@ -18,6 +18,7 @@ public sealed class OrchestrationPrimitiveTests
     private readonly IDomainEventBus _eventBus = Substitute.For<IDomainEventBus>();
     private readonly IServiceProvider _serviceProvider = Substitute.For<IServiceProvider>();
     private readonly ILogger<OrchestrationPrimitive> _logger = Substitute.For<ILogger<OrchestrationPrimitive>>();
+    private readonly IVectorStore _vectorStore = Substitute.For<IVectorStore>();
     private readonly StateMachineSettings _settings = new()
     {
         MaxRetryAttempts = 2,
@@ -31,7 +32,7 @@ public sealed class OrchestrationPrimitiveTests
     {
         _primitive = new OrchestrationPrimitive(
             _repository, _unitOfWork, _eventBus, _serviceProvider,
-            Options.Create(_settings), _logger);
+            Options.Create(_settings), _logger, _vectorStore);
     }
 
     private static Workflow CreateWorkflow(string name = "test-workflow", int stepCount = 3)
@@ -52,6 +53,19 @@ public sealed class OrchestrationPrimitiveTests
             .ReturnsForAnyArgs(call => execute(
                 call.ArgAt<WorkflowStep>(0),
                 call.ArgAt<WorkflowContext>(1)));
+        return executor;
+    }
+
+    private static IStepExecutor CreateStepExecutor(
+        Func<WorkflowStep, WorkflowContext, CancellationToken, Task<StepExecutionResult>> execute)
+    {
+        var executor = Substitute.For<IStepExecutor>();
+        executor.StepType.Returns("*");
+        executor.ExecuteAsync(default!, default!, default)
+            .ReturnsForAnyArgs(call => execute(
+                call.ArgAt<WorkflowStep>(0),
+                call.ArgAt<WorkflowContext>(1),
+                call.ArgAt<CancellationToken>(2)));
         return executor;
     }
 
@@ -168,6 +182,33 @@ public sealed class OrchestrationPrimitiveTests
         var result = await _primitive.RunAsync(workflow, OrchestrationPreset.Sequential);
 
         Assert.Equal(WorkflowState.RolledBack, result.CurrentState);
+    }
+
+    // ──────────────────────────────────────────────
+    // Retry semantics: MaxRetryAttempts = TOTAL attempts (first + retries).
+    // Locks the off-by-one fix: with MaxRetryAttempts=2 the executor must be
+    // invoked exactly 2 times, never 3.
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task RunAsync_Sequential_InvokesExecutorExactlyMaxRetryAttemptsTimes()
+    {
+        var workflow = CreateWorkflow(stepCount: 1);
+        _repository.GetByIdAsync(workflow.Id, default).Returns(workflow);
+
+        var callCount = 0;
+        var executor = CreateStepExecutor((step, ctx) =>
+        {
+            callCount++;
+            return StepExecutionResult.RetryableFailure("always fails");
+        });
+        SetupExecutor(executor);
+
+        var result = await _primitive.RunAsync(workflow, OrchestrationPreset.Sequential);
+
+        Assert.Equal(WorkflowState.RolledBack, result.CurrentState);
+        // MaxRetryAttempts = 2 → exactly 2 total attempts (no off-by-one).
+        Assert.Equal(2, callCount);
     }
 
     // ──────────────────────────────────────────────
@@ -369,8 +410,13 @@ public sealed class OrchestrationPrimitiveTests
         var executor = CreateStepExecutor((step, ctx) =>
             StepExecutionResult.Success($"output-{step.StepName}"));
         var termination = Substitute.For<ITerminationCondition>();
+        bool firstCheck = true;
         termination.ShouldTerminateAsync(Arg.Any<WorkflowContext>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(false)); // Don't terminate on first check
+            .Returns(_ =>
+            {
+                if (firstCheck) { firstCheck = false; return Task.FromResult(false); }
+                return Task.FromResult(true); // terminate after first step
+            });
         var selection = Substitute.For<ISelectionStrategy>();
         selection.SelectNextAsync(Arg.Any<WorkflowContext>(), Arg.Any<IReadOnlyList<WorkflowStep>>(), Arg.Any<CancellationToken>())
             .Returns(workflow.Steps[0]); // Return the step
@@ -434,5 +480,70 @@ public sealed class OrchestrationPrimitiveTests
         var result = await _primitive.RunAsync(workflow, OrchestrationPreset.Negotiation);
 
         Assert.Equal(WorkflowState.RolledBack, result.CurrentState);
+    }
+
+    // ──────────────────────────────────────────────
+    // Crash recovery / Resume continuity (Blueprint C.7): a workflow that
+    // partially completed (e.g. host crashed mid-run) must RESUME from the
+    // last completed step — already-completed steps must NOT be re-executed.
+    // This is the test the 07-20 review incorrectly waived as "needs Docker".
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task RunAsync_Sequential_SkipsAlreadyCompletedSteps_OnResume()
+    {
+        var workflow = CreateWorkflow(stepCount: 2);
+        // Simulate a workflow that ran partway then restarted: step-0 already
+        // succeeded, step-1 still pending.
+        workflow.SetState(WorkflowState.Running);
+        workflow.Steps[0].SetResult("already-completed");
+        _repository.GetByIdAsync(workflow.Id, default).Returns(workflow);
+
+        var executed = new List<string>();
+        var executor = CreateStepExecutor((step, ctx) =>
+        {
+            executed.Add(step.StepName);
+            return StepExecutionResult.Success($"output-{step.StepName}");
+        });
+        SetupExecutor(executor);
+
+        var result = await _primitive.RunAsync(workflow, OrchestrationPreset.Sequential);
+
+        Assert.Equal(WorkflowState.Completed, result.CurrentState);
+        // Only the pending step must run; the completed step must NOT re-execute.
+        Assert.Single(executed);
+        Assert.DoesNotContain("step-0", executed);
+        Assert.Contains("step-1", executed);
+    }
+
+    // ──────────────────────────────────────────────
+    // Pause mid-execution (Blueprint C.7): PauseAsync must interrupt an
+    // in-flight run and leave the workflow Paused + resumable.
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task PauseAsync_InterruptsInFlightRun_LeavesWorkflowPaused()
+    {
+        var workflow = CreateWorkflow(stepCount: 2);
+        workflow.SetState(WorkflowState.Running);
+        _repository.GetByIdAsync(workflow.Id, default).Returns(workflow);
+
+        var executor = CreateStepExecutor(async (step, ctx, ct) =>
+        {
+            if (step.Order == 0)
+            {
+                // Simulate a long-running first step; issue Pause while it is in flight.
+                _ = _primitive.PauseAsync(workflow.Id);
+                try { await Task.Delay(Timeout.InfiniteTimeSpan, ct); }
+                catch (OperationCanceledException) { throw; }
+            }
+            return StepExecutionResult.Success($"output-{step.StepName}");
+        });
+        SetupExecutor(executor);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            _primitive.RunAsync(workflow, OrchestrationPreset.Sequential));
+
+        Assert.Equal(WorkflowState.Paused, workflow.CurrentState);
     }
 }

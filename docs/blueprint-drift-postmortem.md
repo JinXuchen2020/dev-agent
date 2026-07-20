@@ -111,6 +111,27 @@ Phase 2 只跑了 `ddd-phase-quality-gate`（静态结构 12 类，Blueprint Dri
 
 ---
 
+## 6.1 更正（2026-07-16 复评发现，推翻上面 §6 的"当前待办"）
+
+> ⚠️ **本节对 §6 的结论做了重大修正**：上面 §6 写的"Phase 2 旧代码仍实现旧设计、处于漂移态"**已不准确**。
+
+复评（`docs/quality/phase-2-rereview-2026-07-16.md`）逐行核对了实际代码，结论反转：
+
+- **A 类实现漂移（双引擎 / 内存态 / 全量重置 / 空心 AutoGen）在新基线上已解决**。编排的**实时执行路径**早已重写为 `OrchestrationPrimitive`（`RunWorkflowCommandHandler → IOrchestrationPrimitive.RunAsync → OrchestrationPrimitive`），单一编排原语 + `sequential`/`negotiation` 预设、统一 `WorkflowContext`、精准回滚（Order≥target）、逐步持久化、真实 `Pause/Resume/Retry/Rollback`。
+- 旧的 `AutoGenAgentOrchestrator`（蜜罐）**根本没在 DI 注册** → 死代码；`WorkflowStateMachineEngine`/`IWorkflowEngine`/`StubWorkflowEngine` 已标 `[Obsolete]` 或注册即抛异常。
+- `RoleBasedSelectionStrategy` 与 `CriticConvergenceTermination` 是**真实实现**（非 stub），协商预设确实落地。
+
+**所以"蓝图 READY ≠ 代码 READY"这句话对实时路径已不成立**——代码现在照新蓝图实现了。但新原语有**自己的新缺陷**（非旧漂移）：
+- P1：`Resume`/`Retry` 会**重跑全部步骤**（不跳已完成）；`Pause` 执行中**不生效**；`Critic` 是**恒通过模拟器**（C.6 功能空）。
+- P2：上下文伸缩（C.3.1）未实现；`ReworkTarget` 未接线；`DetectPreset` 字符串嗅探脆弱且破坏 Resume。
+- P3：Retry off-by-one（4 次非 3）；死蜜罐未标 Obsolete；双回滚路径冗余。
+
+**修正后的"当前待办"**：不是"重写编排器"，而是**修新原语的 P1/P2**（跳过已完成步骤、Pause 生效、Critic 真实化或显式标注占位），修完重跑 `ddd-code-reviewer` 闭环、补测试，再写 `.quality-gate.json cleared:true` 才能 commit `src/`。`src/` 目前仍**不可 commit**（质量门未清）。
+
+> 教训：写"代码仍漂移"这类结论前要**先 grep 实时路径的 DI 注册与调用方**，不能只凭旧文件存在就断言它还活着。蜜罐类（名带 Orchestrator 却死代码）最容易让人误判。
+
+---
+
 ## 7. 给学习项目的经验
 
 1. **漂移 vs 范式是两种病，药方不同**：别指望代码审查抓到范式债，也别让下游 Phase 替上游背债。

@@ -1,3 +1,4 @@
+using System.Text;
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Domain.Aggregates.Workflows;
 using AgentPlatform.Domain.Aggregates.Workflows.Events;
@@ -6,6 +7,8 @@ using AgentPlatform.Domain.Repositories;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Collections.Concurrent;
+using System.Threading;
 
 namespace AgentPlatform.Infrastructure.Workflows;
 
@@ -24,6 +27,15 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<OrchestrationPrimitive> _logger;
     private readonly StateMachineSettings _settings;
+    private readonly IVectorStore _vectorStore;
+
+    // Tracks in-flight runs so PauseAsync can interrupt them (Blueprint C.7: mid-execution pause).
+    private static readonly ConcurrentDictionary<Guid, CancellationTokenSource> s_runningCts = new();
+
+    // Tracks the preset chosen on first RunAsync so Resume/Retry reuse the SAME preset
+    // instead of re-sniffing Context (which could flip the preset mid-lifecycle).
+    // Cold-start fallback (e.g. after a process restart) still uses DetectPreset.
+    private static readonly ConcurrentDictionary<Guid, OrchestrationPreset> s_resolvedPresets = new();
 
     public OrchestrationPrimitive(
         IWorkflowRepository repository,
@@ -31,7 +43,8 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
         IDomainEventBus eventBus,
         IServiceProvider serviceProvider,
         IOptions<StateMachineSettings> settings,
-        ILogger<OrchestrationPrimitive> logger)
+        ILogger<OrchestrationPrimitive> logger,
+        IVectorStore vectorStore)
     {
         _repository = repository;
         _unitOfWork = unitOfWork;
@@ -39,11 +52,15 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
         _serviceProvider = serviceProvider;
         _logger = logger;
         _settings = settings.Value;
+        _vectorStore = vectorStore;
     }
 
     public async Task<Workflow> RunAsync(Workflow workflow, OrchestrationPreset preset, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(workflow);
+
+        // Remember the chosen preset for this workflow so Resume/Retry stay stable.
+        s_resolvedPresets[workflow.Id] = preset;
 
         if (workflow.CurrentState != WorkflowState.Pending && workflow.CurrentState != WorkflowState.Running)
             throw new InvalidOperationException(
@@ -58,15 +75,19 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
         await _eventBus.PublishAsync(
             new WorkflowStarted(workflow.Id, workflow.Name, workflow.TenantId), ct);
 
+        // Register a cancellable source so PauseAsync can interrupt an in-flight run (Blueprint C.7).
+        var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        s_runningCts[workflow.Id] = linkedCts;
+        var linkedToken = linkedCts.Token;
         try
         {
             switch (preset)
             {
                 case OrchestrationPreset.Sequential:
-                    await RunSequentialAsync(workflow, ct);
+                    await RunSequentialAsync(workflow, linkedToken);
                     break;
                 case OrchestrationPreset.Negotiation:
-                    await RunNegotiationAsync(workflow, ct);
+                    await RunNegotiationAsync(workflow, linkedToken);
                     break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(preset), preset, null);
@@ -74,12 +95,29 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            // Timeout or external cancellation — leave workflow Running for resume
-            _logger.LogWarning("Workflow {WorkflowId} execution timed out or was cancelled", workflow.Id);
+            // Timeout (inner CTS fired) OR external Pause (linked CTS cancelled) —
+            // both leave the workflow resumable.
+            _logger.LogWarning("Workflow {WorkflowId} execution interrupted (timeout or pause)", workflow.Id);
             workflow.SetState(WorkflowState.Paused);
             _repository.Update(workflow);
             await _unitOfWork.SaveChangesAsync(ct);
             throw;
+        }
+        catch (OperationCanceledException)
+        {
+            // Explicit cancellation (outer ct was cancelled mid-execution)
+            // Set Paused so the workflow is resumable — otherwise it stays Running permanently.
+            _logger.LogWarning("Workflow {WorkflowId} execution was cancelled by caller", workflow.Id);
+            workflow.SetState(WorkflowState.Paused);
+            _repository.Update(workflow);
+            // Use CancellationToken.None because ct is already cancelled
+            await _unitOfWork.SaveChangesAsync(CancellationToken.None);
+            throw;
+        }
+        finally
+        {
+            s_runningCts.TryRemove(workflow.Id, out _);
+            linkedCts.Dispose();
         }
 
         return workflow;
@@ -90,6 +128,11 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
         var workflow = await LoadWorkflowAsync(workflowId, ct);
         if (workflow.CurrentState != WorkflowState.Running)
             throw new InvalidOperationException($"Workflow {workflowId} is not running (state: {workflow.CurrentState})");
+
+        // Interrupt the in-flight run, if one is registered, so an executing step aborts
+        // immediately instead of finishing (Blueprint C.7: mid-execution pause).
+        if (s_runningCts.TryGetValue(workflowId, out var cts))
+            cts.Cancel();
 
         workflow.SetState(WorkflowState.Paused);
         _repository.Update(workflow);
@@ -103,8 +146,8 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
         if (workflow.CurrentState != WorkflowState.Paused)
             throw new InvalidOperationException($"Workflow {workflowId} is not paused (state: {workflow.CurrentState})");
 
-        // Reload preset from stored step data
-        var preset = DetectPreset(workflow);
+        // Reload preset — prefer the one chosen on first RunAsync (stable across resume).
+        var preset = ResolvePreset(workflow, workflowId);
         workflow.SetState(WorkflowState.Running);
         _repository.Update(workflow);
         await _unitOfWork.SaveChangesAsync(ct);
@@ -124,9 +167,9 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
         _repository.Update(workflow);
         await _unitOfWork.SaveChangesAsync(ct);
 
-        // Re-run from the reset step
+        // Re-run from the reset step, reusing the stable preset.
         workflow.SetState(WorkflowState.Running);
-        await RunAsync(workflow, DetectPreset(workflow), ct);
+        await RunAsync(workflow, ResolvePreset(workflow, workflowId), ct);
     }
 
     public async Task RollbackToAsync(Guid workflowId, int targetStepOrder, CancellationToken ct = default)
@@ -178,10 +221,16 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
 
         foreach (var step in orderedSteps)
         {
+            // Resume continuity (Blueprint C.7): never re-execute steps that already completed.
+            // This is what makes a restarted/crashed workflow resume from the last
+            // completed step instead of replaying the whole pipeline.
+            if (step.State == WorkflowState.Completed)
+                continue;
+
             ct.ThrowIfCancellationRequested();
 
             // Build the unified WorkflowContext from current workflow state
-            var ctx = BuildWorkflowContext(workflow, step, orderedSteps);
+            var ctx = await BuildWorkflowContext(workflow, step, orderedSteps, ct);
 
             var result = await ExecuteStepWithRetryAsync(workflow, step, ctx, ct);
 
@@ -247,7 +296,7 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
         while (!ct.IsCancellationRequested)
         {
             // Build unified context
-            var ctx = BuildWorkflowContext(workflow, null, workflow.Steps.ToList());
+            var ctx = await BuildWorkflowContext(workflow, null, workflow.Steps.ToList(), ct);
 
             // Check termination before selecting next step
             if (await terminationCondition.ShouldTerminateAsync(ctx, ct))
@@ -277,7 +326,7 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
             }
 
             // Build step-specific context
-            var stepCtx = BuildWorkflowContext(workflow, nextStep, workflow.Steps.ToList());
+            var stepCtx = await BuildWorkflowContext(workflow, nextStep, workflow.Steps.ToList(), ct);
             var result = await ExecuteStepWithRetryAsync(workflow, nextStep, stepCtx, ct);
 
             switch (result.Outcome)
@@ -324,17 +373,19 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
     private async Task<StepExecutionResult> ExecuteStepWithRetryAsync(
         Workflow workflow, WorkflowStep step, WorkflowContext ctx, CancellationToken ct)
     {
-        var retryCount = 0;
+        // MaxRetryAttempts = MAXIMUM TOTAL attempts for a step (first attempt + retries).
+        // E.g. MaxRetryAttempts = 3 means at most 3 runs, never 4. The explicit `for`
+        // loop removes the previous `<=`-bound off-by-one ambiguity.
+        var maxAttempts = Math.Max(1, _settings.MaxRetryAttempts);
         StepExecutionResult? lastResult = null;
-        var maxRetries = _settings.MaxRetryAttempts;
 
-        while (retryCount <= maxRetries)
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
             ct.ThrowIfCancellationRequested();
 
             step.SetState(WorkflowState.Running);
-            _logger.LogInformation("Executing step {StepName} (attempt {Attempt}/{MaxRetry})",
-                step.StepName, retryCount + 1, maxRetries + 1);
+            _logger.LogInformation("Executing step {StepName} (attempt {Attempt}/{MaxAttempts})",
+                step.StepName, attempt, maxAttempts);
 
             var executor = ResolveExecutor(step);
             if (executor == null)
@@ -379,25 +430,22 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
             {
                 var duration = DateTime.UtcNow - startTime;
                 _logger.LogWarning(ex, "Step {StepName} failed on attempt {Attempt}",
-                    step.StepName, retryCount + 1);
+                    step.StepName, attempt);
                 lastResult = StepExecutionResult.RetryableFailure(ex.Message, duration);
             }
 
-            retryCount++;
-
-            if (retryCount <= maxRetries)
+            // Not the final attempt yet → brief backoff before retrying.
+            if (attempt < maxAttempts)
             {
-                _logger.LogInformation("Retrying step {StepName} in {Delay}ms (attempt {Attempt}/{MaxRetry})",
-                    step.StepName, _settings.RetryDelayMs, retryCount, maxRetries + 1);
+                _logger.LogInformation("Retrying step {StepName} in {Delay}ms (attempt {NextAttempt}/{MaxAttempts})",
+                    step.StepName, _settings.RetryDelayMs, attempt + 1, maxAttempts);
                 await Task.Delay(_settings.RetryDelayMs, ct);
-                continue; // Keep state as Running for next attempt
             }
-
-            // All retries exhausted — now mark as Failed
-            step.SetState(WorkflowState.Failed);
-            step.SetError(lastResult?.ErrorMessage ?? "All retry attempts exhausted");
         }
 
+        // All attempts exhausted — persist the failed state.
+        step.SetState(WorkflowState.Failed);
+        step.SetError(lastResult?.ErrorMessage ?? "All retry attempts exhausted");
         return lastResult ?? StepExecutionResult.FatalFailure("All retry attempts exhausted");
     }
 
@@ -425,8 +473,8 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
 
     // ──────────── Context Building ────────────
 
-    private WorkflowContext BuildWorkflowContext(
-        Workflow workflow, WorkflowStep? currentStep, IReadOnlyList<WorkflowStep> allSteps)
+    private async Task<WorkflowContext> BuildWorkflowContext(
+        Workflow workflow, WorkflowStep? currentStep, IReadOnlyList<WorkflowStep> allSteps, CancellationToken ct)
     {
         var artifacts = new Dictionary<string, StepArtifact>();
         var blackboard = Blackboard.Empty;
@@ -442,17 +490,66 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
             };
         }
 
+        // Populate Retrieval from vector store (Blueprint C.3.1)
+        var retrieval = RetrievalContext.Empty;
+        if (currentStep != null)
+        {
+            try
+            {
+                // Await asynchronously with the real cancellation token — do NOT block
+                // the thread via .GetAwaiter().GetResult() and do NOT pass ct: default.
+                var searchResults = await _vectorStore.SearchAsync(
+                    "workflow-context", currentStep.StepName, topK: 3, ct);
+                if (searchResults.Count > 0)
+                {
+                    retrieval = new RetrievalContext
+                    {
+                        Chunks = searchResults.Select(r => r.Content).ToList(),
+                        Sources = searchResults.Select(r => r.DocumentId).ToList()
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                // Retrieval is best-effort enrichment: degrade to empty context, but
+                // surface the failure at Warning level (was silently swallowed at Debug).
+                _logger.LogWarning(ex, "Vector store retrieval failed for step {StepName}; using empty context",
+                    currentStep.StepName);
+            }
+        }
+
+        // Build compressed summary from completed step artifacts (Blueprint C.3.1)
+        var summaries = new Dictionary<int, string>();
+        const int maxSummaryTokens = 8000;
+        var estimatedTokens = 0;
+        foreach (var step in allSteps.Where(s => s.State == WorkflowState.Completed && !string.IsNullOrEmpty(s.Result)))
+        {
+            var summary = $"[{step.Order}] {step.StepName}: {Truncate(step.Result!, 200)}";
+            var estimatedStepTokens = summary.Length / 2;
+            if (estimatedTokens + estimatedStepTokens > maxSummaryTokens)
+                break;
+            summaries[step.Order] = summary;
+            estimatedTokens += estimatedStepTokens;
+        }
+
         return new WorkflowContext
         {
             WorkflowId = workflow.Id,
             CurrentStepOrder = currentStep?.Order ?? 0,
             Artifacts = artifacts,
             Blackboard = blackboard,
-            Retrieval = RetrievalContext.Empty,
-            Summary = StepHistory.Empty,
+            Retrieval = retrieval,
+            Summary = new StepHistory
+            {
+                Summaries = summaries,
+                MaxTokens = maxSummaryTokens
+            },
             TenantId = workflow.TenantId
         };
     }
+
+    private static string Truncate(string value, int maxLength) =>
+        value.Length <= maxLength ? value : value[..maxLength];
 
     private static string DetectContentType(string stepName)
     {
@@ -494,10 +591,21 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
         return string.Equals(pattern, value, StringComparison.Ordinal);
     }
 
+    private OrchestrationPreset ResolvePreset(Workflow workflow, Guid workflowId)
+    {
+        // Prefer the preset recorded when the workflow first ran; fall back to
+        // heuristic sniffing only for cold starts (in-memory cache lost on restart).
+        return s_resolvedPresets.TryGetValue(workflowId, out var cached)
+            ? cached
+            : DetectPreset(workflow);
+    }
+
     private static OrchestrationPreset DetectPreset(Workflow workflow)
     {
-        // Heuristic: if workflow has negotiation-related metadata, use negotiation
-        // Otherwise default to sequential (the fast path)
+        // Cold-start fallback ONLY (ResolvePreset prefers the cached choice).
+        // Heuristic: a structured marker in Context selects negotiation; otherwise
+        // default to sequential (the fast path). Anchored to the exact JSON key so a
+        // step name/result containing the word "negotiation" cannot trigger it.
         return workflow.Context?.Contains("\"preset\":\"negotiation\"", StringComparison.OrdinalIgnoreCase) == true
             ? OrchestrationPreset.Negotiation
             : OrchestrationPreset.Sequential;

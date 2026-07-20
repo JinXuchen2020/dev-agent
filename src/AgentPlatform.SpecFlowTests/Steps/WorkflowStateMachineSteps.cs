@@ -295,8 +295,7 @@ public class WorkflowStateMachineSteps
         private readonly StateMachineSettings _settings = new()
         {
             MaxRetryAttempts = 3,
-            StepTimeoutSeconds = 120,
-            RollbackTimeoutSeconds = 300
+            StepTimeoutSeconds = 120
         };
 
         public TestStateMachineEngine(IEnumerable<IStepExecutor> executors)

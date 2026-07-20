@@ -151,7 +151,8 @@ public static class DependencyInjection
         {
             MaxRetryAttempts = int.TryParse(smSection["MaxRetryAttempts"], out var maxRetry) ? maxRetry : 3,
             StepTimeoutSeconds = int.TryParse(smSection["StepTimeoutSeconds"], out var timeout) ? timeout : 120,
-            RollbackTimeoutSeconds = int.TryParse(smSection["RollbackTimeoutSeconds"], out var rollTimeout) ? rollTimeout : 300
+            RetryDelayMs = int.TryParse(smSection["RetryDelayMs"], out var delayMs) ? delayMs : 1000,
+            DefaultModelId = smSection["DefaultModelId"] ?? "deepseek-chat"
         };
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(stateMachineSettings));
 
@@ -189,6 +190,8 @@ public static class DependencyInjection
         };
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(autoGenSettings));
         // IAgentOrchestrator fully replaced by IOrchestrationPrimitive (Blueprint C.2)
+        // AutoGenSettings is dead configuration — kept only for the [Obsolete] AutoGenAgentOrchestrator.
+        // When that class is removed in Phase 3, remove this registration block as well.
 
         services.AddScoped<ToolCallingDispatcher>();
         services.AddScoped<IToolExecutor, NativeToolExecutor>();

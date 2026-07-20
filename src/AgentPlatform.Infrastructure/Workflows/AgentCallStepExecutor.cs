@@ -31,6 +31,9 @@ internal sealed class AgentCallStepExecutor : IStepExecutor
 
     public async Task<StepExecutionResult> ExecuteAsync(WorkflowStep step, WorkflowContext ctx, CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(step);
+        ArgumentNullException.ThrowIfNull(ctx);
+
         _logger.LogInformation("Executing step: {StepName} (workflow: {WorkflowId})",
             step.StepName, ctx.WorkflowId);
 

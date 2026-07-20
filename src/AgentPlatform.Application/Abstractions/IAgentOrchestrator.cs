@@ -4,6 +4,8 @@ namespace AgentPlatform.Application.Abstractions;
 /// Defines the contract for orchestrating multi-agent collaboration workflows,
 /// typically involving AutoGen-powered group chat with multiple specialized agent roles.
 /// </summary>
+[Obsolete("Replaced by IOrchestrationPrimitive with OrchestrationPreset.Negotiation (Blueprint C.2). " +
+    "Scheduled for removal in Phase 3 cleanup.")]
 public interface IAgentOrchestrator
 {
     /// <summary>

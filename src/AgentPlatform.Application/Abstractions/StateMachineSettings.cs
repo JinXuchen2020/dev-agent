@@ -21,12 +21,6 @@ public sealed class StateMachineSettings
     public int StepTimeoutSeconds { get; set; } = 120;
 
     /// <summary>
-    /// Gets or sets the timeout in seconds for the complete rollback of a workflow.
-    /// Default: 300 (5 minutes)
-    /// </summary>
-    public int RollbackTimeoutSeconds { get; set; } = 300;
-
-    /// <summary>
     /// Gets or sets the delay in milliseconds between retry attempts for a failing workflow step.
     /// Default: 1000 (1 second)
     /// </summary>

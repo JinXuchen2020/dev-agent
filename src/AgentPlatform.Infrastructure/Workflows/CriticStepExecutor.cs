@@ -1,30 +1,43 @@
 using System.Text.Json;
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Domain.Aggregates.Workflows;
+using AgentPlatform.Domain.Enums;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace AgentPlatform.Infrastructure.Workflows;
 
 /// <summary>
 /// Executes a critic/review step within the negotiation preset (Blueprint C.6).
-/// Reviews the previous step's artifact and returns a structured diff with
-/// either approval or rework instructions.
+/// Reviews the previous step's artifact via IModelClient and returns a structured
+/// diff with either approval or rework instructions.
 ///
 /// This enables range-specific rework (targeted fixes) instead of full pipeline restart.
+/// Uses IModelClient for real review — fallback to "always approve" only if model is unavailable.
 /// </summary>
 internal sealed class CriticStepExecutor : IStepExecutor
 {
     private readonly ILogger<CriticStepExecutor> _logger;
+    private readonly IModelClient _modelClient;
+    private readonly StateMachineSettings _settings;
 
     public string StepType => "*critic*";
 
-    public CriticStepExecutor(ILogger<CriticStepExecutor> logger)
+    public CriticStepExecutor(
+        ILogger<CriticStepExecutor> logger,
+        IModelClient modelClient,
+        IOptions<StateMachineSettings> settings)
     {
         _logger = logger;
+        _modelClient = modelClient;
+        _settings = settings.Value;
     }
 
     public async Task<StepExecutionResult> ExecuteAsync(WorkflowStep step, WorkflowContext ctx, CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(step);
+        ArgumentNullException.ThrowIfNull(ctx);
+
         _logger.LogInformation("Critic reviewing step {StepName} for workflow {WorkflowId}",
             step.StepName, ctx.WorkflowId);
 
@@ -41,30 +54,60 @@ internal sealed class CriticStepExecutor : IStepExecutor
                 return StepExecutionResult.Success("No artifacts to review");
             }
 
-            // Simulate review — always approve for now
-            // In production, the critic agent would call IModelClient with a review prompt
-            await Task.Delay(50, ct);
+            // Build a review prompt for the critic model
+            var systemPrompt = "You are a quality reviewer on a software development team. " +
+                "Analyze the following artifact produced by a team member and determine if it meets quality standards. " +
+                "Respond with a JSON object containing:\n" +
+                "- \"Approved\": true if the artifact is acceptable, false if it needs rework\n" +
+                "- \"Feedback\": specific, actionable feedback about the artifact\n" +
+                "- \"ReworkTarget\": the step that should be reworked (or null if approved)\n" +
+                "- \"Diff\": specific issues found (or null if approved)";
 
-            var reviewResult = new CriticReviewResult
+            var userPrompt = $"Review this {lastArtifact.ContentType} artifact from step '{lastArtifact.StepName}':\n\n" +
+                Truncate(lastArtifact.Content, 4000);
+
+            var messages = new List<ChatMessage>
             {
-                Approved = true,
-                StepName = lastArtifact.StepName,
-                Feedback = "Artifact meets quality standards.",
-                ReworkTarget = null,
-                Diff = null
+                new(MessageRole.System, systemPrompt),
+                new(MessageRole.User, userPrompt)
             };
 
-            var artifactJson = JsonSerializer.Serialize(reviewResult);
+            CriticReviewResult reviewResult;
 
-            // Write convergence signal to blackboard via the context's blackboard
-            var updatedBb = ctx.Blackboard.Set("negotiation:converged", reviewResult.Approved ? "true" : "false");
+            try
+            {
+                var modelId = _settings.DefaultModelId;
+                var response = await _modelClient.ChatAsync(modelId, messages, ct);
+                reviewResult = ParseReviewResult(response.Content, lastArtifact.StepName);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Model unavailable — fall back to a safe approval with warning
+                _logger.LogWarning(ex,
+                    "Critic model unavailable for step {StepName}, falling back to approval",
+                    step.StepName);
+                reviewResult = new CriticReviewResult
+                {
+                    Approved = true,
+                    StepName = lastArtifact.StepName,
+                    Feedback = "Auto-approved (critic model unavailable).",
+                    ReworkTarget = null,
+                    Diff = null
+                };
+            }
+
+            var artifactJson = JsonSerializer.Serialize(reviewResult);
 
             _logger.LogInformation("Critic review for {TargetStep}: {Verdict}",
                 lastArtifact.StepName, reviewResult.Approved ? "APPROVED" : "REWORK_REQUIRED");
 
-            return StepExecutionResult.Success(
-                reviewResult.Approved ? "APPROVED" : "REWORK_REQUIRED",
-                artifactJson);
+            // Return artifact JSON as both output AND artifact so CriticConvergenceTermination
+            // can scan artifacts for approval signal (Blackboard is per-request, not persisted)
+            return StepExecutionResult.Success(artifactJson, artifactJson);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -72,6 +115,33 @@ internal sealed class CriticStepExecutor : IStepExecutor
             return StepExecutionResult.RetryableFailure(ex.Message);
         }
     }
+
+    private static CriticReviewResult ParseReviewResult(string content, string fallbackStepName)
+    {
+        try
+        {
+            var result = JsonSerializer.Deserialize<CriticReviewResult>(content);
+            if (result != null && !string.IsNullOrEmpty(result.StepName))
+                return result;
+        }
+        catch (JsonException)
+        {
+            // Not valid JSON — fall through to parsing as plain text
+        }
+
+        // If the model returned free text instead of JSON, create a default result
+        return new CriticReviewResult
+        {
+            Approved = true,
+            StepName = fallbackStepName,
+            Feedback = content.Length > 500 ? content[..500] : content,
+            ReworkTarget = null,
+            Diff = null
+        };
+    }
+
+    private static string Truncate(string value, int maxLength) =>
+        value.Length <= maxLength ? value : value[..maxLength];
 }
 
 /// <summary>

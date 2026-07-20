@@ -12,6 +12,9 @@ namespace AgentPlatform.Infrastructure.Agents;
 /// Each agent calls the LLM via <see cref="IModelClient"/> in sequence, building on prior responses.
 /// The Reviewer determines whether the pipeline output is approved or needs rework.
 /// </summary>
+[Obsolete("Replaced by OrchestrationPrimitive with OrchestrationPreset.Negotiation (Blueprint C.2). " +
+    "This class does NOT use AutoGen.NET symbols — it is a manual IModelClient loop. " +
+    "Scheduled for removal in Phase 3 cleanup.")]
 internal sealed class AutoGenAgentOrchestrator : IAgentOrchestrator
 {
     private readonly ILogger<AutoGenAgentOrchestrator> _logger;

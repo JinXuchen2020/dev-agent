@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AgentPlatform.Application.Abstractions;
 
 namespace AgentPlatform.Application.Routing.Services;
@@ -6,9 +7,11 @@ namespace AgentPlatform.Application.Routing.Services;
 /// Termination condition for the negotiation preset (Blueprint C.5 / C.6).
 /// The negotiation converges when:
 /// 1. All steps have a completed artifact in the WorkflowContext, AND
-/// 2. The last critic/review step did NOT request rework (no "CRITIC_REWORK" signal).
+/// 2. The last critic/review step has approved the artifact (Approved == true).
 ///
 /// This prevents infinite negotiation loops while ensuring quality convergence.
+/// The convergence signal is read from the CriticStepExecutor's artifact JSON,
+/// not from the Blackboard (which is ephemeral per request context).
 /// </summary>
 public sealed class CriticConvergenceTermination : ITerminationCondition
 {
@@ -27,7 +30,10 @@ public sealed class CriticConvergenceTermination : ITerminationCondition
     }
 
     /// <summary>
-    /// Returns true when: (1) max rounds reached, or (2) negotiation:converged signal found in Blackboard.
+    /// Returns true when: (1) max rounds reached, or (2) a critic artifact has Approved == true.
+    /// Scans the WorkflowContext.Artifacts for a critic/review step whose JSON content
+    /// indicates approval — this replaces the old Blackboard-based check that was never
+    /// effective because the Blackboard was rebuilt per-request.
     /// </summary>
     public Task<bool> ShouldTerminateAsync(WorkflowContext context, CancellationToken ct = default)
     {
@@ -37,15 +43,25 @@ public sealed class CriticConvergenceTermination : ITerminationCondition
         if (_roundCount >= _maxRounds)
             return Task.FromResult(true);
 
-        // Check if all expected artifacts are present (convergence)
-        if (context.Artifacts.Count == 0)
-            return Task.FromResult(false);
+        // Check if any critic artifact shows approval (scan most recent first)
+        var latestApproved = context.Artifacts.Values
+            .Where(a => a.StepName.Contains("critic", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(a => a.ProducedAt)
+            .Any(a => IsCriticApproved(a.Content));
 
-        // If we have at least 6 artifacts (one per role), check for convergence
-        // In a real implementation, the critic step would set a convergence flag
-        // in the Blackboard. Here we use a simplified heuristic:
-        var hasConvergenceSignal = context.Blackboard.Get("negotiation:converged") == "true";
+        return Task.FromResult(latestApproved);
+    }
 
-        return Task.FromResult(hasConvergenceSignal);
+    private static bool IsCriticApproved(string content)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(content);
+            return doc.RootElement.TryGetProperty("Approved", out var prop) && prop.GetBoolean();
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 }
