@@ -1,11 +1,13 @@
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using AgentPlatform.Api.Diagnostics;
 using AgentPlatform.Api.Middleware;
 using AgentPlatform.Application;
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Infrastructure;
+using AgentPlatform.Infrastructure.Auth;
 using AgentPlatform.Infrastructure.Persistence;
 using OpenTelemetry.Metrics;
 using Scalar.AspNetCore;
@@ -42,10 +44,46 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
 
+var securitySection = builder.Configuration.GetSection("Security");
+var enforceAuth = securitySection.GetValue<bool>("EnforceAuthentication");
+
+builder.Services.AddAuthentication()
+    .AddJwtBearer("Bearer", options =>
+    {
+        var jwtKey = securitySection["JwtSecretKey"] ?? "dev-secret-key-min-32-chars-long!!";
+        options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = securitySection["JwtIssuer"] ?? "agent-platform",
+            ValidateAudience = true,
+            ValidAudience = securitySection["JwtAudience"] ?? "agent-platform-api",
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(
+                System.Text.Encoding.UTF8.GetBytes(jwtKey)),
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromMinutes(1)
+        };
+    })
+    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions,
+        AgentPlatform.Infrastructure.Auth.ApiKeyAuthenticationHandler>(
+        "ApiKey", null);
+
+builder.Services.AddAuthorization(options =>
+{
+    // When authentication is not enforced (QuickStart/dev), allow anonymous by default
+    if (!enforceAuth)
+    {
+        options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+            .RequireAssertion(_ => true)
+            .Build();
+    }
+});
+
 builder.Services.Configure<TenantSettings>(builder.Configuration.GetSection("Tenant"));
 builder.Services.Configure<ModelDefaults>(builder.Configuration.GetSection("ModelDefaults"));
 builder.Services.Configure<RouterSettings>(builder.Configuration.GetSection("Router"));
 builder.Services.Configure<PricingSettings>(builder.Configuration.GetSection("Pricing"));
+builder.Services.Configure<SecuritySettings>(builder.Configuration.GetSection("Security"));
 
 builder.Services.AddCors(options =>
 {
@@ -77,6 +115,35 @@ builder.Services.PostConfigure<PricingSettings>(pricing =>
         pricing.CostPerMillionTokens["qwen"] = 0.40m;
         pricing.CostPerMillionTokens["vllm"] = 0m;
     }
+});
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddPolicy("PerTenant", context =>
+    {
+        var tenantId = context.User.FindFirst("tenant_id")?.Value ?? "anonymous";
+        return System.Threading.RateLimiting.RateLimitPartition.GetTokenBucketLimiter(
+            tenantId, _ => new System.Threading.RateLimiting.TokenBucketRateLimiterOptions
+            {
+                TokenLimit = 100,
+                TokensPerPeriod = 100,
+                ReplenishmentPeriod = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
+    });
+    options.AddPolicy("PerApiKey", context =>
+    {
+        var apiKey = context.Request.Headers["X-API-Key"].FirstOrDefault() ?? "anonymous";
+        return System.Threading.RateLimiting.RateLimitPartition.GetTokenBucketLimiter(
+            apiKey, _ => new System.Threading.RateLimiting.TokenBucketRateLimiterOptions
+            {
+                TokenLimit = 50,
+                TokensPerPeriod = 50,
+                ReplenishmentPeriod = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
+    });
+    options.RejectionStatusCode = 429;
 });
 
 builder.Services.AddApplication();
@@ -113,6 +180,10 @@ app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseMiddleware<MetricsMiddleware>();
+app.UseMiddleware<PromptInjectionMiddleware>();
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseRateLimiter();
 
 if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("QuickStart"))
 {

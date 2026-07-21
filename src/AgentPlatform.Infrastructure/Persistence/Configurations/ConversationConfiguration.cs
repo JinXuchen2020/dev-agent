@@ -8,7 +8,7 @@ namespace AgentPlatform.Infrastructure.Persistence.Configurations;
 /// <summary>
 /// Configures the EF Core mapping for the <see cref="Conversation"/> aggregate.
 /// </summary>
-public sealed class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
+internal sealed class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
 {
     /// <summary>
     /// Configures the entity type mapping for conversations, including table, primary key, tenant scoping, status conversion, owned token usage, and the owned messages collection.

@@ -1,8 +1,11 @@
+using System;
+
 namespace AgentPlatform.Domain.Enums;
 
 /// <summary>
 /// Represents the types of actions that are recorded in the audit trail.
 /// </summary>
+[Obsolete("Use AgentPlatform.Domain.Aggregates.AuditLogs.AuditActionType instead. This enum is unused.")]
 public enum AuditActionType
 {
     /// <summary>A call was made to a language model.</summary>

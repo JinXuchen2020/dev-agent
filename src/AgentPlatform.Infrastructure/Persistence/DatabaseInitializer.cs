@@ -12,14 +12,15 @@ namespace AgentPlatform.Infrastructure.Persistence;
 /// <summary>
 /// 数据库初始化服务实现，负责数据库迁移、表创建和种子数据填充。
 /// </summary>
-public sealed class DatabaseInitializer : IDatabaseInitializer
+internal sealed class DatabaseInitializer : IDatabaseInitializer
 {
     private readonly AppDbContext _context;
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<DatabaseInitializer> _logger;
     private readonly TenantSettings _tenantSettings;
 
-    // Default tenant GUID used when no tenant is configured (all-zeros is explicit sentinel)
+    // Default tenant GUID used when no tenant is configured — all-zeros is explicit sentinel.
+    // Configure via Tenant:DefaultTenantId in appsettings or user-secrets.
     private static readonly Guid DefaultTenantIdSeed = Guid.Parse("00000000-0000-0000-0000-000000000001");
 
     public DatabaseInitializer(

@@ -3,6 +3,7 @@ using AgentPlatform.Application.ExecutionLogs.Queries.GetExecutionLogs;
 using AgentPlatform.Application.ExecutionLogs.Queries.GetExecutionLogSteps;
 using AgentPlatform.Domain.Enums;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AgentPlatform.Api.Controllers;
@@ -11,6 +12,7 @@ namespace AgentPlatform.Api.Controllers;
 /// API controller for querying workflow execution logs.
 /// All routes are prefixed with <c>api/v1/execution-logs</c>.
 /// </summary>
+[Authorize]
 [ApiController]
 [Route("api/v1/[controller]")]
 public sealed class ExecutionLogsController : ControllerBase
@@ -36,6 +38,7 @@ public sealed class ExecutionLogsController : ControllerBase
     /// <param name="take">Number of records to take (default: 20, max: 100).</param>
     /// <param name="ct">A token to observe for cancellation of the request.</param>
     /// <returns>A paginated list of execution log summaries.</returns>
+    [Authorize(Roles = "Admin,Operator")]
     [HttpGet]
     public async Task<IActionResult> GetExecutionLogs(
         [FromQuery] WorkflowState? status,
@@ -65,6 +68,7 @@ public sealed class ExecutionLogsController : ControllerBase
     /// <param name="id">The unique identifier of the execution log.</param>
     /// <param name="ct">A token to observe for cancellation.</param>
     /// <returns>The execution log detail with step entries.</returns>
+    [Authorize(Roles = "Admin,Operator")]
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetExecutionLogDetail(
         Guid id,
@@ -88,6 +92,7 @@ public sealed class ExecutionLogsController : ControllerBase
     /// <param name="take">Number of records to take (default: 50, max: 100).</param>
     /// <param name="ct">A token to observe for cancellation of the request.</param>
     /// <returns>A paginated list of step entries.</returns>
+    [Authorize(Roles = "Admin,Operator")]
     [HttpGet("{id:guid}/steps")]
     public async Task<IActionResult> GetExecutionLogSteps(
         Guid id,

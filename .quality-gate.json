@@ -1,9 +1,9 @@
 {
-  "phase": "phase-4",
-  "reviewer": "ddd-code-reviewer PASSED (2026-07-20 Phase 4 评审闭环)",
-  "structureGate": "ddd-phase-quality-gate 0 open",
+  "phase": "phase-5",
+  "reviewer": "ddd-code-reviewer PASSED (2026-07-21 Phase 5 安全加固评审闭环)",
+  "structureGate": "ddd-phase-quality-gate PASS (P0=0 P1=0 P2=0 P3=0)",
   "cleared": true,
-  "updatedAt": "2026-07-20T22:00:00+08:00",
-  "reportRef": "phases/phase-4-grounding.md",
-  "note": "Phase 4 (知识接地与上线前加固) 评审闭环：PGVector 真实向量检索替换 stub、Critic fail-loud 质量闸（AllowCriticOverride=false 时模型异常→Approved=false）、ListWorkflows/GetExecutionLogSteps 数据库端 IQueryable 分页、ITokenCounter 真实 token 计数 + MaxSummaryTokens 配置化。3 auto-fixes 已应用：PgVectorStore IDisposable、embedding dimension 参数化、ParseReviewResult StepName 空处理。Build 0 warnings, Tests 34/34 passed。"
+  "updatedAt": "2026-07-21T12:40:00+08:00",
+  "reportRef": "phases/phase-5-security-hardening.md",
+  "note": "Phase 5 (安全加固, launch-blocking) 评审闭环。本轮修复 4 项开放问题 + 1 配置缺口：③ 提示注入正则收窄为具体边界分隔符形态(<|im_start|>/<<SYS>>/[INST]/</system>)并新增负向测试(JSON/代码块/数组/花括号不误杀 + 正例仍拦)；⑥ AuditActionType.KeyRotation 在 KeyRotationService 真实 emit；⑦ ApiKey.Rotate()/Revoke() 死代码接线——Rotate 由 ExpiryJob 临近过期自动轮换调用，Revoke 由 ExpiryJob 对已过期 key 调 RevokeKeyAsync 吊销(新增 GetExpiredActiveKeysAsync + KeyRevoked 审计)；⑧ key 使用(KeyUsed@AuthHandler)/轮换(KeyRotation)/吊销(KeyRevoked)审计闭环；② appsettings JwtSecretKey/AesEncryptionKey 填非空 dev 值(带 DEV ONLY 注释)。① IAesEncryptor 经 ApiKeyEncryptionService 真实消费；⑤ API-Key 恒 Admin 已删，改 per-key GetRoles()。结构门禁本轮抓出并修复 P1: ApiKey.Revoke() 零调用点(死代码规则命中)。Build 0 warnings/0 errors，Tests 103/103 passed(41 SpecFlow + 6 Arch + 51 App + 5 Integration；新增 PromptInjection 负向用例 + KeyRotationService 生命周期用例)。Waiver: ④ CORS AllowAnyOrigin 按用户决定保留(手动改，目标 T1-full/生产配置)；T1-full(公开 create/rotate/revoke HTTP 端点 + 管理 UI)划入 Phase 6。"
 }

@@ -9,7 +9,7 @@ namespace AgentPlatform.Infrastructure.Persistence;
 /// 实现 <see cref="IDomainEventBus"/>，将领域事件包装为 <see cref="DomainEventNotification{T}"/>
 /// 并通过 MediatR 通知管道进行分发。
 /// </summary>
-public sealed class DomainEventBus : IDomainEventBus
+internal sealed class DomainEventBus : IDomainEventBus
 {
     private readonly IPublisher _publisher;
 

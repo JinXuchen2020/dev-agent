@@ -1,8 +1,10 @@
+using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Application.Workflows.Commands.RunWorkflow;
 using AgentPlatform.Application.Workflows.Queries.GetWorkflow;
 using AgentPlatform.Application.Workflows.Queries.ListWorkflows;
 using AgentPlatform.Domain.Enums;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AgentPlatform.Api.Controllers;
@@ -11,19 +13,23 @@ namespace AgentPlatform.Api.Controllers;
 /// API controller for managing and querying workflows.
 /// All routes are prefixed with <c>api/v1/workflows</c>.
 /// </summary>
+[Authorize]
 [ApiController]
 [Route("api/v1/workflows")]
 public sealed class WorkflowsController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly ITenantProvider _tenant;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="WorkflowsController"/> class.
     /// </summary>
     /// <param name="mediator">The MediatR mediator used to dispatch queries and commands.</param>
-    public WorkflowsController(IMediator mediator)
+    /// <param name="tenant">The tenant provider used to resolve the current tenant identifier.</param>
+    public WorkflowsController(IMediator mediator, ITenantProvider tenant)
     {
         _mediator = mediator;
+        _tenant = tenant;
     }
 
     /// <summary>
@@ -59,6 +65,7 @@ public sealed class WorkflowsController : ControllerBase
     /// <summary>
     /// Creates and starts a new workflow with the specified name and initial context.
     /// </summary>
+    [Authorize(Roles = "Admin,Operator")]
     [HttpPost]
     public async Task<IActionResult> RunWorkflow(
         [FromBody] RunWorkflowRequest request,
@@ -67,7 +74,7 @@ public sealed class WorkflowsController : ControllerBase
         var command = new RunWorkflowCommand(
             request.Name,
             request.InitialContext,
-            TenantId: Guid.Empty, // Phase 1: single tenant
+            TenantId: _tenant.GetTenantId(),
             Steps: request.Steps);
 
         var result = await _mediator.Send(command, ct);

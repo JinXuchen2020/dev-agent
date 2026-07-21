@@ -13,6 +13,8 @@ using AgentPlatform.Infrastructure.Persistence;
 using AgentPlatform.Infrastructure.Persistence.Repositories;
 using AgentPlatform.Infrastructure.Progress;
 using AgentPlatform.Infrastructure.Sandbox;
+using AgentPlatform.Infrastructure.Security;
+using AgentPlatform.Infrastructure.Services;
 using AgentPlatform.Infrastructure.Tools;
 using AgentPlatform.Infrastructure.VectorStore;
 using AgentPlatform.Infrastructure.Tokenizers;
@@ -144,7 +146,16 @@ public static class DependencyInjection
             services.AddScoped<IShortTermMemory, InMemoryShortTermMemory>();
         }
 
+        services.AddHttpContextAccessor();
         services.AddScoped<ITenantProvider, TenantProvider>();
+        services.AddScoped<IAesEncryptor, AesGcmEncryptor>();
+        services.AddScoped<IPromptSanitizer, PromptSanitizer>();
+        services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+        services.AddScoped<IApiKeyRepository, ApiKeyRepository>();
+        services.AddScoped<IApiKeyEncryptionService, ApiKeyEncryptionService>();
+        services.AddScoped<IKeyRotationService, KeyRotationService>();
+        services.Configure<SecuritySettings>(configuration.GetSection("Security"));
+        services.AddScoped<PromptInjectionService>();
         services.AddScoped<IResiliencePipelineProvider, ResiliencePipelineProvider>();
         // Token counter singleton — stateless, safe to share across all workflows.
         services.AddSingleton<ITokenCounter, TokenCounter>();
@@ -217,6 +228,9 @@ public static class DependencyInjection
 
         // Register execution log cleanup background job
         services.AddHostedService<ExecutionLogCleanupJob>();
+
+        // Register API key expiry monitoring background job
+        services.AddHostedService<ApiKeyExpiryJob>();
 
         return services;
     }

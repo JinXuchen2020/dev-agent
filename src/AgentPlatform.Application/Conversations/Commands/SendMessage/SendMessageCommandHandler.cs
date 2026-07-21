@@ -1,6 +1,7 @@
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Application.Routing;
 using AgentPlatform.Application.Routing.Services;
+using AgentPlatform.Domain.Aggregates.AuditLogs;
 using AgentPlatform.Domain.Aggregates.Conversations;
 using AgentPlatform.Domain.Enums;
 using AgentPlatform.Domain.Repositories;
@@ -16,19 +17,22 @@ internal sealed class SendMessageCommandHandler : IRequestHandler<SendMessageCom
     private readonly IVectorStore _vectorStore;
     private readonly ModelDefaults _defaults;
     private readonly ITenantProvider _tenant;
+    private readonly IAuditLogRepository _auditLogRepository;
 
     public SendMessageCommandHandler(
         IConversationRepository conversationRepository,
         IModelRouter router,
         IVectorStore vectorStore,
         IOptions<ModelDefaults> defaultsOptions,
-        ITenantProvider tenant)
+        ITenantProvider tenant,
+        IAuditLogRepository auditLogRepository)
     {
         _conversationRepository = conversationRepository;
         _router = router;
         _vectorStore = vectorStore;
         _defaults = defaultsOptions.Value;
         _tenant = tenant;
+        _auditLogRepository = auditLogRepository;
     }
 
     public async Task<SendMessageResult> Handle(SendMessageCommand request, CancellationToken ct)
@@ -70,6 +74,15 @@ internal sealed class SendMessageCommandHandler : IRequestHandler<SendMessageCom
         var agentMsg = new Message(Guid.NewGuid(), MessageRole.Agent, response.Content, tokenUsage: response.TokenUsage);
         conversation.AddMessage(userMsg);
         conversation.AddMessage(agentMsg);
+
+        var tenantId = _tenant.GetTenantId();
+        var auditLog = AuditLog.Record(
+            tenantId: tenantId,
+            action: Domain.Aggregates.AuditLogs.AuditActionType.SendMessage,
+            entity: "Conversation",
+            entityId: request.ConversationId,
+            details: $"Sent message to conversation {request.ConversationId}");
+        _auditLogRepository.Add(auditLog);
 
         return new SendMessageResult(response.Content, response.ModelId, response.TokenUsage);
     }

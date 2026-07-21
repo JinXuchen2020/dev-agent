@@ -3,6 +3,7 @@ using AgentPlatform.Application.AgentRoleManagement.Commands.DeleteAgentRole;
 using AgentPlatform.Application.AgentRoleManagement.Queries.GetAgentRole;
 using AgentPlatform.Application.AgentRoleManagement.Queries.ListAgentRoles;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AgentPlatform.Api.Controllers;
@@ -11,6 +12,7 @@ namespace AgentPlatform.Api.Controllers;
 /// API controller for managing custom agent role definitions.
 /// All routes are prefixed with <c>api/v1/agent-roles</c>.
 /// </summary>
+[Authorize]
 [ApiController]
 [Route("api/v1/[controller]")]
 public sealed class AgentRolesController : ControllerBase
@@ -28,6 +30,7 @@ public sealed class AgentRolesController : ControllerBase
     /// <summary>
     /// Creates a new custom agent role definition.
     /// </summary>
+    [Authorize(Roles = "Admin")]
     [HttpPost]
     public async Task<IActionResult> CreateRole(
         [FromBody] CreateAgentRoleRequest request,
@@ -46,6 +49,7 @@ public sealed class AgentRolesController : ControllerBase
     /// <summary>
     /// Deletes an existing custom agent role by its role code.
     /// </summary>
+    [Authorize(Roles = "Admin")]
     [HttpDelete("{roleCode}")]
     public async Task<IActionResult> DeleteRole(
         string roleCode,

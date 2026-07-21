@@ -1,4 +1,5 @@
 using AgentPlatform.Application.Abstractions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
 
@@ -8,6 +9,7 @@ namespace AgentPlatform.Api.Controllers;
 /// SSE endpoint for real-time workflow execution progress streaming.
 /// Client connects via EventSource /api/v1/workflows/{id}/progress.
 /// </summary>
+[Authorize]
 [ApiController]
 [Route("api/v1/workflows")]
 public sealed class WorkflowProgressController : ControllerBase
@@ -34,6 +36,7 @@ public sealed class WorkflowProgressController : ControllerBase
     /// <param name="id">The workflow identifier to subscribe to.</param>
     /// <param name="ct">A token to observe for cancellation of the request.</param>
     /// <returns>An SSE stream of <see cref="ExecutionProgressEvent"/> objects.</returns>
+    [Authorize(Roles = "Admin,Operator")]
     [HttpGet("{id:guid}/progress")]
     public async Task StreamProgress(Guid id, CancellationToken ct)
     {

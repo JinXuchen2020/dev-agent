@@ -7,7 +7,7 @@ namespace AgentPlatform.Infrastructure.Persistence.Configurations;
 /// <summary>
 /// Configures the EF Core mapping for the <see cref="ToolDefinition"/> aggregate.
 /// </summary>
-public sealed class ToolDefinitionConfiguration : IEntityTypeConfiguration<ToolDefinition>
+internal sealed class ToolDefinitionConfiguration : IEntityTypeConfiguration<ToolDefinition>
 {
     /// <summary>
     /// Configures the entity type mapping for tool definitions, including table, primary key, property constraints, and source conversion.

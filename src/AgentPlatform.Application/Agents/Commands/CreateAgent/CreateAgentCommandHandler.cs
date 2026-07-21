@@ -1,4 +1,5 @@
 using AgentPlatform.Domain.Aggregates.Agents;
+using AgentPlatform.Domain.Aggregates.AuditLogs;
 using AgentPlatform.Domain.Repositories;
 using AgentPlatform.Domain.ValueObjects;
 using MediatR;
@@ -8,10 +9,14 @@ namespace AgentPlatform.Application.Agents.Commands.CreateAgent;
 internal sealed class CreateAgentCommandHandler : IRequestHandler<CreateAgentCommand, Agent>
 {
     private readonly IAgentRepository _repository;
+    private readonly IAuditLogRepository _auditLogRepository;
 
-    public CreateAgentCommandHandler(IAgentRepository repository)
+    public CreateAgentCommandHandler(
+        IAgentRepository repository,
+        IAuditLogRepository auditLogRepository)
     {
         _repository = repository;
+        _auditLogRepository = auditLogRepository;
     }
 
     public Task<Agent> Handle(CreateAgentCommand request, CancellationToken ct)
@@ -33,6 +38,15 @@ internal sealed class CreateAgentCommandHandler : IRequestHandler<CreateAgentCom
             request.TenantId);
 
         _repository.Add(agent);
+
+        var auditLog = AuditLog.Record(
+            tenantId: agent.TenantId,
+            action: AuditActionType.CreateAgent,
+            entity: "Agent",
+            userId: null,
+            entityId: agent.Id,
+            details: $"Created agent '{agent.Name}' with role {agent.Role.RoleCode}");
+        _auditLogRepository.Add(auditLog);
 
         return Task.FromResult(agent);
     }

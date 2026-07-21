@@ -8,6 +8,7 @@ using AgentPlatform.Application.AgentConfigurationManagement.Queries.ListAgentCo
 using AgentPlatform.Domain.Aggregates.AgentConfigurations;
 using AgentPlatform.Domain.Enums;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AgentPlatform.Api.Controllers;
@@ -16,6 +17,7 @@ namespace AgentPlatform.Api.Controllers;
 /// API controller for managing agent configuration definitions.
 /// All routes are prefixed with <c>api/v1/agent-configurations</c>.
 /// </summary>
+[Authorize]
 [ApiController]
 [Route("api/v1/[controller]")]
 public sealed class AgentConfigurationsController : ControllerBase
@@ -33,6 +35,7 @@ public sealed class AgentConfigurationsController : ControllerBase
     /// <summary>
     /// Creates a new agent configuration.
     /// </summary>
+    [Authorize(Roles = "Admin")]
     [HttpPost]
     public async Task<IActionResult> CreateConfiguration(
         [FromBody] CreateAgentConfigurationRequest request,
@@ -51,6 +54,7 @@ public sealed class AgentConfigurationsController : ControllerBase
     /// <summary>
     /// Updates an existing agent configuration.
     /// </summary>
+    [Authorize(Roles = "Admin")]
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> UpdateConfiguration(
         Guid id,
@@ -74,6 +78,7 @@ public sealed class AgentConfigurationsController : ControllerBase
     /// <summary>
     /// Deletes an agent configuration by its unique identifier.
     /// </summary>
+    [Authorize(Roles = "Admin")]
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> DeleteConfiguration(
         Guid id,
