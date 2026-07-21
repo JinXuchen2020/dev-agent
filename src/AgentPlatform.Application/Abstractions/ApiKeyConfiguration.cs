@@ -3,6 +3,7 @@ namespace AgentPlatform.Application.Abstractions;
 /// <summary>
 /// Represents a configured API key with its associated tenant and roles.
 /// </summary>
+[Obsolete("Replaced by AgentPlatform.Domain.Aggregates.ApiKeys.ApiKey (DB-backed storage). This class is unused.")]
 public sealed class ApiKeyConfiguration
 {
     /// <summary>The API key value.</summary>

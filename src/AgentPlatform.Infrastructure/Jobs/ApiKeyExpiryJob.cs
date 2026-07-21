@@ -65,13 +65,13 @@ internal sealed class ApiKeyExpiryJob : Microsoft.Extensions.Hosting.BackgroundS
     {
         using var scope = _scopeFactory.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<IApiKeyRepository>();
+        var rotationService = scope.ServiceProvider.GetRequiredService<IKeyRotationService>();
 
         // 1) Revoke keys that are already past expiry but still active, so they can
         //    no longer authenticate. This is the live call site for ApiKey.Revoke().
         var expiredKeys = await repository.GetExpiredActiveKeysAsync(ct);
         if (expiredKeys.Count > 0)
         {
-            var rotationService = scope.ServiceProvider.GetRequiredService<IKeyRotationService>();
             foreach (var expired in expiredKeys)
             {
                 _logger.LogWarning(
@@ -111,7 +111,6 @@ internal sealed class ApiKeyExpiryJob : Microsoft.Extensions.Hosting.BackgroundS
             {
                 try
                 {
-                    var rotationService = scope.ServiceProvider.GetRequiredService<IKeyRotationService>();
                     await rotationService.RotateKeyAsync(key.Id, ct);
                 }
                 catch (Exception ex)

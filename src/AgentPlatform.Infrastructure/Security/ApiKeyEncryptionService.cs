@@ -36,7 +36,7 @@ internal sealed class ApiKeyEncryptionService : IApiKeyEncryptionService
     /// </summary>
     public string DecryptKey(string encryptedKey)
     {
-        ArgumentNullException.ThrowIfNull(encryptedKey);
+        ArgumentException.ThrowIfNullOrWhiteSpace(encryptedKey);
         return _aesEncryptor.Decrypt(encryptedKey);
     }
 }

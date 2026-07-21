@@ -14,8 +14,10 @@
 | Phase 2 | 多智能体工作流 | 真实业务逻辑 | 状态机引擎、Redis 缓存、AutoGen Agent、真实 PGVector、ExecutionLog |
 | Phase 3 | 平台化 | 前端 + 监控 | React Web UI、Grafana 大盘、React Flow、OpenTelemetry、CI/CD |
 | Phase 4 | 知识接地与加固（上线前必做） | 把声称完成实为存根的能力落地 | RAG 接真 PGVector、Critic fail-loud、DB 端分页、真 tokenizer 压缩 |
-| Phase 5 | 安全加固（launch-blocking） | 把声称要做的认证/多租户落地 | JWT/API-Key 认证、RBAC、真实多租户、限流、审计、API Key 加密 |
+| Phase 5 ✅ | 安全加固（launch-blocking） | 把声称要做的认证/多租户落地 | JWT/API-Key 认证、RBAC、真实多租户、限流、提示注入防护、审计、API Key AES-256-GCM 加密 |
 | Phase 6 | 前沿特性与收尾 | 优化 + 亮点 | Code Agent、Research Agent、性能压测、BDD 全量、简历作品集 |
+
+> **进度**：Phase 1~5 均已落地（Phase 5 于 2026-07-21 二次评审闭环 PASS，`dotnet test` 103/103）。Phase 6 为后续。Phase 5 的知识点与排障详解见 `09`（加固）与 `10-phase5-security-learnings.md`（安全）。
 
 ## 7.2 为什么 Phase 1 全部用 Stub
 
@@ -80,6 +82,7 @@ Phase 2 跑通了核心逻辑，但**只有 API 没有 UI，只有日志没有�
 - **为什么单独成阶段、且 launch-blocking**：安全是运营前置门槛，不是亮点功能。埋进"前沿特性"会被持续排挤，所以独立成 Phase 5 并作为任何多用户/对外部署前的硬门槛。
 - **为什么工作量可控**：多租户隔离的数据库层（EF Global Query Filter + `ITenantScoped`）早已建好，只差 `TenantProvider` 从硬编码 `DefaultTenantId` 改为按请求解析——属于"小而高杠杆"的改动，配上最小鉴权即可激活。
 - **包含项**：JWT/API-Key 认证、RBAC、真实多租户、限流、Prompt 注入防护、审计日志、API Key 加密。内部上线若完整 Phase 5 未完，至少先落"最小 API-Key 网关 + TenantProvider 解析"兜底。
+- **落地小结（2026-07-21）**：以上包含项全部真实接线并通过二次评审闭环。收尾时踩了三个"编译过、运行炸"的坑——认证无默认方案（`no DefaultChallengeScheme`）、Swagger 缺 Authorize 按钮、`EnsureCreated` 与迁移混用导致 `no such table`——印证了**安全代码"编译通过 ≠ 能跑"，接线后必须运行时实测**。详见 `10-phase5-security-learnings.md` §10.4。
 
 ---
 

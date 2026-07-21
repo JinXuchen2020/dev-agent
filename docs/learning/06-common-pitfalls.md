@@ -1,14 +1,14 @@
-# 06. 常见踩坑汇总（Phase 1 实战记录）
+# 06. 常见踩坑汇总（Phase 1 + Phase 5 实战记录）
 
-> 目标：这些坑你一定会踩，提前知道省一天时间。所有记录来自 phase-1-baseline-mvp.md 踩坑表。
+> 目标：这些坑你一定会踩，提前知道省一天时间。#1~#26 来自 phase-1-baseline-mvp.md 踩坑表；#27~#31 来自 Phase 5 安全加固实战。
 
-> **一句话**：26 个真实踩坑 + 一句诊断口诀，编译错/运行炸/数据写不进/并发不准/环境不对时先翻这篇。
+> **一句话**：31 个真实踩坑 + 一句诊断口诀，编译错/运行炸/数据写不进/并发不准/环境不对/认证炸/迁移缺表时先翻这篇。
 
 ---
 
 ## 6.0 按症状查因（报错先翻这张）
 
-> 不知道从哪查时，先用口诀（§6.8）定位大方向，再用下表精确到坑号。
+> 不知道从哪查时，先用口诀（§6.11）定位大方向，再用下表精确到坑号。
 
 | 你遇到的症状 | 先查方向（口诀） | 对应坑 |
 |--------------|------------------|--------|
@@ -19,6 +19,9 @@
 | 并发不准 / 偶发炸 | 查 lock + 线程安全 | #14 `_todaySpent`、#21 decimal、#22 Dictionary、#23 跨天不重置 |
 | 环境 / 配置不对 | 查 launch-profile & 配置 | #17 `--configuration`、#18 HTTPS、#19 Scalar 不显示、#20 TenantId |
 | 弹性管道 / 重试异常 | 查 Polly 用法 | #24 非泛型、#25 层暴露、#26 未使用 |
+| 认证炸：no DefaultChallengeScheme | 查认证默认方案 | #27 多方案无默认、#28 handler 误 Fail |
+| Swagger 无法测受保护端点 | 查 SecurityDefinition | #29 无 Authorize 按钮、#30 bearer 双前缀 |
+| 运行时缺表 `no such table` | 查 EnsureCreated/Migrate 混用 | #31 迁移反模式 + pending model change |
 | 架构违规（编译不报） | 查 ArchitectureTests | 教训见 #5/#6/#8，用架构测试自动拦截 |
 
 ---
@@ -110,7 +113,39 @@
 
 ---
 
-## 6.8 快速诊断口诀
+## 6.8 认证 / 授权（Phase 5）
+
+| # | 现象 | 根因 | 避免 |
+|---|------|------|------|
+| 27 | 启动后访问 `[Authorize]` 抛 `No authenticationScheme was specified, and there was no DefaultChallengeScheme found` | `AddAuthentication()` 空配置，注册了多个方案却无默认方案；`EnforceAuthentication=true` 时 challenge 找不到方案 | 加 `Smart` policy scheme 作默认方案，`ForwardDefaultSelector` 按请求头分发到 Bearer/ApiKey |
+| 28 | 带 JWT 的请求被 ApiKey handler 拒了 / 多方案互相短路 | handler 在自己不适用时返回了 `Fail()` 而非 `NoResult()` | 无 `X-API-Key` 头时返回 `NoResult()`（"交给别的方案"），有头但无效才 `Fail()` |
+
+**教训：** 多方案认证必须有"选择器"。`[Authorize]` 不指定 `AuthenticationSchemes` 时完全依赖默认方案；handler 不适用时用 `NoResult()` 不要 `Fail()`。
+
+---
+
+## 6.9 Swagger / 测试凭证（Phase 5）
+
+| # | 现象 | 根因 | 避免 |
+|---|------|------|------|
+| 29 | 认证接上后 Swagger UI 没有 Authorize 按钮，无法测受保护端点 | `AddSwaggerGen` 没有任何 `AddSecurityDefinition` | 补 `Bearer` 安全定义 + 全局安全需求；Scalar 用 `AddOpenApi().AddDocumentTransformer` 同步 |
+| 30 | 把签发的 token 贴进 Authorize 弹窗仍 401 | `scheme: bearer` 弹窗会**自动加 `Bearer ` 前缀**，返回带前缀的 token 就变成 `Bearer Bearer xxx` | 登录/发 token 端点一律返回**裸 token**；dev 登录端点用 `DevLoginEnabled` 门控、默认 false |
+
+**教训：** Swagger bearer 输入框自动补前缀，测试用 token 一律返回裸串；调试后门（dev 登录）必须开关门控、生产默认关。
+
+---
+
+## 6.10 EF 迁移 / 数据库初始化（Phase 5）
+
+| # | 现象 | 根因 | 避免 |
+|---|------|------|------|
+| 31 | 运行时 `no such table: AgentConfigurations`（模型里明明有该实体） | `DatabaseInitializer` 用 `EnsureCreatedAsync()`，但项目同时有 EF 迁移。`EnsureCreated` 只在 DB 不存在时一次性建表；旧 DB（无 `__EFMigrationsHistory`）缺后加的表 | 改用 `MigrateAsync()`；改模型必须 `dotnet ef migrations add`（否则 pending model change 会抛异常）；本地删旧 DB 让迁移重建 |
+
+**教训：** `EnsureCreated` 与 Migrations **不能混用**。有迁移就全程 `MigrateAsync`；新增实体/字段后忘了 `migrations add` 会静默导致 `no such table` 或 pending model change 抛异常。
+
+---
+
+## 6.11 快速诊断口诀
 
 ```
 编译报了错 → 查版本号
@@ -119,6 +154,9 @@
 并发不准 → 查 lock + ConcurrentDictionary
 环境不对 → 查 launch-profile + --configuration
 跨天不重置 → 查 Singleton 状态重置逻辑
+认证 challenge 炸 → 查默认方案 / policy scheme
+Swagger 没 Authorize → 查 AddSecurityDefinition
+运行时缺表 → 查 EnsureCreated/Migrate 混用
 ```
 
 ---
@@ -128,11 +166,15 @@
 - 编译报错、运行期炸、数据写不进、并发不准、环境不对，分别先查什么？（背出口诀）
 - 架构违规为什么编译不报错？靠什么拦截？
 - 为什么 DI 注册后要第一时间写个空测试验证解析成功？
+- 多方案认证报 `no DefaultChallengeScheme` 怎么修？handler 不适用时该 `NoResult()` 还是 `Fail()`？
+- 运行时 `no such table` 但模型里有该实体，通常是什么反模式？
 
 ---
 
 ## 参考代码
 
 - `phases/phase-1-baseline-mvp.md` 的完整踩坑表（346 行）
+- `phases/phase-5-security-hardening.md`（#27~#31 的完整背景）
+- `docs/learning/10-phase5-security-learnings.md`（三个排障实录详解）
 - `Directory.Build.props`（TreatWarningsAsErrors = true）
 - `src/AgentPlatform.ArchitectureTests/DddLayerTests.cs`

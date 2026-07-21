@@ -204,7 +204,88 @@ public class UnitOfWorkBehavior<TRequest, TResponse>
 
 ---
 
-## 8.7 决策演化时间线
+## 8.7 认证：Policy Scheme vs 写死默认方案（Phase 5）
+
+| 属性 | 值 |
+|------|-----|
+| **时间** | 2026-07-21，Phase 5 |
+| **决策者** | 架构组 |
+
+### 选项
+
+| 方案 | 描述 | 问题 |
+|------|------|------|
+| **写死一个默认方案**（如恒 Bearer） | `AddAuthentication("Bearer")` | 带 `X-API-Key` 的请求走不到 ApiKey handler |
+| **每个 `[Authorize]` 显式标注 `AuthenticationSchemes`** | 控制器级指定 | 侵入性强，容易漏标 |
+| **Policy Scheme 动态分发** | `Smart` 方案按请求头 `ForwardDefaultSelector` 转发 | 无侵入，JWT/ApiKey 并存 |
+
+### 选择：Policy Scheme（`Smart`）
+
+**理由：**
+- JWT（`Authorization` 头）和 API-Key（`X-API-Key` 头）需要**并存**，写死单一默认方案会让另一种失效。
+- Policy scheme 集中在 `Program.cs` 一处分发，控制器无需逐个标注 `AuthenticationSchemes`。
+- 无凭证时转发到 Bearer，返回标准 `WWW-Authenticate: Bearer`，401 语义正确。
+
+### 后续影响
+- ApiKey handler 必须遵守 `NoResult()`（不适用）vs `Fail()`（无效）语义，否则会短路其他方案。
+- 修掉了 `No DefaultChallengeScheme found` 运行时异常（见 `06` #27、`10` §10.4）。
+
+---
+
+## 8.8 dev 登录端点：门控开关 vs 不提供（Phase 5）
+
+| 属性 | 值 |
+|------|-----|
+| **时间** | 2026-07-21，Phase 5 |
+| **决策者** | 架构组 |
+
+### 选项
+
+| 方案 | 问题 |
+|------|------|
+| **不提供**，手动用脚本签 token | 每次测试都要跑脚本，体验差 |
+| **无条件提供 `/api/dev/login`** | 生产环境等于"任意发 token"漏洞 |
+| **`DevLoginEnabled` 门控、默认 false** | 兼顾便利与安全 |
+
+### 选择：门控开关，默认关闭
+
+**理由：**
+- 主 `appsettings.json` 设 `false`（安全默认），`appsettings.Development.json` 设 `true`（本地自动可用）。
+- 端点仅当 `DevLoginEnabled=true` 才注册，生产零调试后门。
+- 返回**裸 token**（Swagger bearer 弹窗会自动补 `Bearer ` 前缀，返回带前缀会变成 `Bearer Bearer xxx`）。
+
+### 后续影响
+- 同步给 Swagger + Scalar 补 `AddSecurityDefinition("Bearer")`，UI 出现 Authorize 按钮（见 `06` #29/#30）。
+
+---
+
+## 8.9 数据库初始化：MigrateAsync vs EnsureCreated（Phase 5）
+
+| 属性 | 值 |
+|------|-----|
+| **时间** | 2026-07-21，Phase 5 |
+| **决策者** | 架构组 |
+
+### 选项
+
+| 方案 | 问题 |
+|------|------|
+| **`EnsureCreatedAsync()`** | 只在 DB 不存在时一次性建表，与 EF 迁移混用会漏建后加的表 |
+| **`MigrateAsync()`** | 按迁移历史增量建表，是有迁移项目的正确做法 |
+
+### 选择：MigrateAsync（保留 EnsureCreated 仅作 InMemory 测试兜底）
+
+**理由：**
+- 项目已有 EF 迁移（Phase2/3/5），`EnsureCreated` 不读迁移历史，旧 DB 缺 `AgentConfigurations`/`ApiKeys`/`AuditLogs` → `no such table`。
+- `MigrateAsync` 先 `GetPendingMigrationsAsync` 判空再迁移；catch 兜底 `EnsureCreated` 兼容 InMemory 测试。
+
+### 后续影响
+- 补落缺失迁移 `Phase5ApiKeyIndex`（`ApiKeys` 索引调整；否则 pending model change 抛异常）。
+- 铁律：**改模型必须 `dotnet ef migrations add`**；本地 DB 漂移用删文件 + 迁移重建（见 `06` #31、`10` §10.4）。
+
+---
+
+## 8.10 决策演化时间线
 
 ```
 2026-07-01 (v1.0 基线)
@@ -227,6 +308,14 @@ public class UnitOfWorkBehavior<TRequest, TResponse>
 ├── 加 IntegrationTests（Testcontainers 脚手架）
 ├── 加 CI workflow（+ --vulnerable 安全扫描）
 └── 加学习文档（8 篇）
+
+2026-07-21 (Phase 5 安全加固)
+├── 认证：写死默认方案 → Policy Scheme（Smart，按请求头分发 JWT/ApiKey）
+├── dev 登录：不提供/无条件 → DevLoginEnabled 门控（默认 false，返回裸 token）
+├── DB 初始化：EnsureCreatedAsync → MigrateAsync（补落 Phase5ApiKeyIndex 迁移）
+├── API Key：明文 → AES-256-GCM 加密 + DB 聚合 + 轮换/吊销/过期扫描
+├── 多租户：TenantProvider 硬编码默认 → per-request 从 claim 解析
+└── 加学习文档（第 10 篇 Phase 5 安全）
 ```
 
 ---
@@ -236,6 +325,8 @@ public class UnitOfWorkBehavior<TRequest, TResponse>
 - 模型路由为什么选 Flat Priority List 而不是模型特定降级链？
 - Domain 事件为什么用适配器模式桥接 MediatR，而不是直接依赖？
 - `ICommand<T>` 标记接口的选型，后续影响是什么？
+- JWT + API-Key 并存为什么选 Policy Scheme 而不是写死默认方案？
+- dev 登录端点为什么必须门控？DB 初始化为什么从 EnsureCreated 改成 MigrateAsync？
 
 ---
 

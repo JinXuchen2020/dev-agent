@@ -28,7 +28,7 @@ curl -X POST "http://localhost:5000/api/v1/conversations/$CONV_ID/messages" \
 | `AgentPlatform.Domain` | 领域层 — 聚合根、值对象（`AgentType`）、仓储接口，零外部依赖 |
 | `AgentPlatform.Application` | 应用层 — MediatR Command/Query、路由策略、状态机事件处理器、工具调度 |
 | `AgentPlatform.Infrastructure` | 基础设施 — EF Core、Semantic Kernel、Redis 短期记忆、AutoGen 编排、状态机引擎、ExecutionLog |
-| `AgentPlatform.Api` | 表现层 — ASP.NET Core Web API 含 Agents/AgentRoles/ExecutionLogs 端点、Scalar、CORS |
+| `AgentPlatform.Api` | 表现层 — ASP.NET Core Web API 含 Agents/AgentRoles/ExecutionLogs 端点、JWT/API-Key 认证（Smart policy scheme）、RBAC、限流、提示注入中间件、Swagger/Scalar、CORS |
 | `AgentPlatform.Workflow` | 工作流引擎（预留） |
 | `AgentPlatform.SpecFlowTests` | BDD 验收测试（SpecFlow + xUnit，11 个 .feature 文件） |
 
@@ -71,7 +71,7 @@ dotnet user-secrets set "OpenAI:Key" "sk-your-key-here"
 | Phase 2 | 多智能体工作流 — 状态机、Redis、AutoGen 编排、ExecutionLog | ✅ 完成 |
 | Phase 3 | 平台化 — 可视化编排、监控、自定义 AgentType | ✅ 完成 |
 | Phase 4 | 知识接地与加固 — RAG 真接地、Critic fail-loud、DB 分页、真 tokenizer | ✅ 完成 |
-| Phase 5 | 安全加固（launch-blocking）— 认证 / RBAC / 真实多租户 / 限流 / 审计 / Key 加密 | 📋 计划 |
+| Phase 5 | 安全加固（launch-blocking）— JWT/API-Key 认证 / RBAC / 真实多租户 / 限流 / 提示注入防护 / 审计 / API Key AES-256-GCM 加密 | ✅ 完成 |
 | Phase 6 | 前沿特性 — Code Agent、压测、BDD 全量 | 📋 计划 |
 
 ## 学习资料
@@ -89,6 +89,7 @@ dotnet user-secrets set "OpenAI:Key" "sk-your-key-here"
   - [`07-project-evolution.md`](./docs/learning/07-project-evolution.md) — 项目演进
   - [`08-decision-log.md`](./docs/learning/08-decision-log.md) — 决策日志
   - [`09-phase4-grounding-learnings.md`](./docs/learning/09-phase4-grounding-learnings.md) — Phase 4 知识接地（含「按能力查因」表）
+  - [`10-phase5-security-learnings.md`](./docs/learning/10-phase5-security-learnings.md) — Phase 5 安全加固（认证/多租户/RBAC/Key 加密/审计 7 个知识点 + 3 个排障实录）
 - 🃏 **速记卡**：[`docs/learning/cheatsheet-复盘速记.md`](./docs/learning/cheatsheet-复盘速记.md)（文字版）/ [`docs/learning/cheatsheet-复盘速记.png`](./docs/learning/cheatsheet-复盘速记.png)（图片版，可一键保存手机常看）
 
 ## 质量治理流程

@@ -43,10 +43,16 @@ internal sealed class KeyRotationService : IKeyRotationService
             return;
         }
 
-        var newPlaintextKey = GenerateSecureKey();
-        var (encryptedKey, _) = _encryptionService.EncryptKey(newPlaintextKey);
+        if (!apiKey.IsActive)
+        {
+            _logger.LogWarning("API key rotation skipped: key {KeyId} is inactive.", apiKeyId);
+            return;
+        }
 
-        apiKey.Rotate(encryptedKey);
+        var newPlaintextKey = GenerateSecureKey();
+        var (encryptedKey, newPrefix) = _encryptionService.EncryptKey(newPlaintextKey);
+
+        apiKey.Rotate(encryptedKey, newPrefix);
         await _apiKeyRepository.UpdateAsync(apiKey, ct);
 
         var auditLog = AuditLog.Record(

@@ -41,6 +41,7 @@ public sealed class KeyRotationServiceTests
 
         Assert.Equal(2, key.KeyVersion);
         Assert.Equal("enc-rotated", key.EncryptedKeyHash);
+        Assert.Equal("ak_new12", key.KeyPrefix);
         await _repo.Received(1).UpdateAsync(key, Arg.Any<CancellationToken>());
         _audit.Received(1).Add(Arg.Is<AuditLog>(a => a.Action == AuditActionType.KeyRotation));
         await _uow.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());

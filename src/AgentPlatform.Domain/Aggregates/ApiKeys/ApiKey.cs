@@ -25,7 +25,7 @@ public sealed class ApiKey : ITenantScoped, IAggregateRoot
     /// Gets a human-readable prefix (first 8 chars of the plaintext key)
     /// for identification in logs and admin UIs.
     /// </summary>
-    public string KeyPrefix { get; private init; } = null!;
+    public string KeyPrefix { get; private set; } = null!;
 
     /// <summary>Gets a display name for this key (e.g. "Production CI/CD Key").</summary>
     public string DisplayName { get; private init; } = null!;
@@ -71,7 +71,7 @@ public sealed class ApiKey : ITenantScoped, IAggregateRoot
         string rolesCsv,
         DateTime? expiresAt = null)
     {
-        ArgumentNullException.ThrowIfNull(encryptedKey);
+        ArgumentException.ThrowIfNullOrWhiteSpace(encryptedKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(keyPrefix);
         ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
 
@@ -94,16 +94,22 @@ public sealed class ApiKey : ITenantScoped, IAggregateRoot
     public void ClearDomainEvents() => _domainEvents.Clear();
 
     /// <summary>
-    /// Rotates this key by updating its encrypted value and incrementing the version.
+    /// Rotates this key by updating its encrypted value, prefix, and incrementing the version.
     /// The old key's encrypted value is replaced; callers should retain the previous
     /// key for a grace period in a separate store or via a secondary lookup.
     /// </summary>
     /// <param name="newEncryptedKey">The new encrypted key value.</param>
-    public void Rotate(string newEncryptedKey)
+    /// <param name="newKeyPrefix">The new key prefix (first 8 chars of the new plaintext key).</param>
+    public void Rotate(string newEncryptedKey, string newKeyPrefix)
     {
         ArgumentNullException.ThrowIfNull(newEncryptedKey);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newKeyPrefix);
+        if (!IsActive)
+            throw new InvalidOperationException("Cannot rotate a revoked or inactive API key.");
         EncryptedKeyHash = newEncryptedKey;
+        KeyPrefix = newKeyPrefix;
         KeyVersion++;
+        RevokedAt = null;
     }
 
     /// <summary>
