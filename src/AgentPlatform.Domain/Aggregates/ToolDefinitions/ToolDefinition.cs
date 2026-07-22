@@ -22,22 +22,25 @@ public sealed class ToolDefinition : ITenantScoped, IAggregateRoot
     /// <summary>
     /// Gets the human-readable name of the tool.
     /// </summary>
-    public string Name { get; private init; } = null!; // EF Core proxy
+    /// <summary>
+    /// Gets the human-readable name of the tool.
+    /// </summary>
+    public string Name { get; private init; } = null!;
 
     /// <summary>
     /// Gets the human-readable description of what the tool does.
     /// </summary>
-    public string Description { get; private init; } = null!; // EF Core proxy
+    public string Description { get; private init; } = null!;
 
     /// <summary>
     /// Gets or sets the JSON schema describing the tool's parameters.
     /// </summary>
-    public string ParametersSchema { get; private set; } = null!; // EF Core proxy
+    public string ParametersSchema { get; private set; } = null!;
 
     /// <summary>
     /// Gets the name of the handler responsible for executing the tool.
     /// </summary>
-    public string HandlerName { get; private init; } = null!; // EF Core proxy
+    public string HandlerName { get; private init; } = null!;
 
     /// <summary>
     /// Gets or sets a value indicating whether the tool is currently enabled for use.

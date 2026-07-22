@@ -23,6 +23,7 @@ public class SendMessageCommandHandlerTests
         SystemPrompt = "You are a test assistant."
     });
     private readonly ITenantProvider _tenant = Substitute.For<ITenantProvider>();
+    private readonly IAuditLogRepository _auditLogRepository = Substitute.For<IAuditLogRepository>();
     private readonly Guid _tenantId = Guid.NewGuid();
     private readonly SendMessageCommandHandler _handler;
 
@@ -30,7 +31,7 @@ public class SendMessageCommandHandlerTests
     {
         _tenant.GetTenantId().Returns(_tenantId);
         _handler = new SendMessageCommandHandler(
-            _conversationRepository, _router, _vectorStore, _defaults, _tenant);
+            _conversationRepository, _router, _vectorStore, _defaults, _tenant, _auditLogRepository);
     }
 
     [Fact]

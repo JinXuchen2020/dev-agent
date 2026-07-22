@@ -15,7 +15,7 @@ public sealed class ExecutionLogEntry
     /// <summary>
     /// Gets the name of the step that was executed.
     /// </summary>
-    public string StepName { get; private init; } = null!; // EF Core proxy
+    public string StepName { get; private init; } = null!;
 
     /// <summary>
     /// Gets the zero-based execution order of the step.

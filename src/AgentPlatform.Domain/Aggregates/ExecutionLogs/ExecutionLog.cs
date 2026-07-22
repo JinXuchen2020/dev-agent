@@ -24,7 +24,7 @@ public sealed class ExecutionLog : IAggregateRoot
     /// <summary>
     /// Gets the name of the workflow.
     /// </summary>
-    public string WorkflowName { get; private init; } = null!; // EF Core proxy
+    public string WorkflowName { get; private init; } = null!;
 
     /// <summary>
     /// Gets the tenant that owns this execution log.

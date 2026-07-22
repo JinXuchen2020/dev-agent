@@ -5,6 +5,7 @@ using AgentPlatform.Application.Conversations.Commands.SendMessage;
 using AgentPlatform.Application.Conversations.Queries.GetConversations;
 using AgentPlatform.Application.Routing.Queries.GetCostReport;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AgentPlatform.Api.Controllers;
@@ -13,7 +14,9 @@ namespace AgentPlatform.Api.Controllers;
 /// API controller exposing endpoints for managing conversations, sending messages, and retrieving cost reports.
 /// All routes are prefixed with <c>api/v1/conversations</c>.
 /// </summary>
+[Authorize]
 [ApiController]
+[ApiVersion("1.0")]
 [Route("api/v1/[controller]")]
 public sealed class ConversationsController : ControllerBase
 {
@@ -38,6 +41,7 @@ public sealed class ConversationsController : ControllerBase
     /// </summary>
     /// <param name="ct">A token to observe for cancellation of the request.</param>
     /// <returns>An <see cref="IActionResult"/> containing the identifier of the newly created conversation.</returns>
+    [Authorize(Roles = "Admin,Operator")]
     [HttpPost]
     public async Task<IActionResult> CreateConversation(CancellationToken ct)
     {
@@ -64,6 +68,7 @@ public sealed class ConversationsController : ControllerBase
     /// <param name="request">The request payload containing the message content and optional overrides.</param>
     /// <param name="ct">A token to observe for cancellation of the request.</param>
     /// <returns>An <see cref="IActionResult"/> containing the reply, the model identifier, and token usage.</returns>
+    [Authorize(Roles = "Admin,Operator")]
     [HttpPost("{conversationId}/messages")]
     public async Task<IActionResult> SendMessage(
         Guid conversationId,
@@ -80,6 +85,7 @@ public sealed class ConversationsController : ControllerBase
     /// </summary>
     /// <param name="ct">A token to observe for cancellation of the request.</param>
     /// <returns>An <see cref="IActionResult"/> containing the cost report data.</returns>
+    [Authorize(Roles = "Admin")]
     [HttpGet("cost-report")]
     public async Task<IActionResult> GetCostReport(CancellationToken ct)
     {
@@ -87,3 +93,4 @@ public sealed class ConversationsController : ControllerBase
         return Ok(result);
     }
 }
+

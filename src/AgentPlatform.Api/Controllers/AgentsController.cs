@@ -4,6 +4,7 @@ using AgentPlatform.Application.Agents.Commands.CreateAgent;
 using AgentPlatform.Application.Agents.Queries.GetAgent;
 using AgentPlatform.Application.Agents.Queries.GetAgents;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 
@@ -13,7 +14,9 @@ namespace AgentPlatform.Api.Controllers;
 /// API controller exposing endpoints for creating and retrieving agents.
 /// All routes are prefixed with <c>api/v1/agents</c>.
 /// </summary>
+[Authorize]
 [ApiController]
+[ApiVersion("1.0")]
 [Route("api/v1/[controller]")]
 public sealed class AgentsController : ControllerBase
 {
@@ -44,6 +47,7 @@ public sealed class AgentsController : ControllerBase
     /// <param name="request">The request payload describing the agent to create.</param>
     /// <param name="ct">A token to observe for cancellation of the request.</param>
     /// <returns>An <see cref="IActionResult"/> containing the created agent as an <see cref="AgentResponse"/>.</returns>
+    [Authorize(Roles = "Admin")]
     [HttpPost]
     public async Task<IActionResult> CreateAgent(
         [FromBody] CreateAgentRequest request,
@@ -68,6 +72,7 @@ public sealed class AgentsController : ControllerBase
     /// <param name="id">The unique identifier of the agent to retrieve.</param>
     /// <param name="ct">A token to observe for cancellation of the request.</param>
     /// <returns>An <see cref="IActionResult"/> containing the agent as an <see cref="AgentResponse"/>; <c>404 Not Found</c> when the agent does not exist.</returns>
+    [Authorize(Roles = "Admin,Operator,Viewer")]
     [HttpGet("{id}")]
     public async Task<IActionResult> GetAgent(Guid id, CancellationToken ct)
     {
@@ -81,6 +86,7 @@ public sealed class AgentsController : ControllerBase
     /// </summary>
     /// <param name="ct">A token to observe for cancellation of the request.</param>
     /// <returns>An <see cref="IActionResult"/> containing a list of agents as <see cref="AgentResponse"/> objects.</returns>
+    [Authorize(Roles = "Admin,Operator,Viewer")]
     [HttpGet]
     public async Task<IActionResult> GetAgents(CancellationToken ct)
     {
@@ -89,3 +95,4 @@ public sealed class AgentsController : ControllerBase
         return Ok(responses);
     }
 }
+

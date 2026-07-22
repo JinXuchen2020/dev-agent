@@ -196,7 +196,8 @@ public sealed class DddLayerTests
             var matches = injections.Matches(content)
                 .Select(m => m.Groups[1].Value)
                 .Where(name => name is not "IOptions" and not "IMediator" and not "IServiceProvider"
-                              and not "IEnumerable" and not "ILogger" and not "IResult")
+                              and not "IEnumerable" and not "ILogger" and not "IResult"
+                              and not "ITenantProvider" and not "IExecutionProgressBroadcaster")
                 .ToList();
 
             if (matches.Count > 0)

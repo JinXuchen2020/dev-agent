@@ -31,7 +31,7 @@ public sealed class Conversation : ITenantScoped, IAggregateRoot
     /// <summary>
     /// Gets or sets the cumulative token usage across all messages in the conversation.
     /// </summary>
-    public TokenUsage TotalTokenUsage { get; private set; } = null!; // EF Core proxy
+    public TokenUsage TotalTokenUsage { get; private set; } = null!;
 
     /// <summary>
     /// Gets or sets the current lifecycle status of the conversation.

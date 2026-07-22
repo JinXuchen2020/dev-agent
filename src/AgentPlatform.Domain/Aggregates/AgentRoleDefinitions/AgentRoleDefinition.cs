@@ -18,22 +18,25 @@ public sealed class AgentRoleDefinition : IAggregateRoot
     /// <summary>
     /// Gets the display name of the role (e.g., "Security Auditor").
     /// </summary>
-    public string Name { get; private set; } = null!; // EF Core proxy
+    /// <summary>
+    /// Gets the display name of the role (e.g., "Security Auditor").
+    /// </summary>
+    public string Name { get; private set; } = null!;
 
     /// <summary>
     /// Gets the unique code identifying this role (e.g., "security-auditor").
     /// </summary>
-    public string RoleCode { get; private init; } = null!; // EF Core proxy
+    public string RoleCode { get; private init; } = null!;
 
     /// <summary>
     /// Gets a description of the role's responsibilities.
     /// </summary>
-    public string Description { get; private set; } = null!; // EF Core proxy
+    public string Description { get; private set; } = null!;
 
     /// <summary>
     /// Gets the system prompt used by agents assigned to this role.
     /// </summary>
-    public string SystemPrompt { get; private set; } = null!; // EF Core proxy
+    public string SystemPrompt { get; private set; } = null!;
 
     /// <summary>
     /// Gets the UTC timestamp when the role was created.

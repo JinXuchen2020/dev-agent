@@ -22,7 +22,7 @@ public sealed class AgentConfiguration : ITenantScoped, IAggregateRoot
     /// <summary>
     /// Gets the display name of the configuration.
     /// </summary>
-    public string Name { get; private set; } = null!; // EF Core proxy
+    public string Name { get; private set; } = null!;
 
     /// <summary>
     /// Gets an optional description of the configuration's purpose.
@@ -32,12 +32,12 @@ public sealed class AgentConfiguration : ITenantScoped, IAggregateRoot
     /// <summary>
     /// Gets the YAML content defining the agent configuration.
     /// </summary>
-    public string YamlContent { get; private set; } = null!; // EF Core proxy
+    public string YamlContent { get; private set; } = null!;
 
     /// <summary>
     /// Gets the current semantic version of the configuration.
     /// </summary>
-    public ConfigurationVersion Version { get; private set; } = null!; // EF Core proxy
+    public ConfigurationVersion Version { get; private set; } = null!;
 
     /// <summary>
     /// Gets the role code this configuration is intended for, if any.

@@ -1,7 +1,7 @@
-using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using AgentPlatform.Api.Diagnostics;
+using AgentPlatform.Api.Configuration;
+using AgentPlatform.Api.Endpoints;
 using AgentPlatform.Api.Middleware;
 using AgentPlatform.Application;
 using AgentPlatform.Application.Abstractions;
@@ -12,6 +12,7 @@ using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ── Service registration ──────────────────────────────────────────
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
@@ -19,114 +20,73 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
     });
 
-builder.Services.AddOpenApi();
-builder.Services.AddSwaggerGen(options =>
+builder.Services.AddApiVersioning(options =>
 {
-    options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
-    {
-        Title = "AgentPlatform API",
-        Version = "v1",
-        Description = "Multi-agent development platform API for managing agents, conversations, workflows, and model routing."
-    });
-
-    var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
-    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
-    if (File.Exists(xmlPath))
-        options.IncludeXmlComments(xmlPath);
-
-    var appXmlFile = "AgentPlatform.Application.xml";
-    var appXmlPath = Path.Combine(AppContext.BaseDirectory, appXmlFile);
-    if (File.Exists(appXmlPath))
-        options.IncludeXmlComments(appXmlPath);
+    options.DefaultApiVersion = new Asp.Versioning.ApiVersion(1, 0);
+    options.AssumeDefaultVersionWhenUnspecified = true;
+    options.ReportApiVersions = true;
+    options.ApiVersionReader = new Asp.Versioning.UrlSegmentApiVersionReader();
+}).AddApiExplorer(options =>
+{
+    options.GroupNameFormat = "'v'VVV";
+    options.SubstituteApiVersionInUrl = true;
 });
+
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
 
-builder.Services.Configure<TenantSettings>(builder.Configuration.GetSection("Tenant"));
-builder.Services.Configure<ModelDefaults>(builder.Configuration.GetSection("ModelDefaults"));
-builder.Services.Configure<RouterSettings>(builder.Configuration.GetSection("Router"));
-builder.Services.Configure<PricingSettings>(builder.Configuration.GetSection("Pricing"));
-
-builder.Services.AddCors(options =>
-{
-    var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
-    if (origins is { Length: > 0 })
-        options.AddDefaultPolicy(p => p.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod());
-    else
-        options.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
-});
-
-builder.Services.PostConfigure<RouterSettings>(settings =>
-{
-    foreach (var c in settings.Candidates ?? [])
-    {
-        if (string.IsNullOrWhiteSpace(c.ModelId))
-            throw new InvalidOperationException("Router candidate ModelId is required");
-        if (string.IsNullOrWhiteSpace(c.Provider))
-            throw new InvalidOperationException("Router candidate Provider is required");
-    }
-});
-
-builder.Services.PostConfigure<PricingSettings>(pricing =>
-{
-    if (pricing.CostPerMillionTokens.Count == 0)
-    {
-        pricing.CostPerMillionTokens["openai"] = 2.50m;
-        pricing.CostPerMillionTokens["anthropic"] = 3.00m;
-        pricing.CostPerMillionTokens["deepseek"] = 0.14m;
-        pricing.CostPerMillionTokens["qwen"] = 0.40m;
-        pricing.CostPerMillionTokens["vllm"] = 0m;
-    }
-});
+builder.Services.AddOpenApiConfiguration();
+builder.Services.AddAuthConfiguration(builder.Configuration);
+builder.Services.AddInfrastructureConfiguration(builder.Configuration);
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
-// OpenTelemetry — metrics + tracing
-builder.Services.AddOpenTelemetry()
-    .WithMetrics(metrics => metrics
-        .AddMeter(DiagnosticsConfig.ServiceName)
-        .AddMeter(AgentPlatform.Application.Diagnostics.WorkflowMetrics.MeterName)
-        .AddAspNetCoreInstrumentation()
-        .AddPrometheusExporter());
+// JWT startup guard — reject dev default key outside development
+var jwtKey = builder.Configuration["Security:JwtSecretKey"];
+if (string.IsNullOrEmpty(jwtKey) || jwtKey == "dev-secret-key-min-32-chars-long!!")
+    throw new InvalidOperationException("Security:JwtSecretKey must be configured and must not be the dev default.");
 
 var app = builder.Build();
 
-// 初始化数据库（仅开发环境）
+// ── Database initialization (development only) ────────────────────
 if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("QuickStart"))
 {
     using var scope = app.Services.CreateScope();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     var initializer = scope.ServiceProvider.GetRequiredService<IDatabaseInitializer>();
-
     logger.LogInformation("Initializing database...");
     await initializer.InitializeAsync();
     logger.LogInformation("Database initialization completed.");
 }
 
+// ── OpenAPI / Swagger / Scalar pipeline ───────────────────────────
 app.MapOpenApi();
 app.MapScalarApiReference();
 app.UseSwagger();
 app.UseSwaggerUI();
 
+// ── Middleware pipeline ───────────────────────────────────────────
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseMiddleware<MetricsMiddleware>();
+app.UseMiddleware<PromptInjectionMiddleware>();
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseRateLimiter();
 
-if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("QuickStart"))
-{
-    // HttpsRedirection disabled in dev profiles without HTTPS endpoint
-}
-else
-{
+if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("QuickStart"))
     app.UseHttpsRedirection();
-}
 
 app.UseCors();
 app.MapControllers();
 app.MapHealthChecks("/health");
 app.MapPrometheusScrapingEndpoint("/metrics");
+
+// ── Dev-only endpoints ────────────────────────────────────────────
+if (builder.Configuration.GetValue<bool>("Security:DevLoginEnabled"))
+    DevLoginEndpoint.Map(app, builder.Configuration);
 
 app.Run();
 

@@ -8,7 +8,7 @@ namespace AgentPlatform.Infrastructure.Persistence.Configurations;
 /// <summary>
 /// Configures the EF Core mapping for the <see cref="Workflow"/> aggregate.
 /// </summary>
-public sealed class WorkflowConfiguration : IEntityTypeConfiguration<Workflow>
+internal sealed class WorkflowConfiguration : IEntityTypeConfiguration<Workflow>
 {
     /// <summary>
     /// Configures the entity type mapping for workflows, including table, primary key, property constraints, state conversion, ignored runtime mappings, and the owned steps collection.

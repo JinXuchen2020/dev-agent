@@ -11,11 +11,12 @@ namespace AgentPlatform.Application.Tests.Handlers;
 public class CreateAgentCommandHandlerTests
 {
     private readonly IAgentRepository _repository = Substitute.For<IAgentRepository>();
+    private readonly IAuditLogRepository _auditLogRepository = Substitute.For<IAuditLogRepository>();
     private readonly CreateAgentCommandHandler _handler;
 
     public CreateAgentCommandHandlerTests()
     {
-        _handler = new CreateAgentCommandHandler(_repository);
+        _handler = new CreateAgentCommandHandler(_repository, _auditLogRepository);
     }
 
     [Fact]

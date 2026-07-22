@@ -13,6 +13,8 @@ using AgentPlatform.Infrastructure.Persistence;
 using AgentPlatform.Infrastructure.Persistence.Repositories;
 using AgentPlatform.Infrastructure.Progress;
 using AgentPlatform.Infrastructure.Sandbox;
+using AgentPlatform.Infrastructure.Security;
+using AgentPlatform.Infrastructure.Services;
 using AgentPlatform.Infrastructure.Tools;
 using AgentPlatform.Infrastructure.VectorStore;
 using AgentPlatform.Infrastructure.Tokenizers;
@@ -132,10 +134,43 @@ public static class DependencyInjection
             services.AddSingleton(Microsoft.Extensions.Options.Options.Create(redisSettings));
             services.AddSingleton<IConnectionMultiplexer>(sp =>
             {
+                var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+                var logger = loggerFactory.CreateLogger("AgentPlatform.Infrastructure.RedisConnection");
                 var redisConnection = configuration.GetConnectionString("Redis")
                     ?? configuration.GetSection("Redis:ConnectionString").Value
                     ?? "localhost:6379";
-                return ConnectionMultiplexer.Connect(redisConnection);
+
+                // Retry up to 3 times with exponential backoff for transient failures
+                var maxAttempts = 3;
+                for (var attempt = 1; attempt <= maxAttempts; attempt++)
+                {
+                    try
+                    {
+                        var conn = ConnectionMultiplexer.Connect(
+                            new ConfigurationOptions
+                            {
+                                EndPoints = { redisConnection },
+                                ConnectTimeout = 5000,
+                                SyncTimeout = 5000,
+                                AbortOnConnectFail = false  // graceful degradation
+                            });
+                        logger.LogInformation("Redis connected successfully to {Endpoint}", redisConnection);
+                        return conn;
+                    }
+                    catch (Exception ex) when (attempt < maxAttempts)
+                    {
+                        logger.LogWarning(ex,
+                            "Redis connection attempt {Attempt}/{MaxAttempts} failed, retrying in {Delay}ms",
+                            attempt, maxAttempts, attempt * 1000);
+                        Thread.Sleep(attempt * 1000);
+                    }
+                }
+
+                // Last attempt: throw so the caller can decide to fall back to InMemoryShortTermMemory
+                logger.LogError("Redis connection failed after {MaxAttempts} attempts", maxAttempts);
+                throw new InvalidOperationException(
+                    $"Redis connection to '{redisConnection}' failed after {maxAttempts} attempts. " +
+                    "Set Cache:Provider=Memory or ensure Redis is reachable.");
             });
             services.AddScoped<IShortTermMemory, RedisShortTermMemory>();
         }
@@ -144,7 +179,16 @@ public static class DependencyInjection
             services.AddScoped<IShortTermMemory, InMemoryShortTermMemory>();
         }
 
+        services.AddHttpContextAccessor();
         services.AddScoped<ITenantProvider, TenantProvider>();
+        services.AddScoped<IAesEncryptor, AesGcmEncryptor>();
+        services.AddScoped<IPromptSanitizer, PromptSanitizer>();
+        services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+        services.AddScoped<IApiKeyRepository, ApiKeyRepository>();
+        services.AddScoped<IApiKeyEncryptionService, ApiKeyEncryptionService>();
+        services.AddScoped<IKeyRotationService, KeyRotationService>();
+        services.Configure<SecuritySettings>(configuration.GetSection("Security"));
+        services.AddScoped<PromptInjectionService>();
         services.AddScoped<IResiliencePipelineProvider, ResiliencePipelineProvider>();
         // Token counter singleton — stateless, safe to share across all workflows.
         services.AddSingleton<ITokenCounter, TokenCounter>();
@@ -217,6 +261,9 @@ public static class DependencyInjection
 
         // Register execution log cleanup background job
         services.AddHostedService<ExecutionLogCleanupJob>();
+
+        // Register API key expiry monitoring background job
+        services.AddHostedService<ApiKeyExpiryJob>();
 
         return services;
     }

@@ -20,7 +20,7 @@ public sealed class Workflow : ITenantScoped, IAggregateRoot
     /// <summary>
     /// Gets or sets the display name of the workflow.
     /// </summary>
-    public string Name { get; private set; } = null!; // EF Core proxy
+    public string Name { get; private set; } = null!;
 
     /// <summary>
     /// Gets a read-only list of steps that comprise the workflow.
@@ -42,7 +42,7 @@ public sealed class Workflow : ITenantScoped, IAggregateRoot
     /// <summary>
     /// Gets or sets the shared context (JSON) available to all steps in the workflow.
     /// </summary>
-    public string Context { get; private set; } = null!; // EF Core proxy
+    public string Context { get; private set; } = null!;
 
     /// <summary>
     /// Gets the unique identifier of the tenant that owns this workflow.

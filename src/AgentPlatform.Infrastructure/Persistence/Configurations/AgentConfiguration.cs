@@ -7,7 +7,7 @@ namespace AgentPlatform.Infrastructure.Persistence.Configurations;
 /// <summary>
 /// Configures the EF Core mapping for the <see cref="Agent"/> aggregate.
 /// </summary>
-public sealed class AgentConfiguration : IEntityTypeConfiguration<Agent>
+internal sealed class AgentConfiguration : IEntityTypeConfiguration<Agent>
 {
     /// <summary>
     /// Configures the entity type mapping for agents, including table, primary key, property constraints, owned model endpoint, and ignored navigation collections.

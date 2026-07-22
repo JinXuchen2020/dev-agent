@@ -8,6 +8,7 @@ using AgentPlatform.Application.AgentConfigurationManagement.Queries.ListAgentCo
 using AgentPlatform.Domain.Aggregates.AgentConfigurations;
 using AgentPlatform.Domain.Enums;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AgentPlatform.Api.Controllers;
@@ -16,7 +17,9 @@ namespace AgentPlatform.Api.Controllers;
 /// API controller for managing agent configuration definitions.
 /// All routes are prefixed with <c>api/v1/agent-configurations</c>.
 /// </summary>
+[Authorize]
 [ApiController]
+[ApiVersion("1.0")]
 [Route("api/v1/[controller]")]
 public sealed class AgentConfigurationsController : ControllerBase
 {
@@ -33,6 +36,7 @@ public sealed class AgentConfigurationsController : ControllerBase
     /// <summary>
     /// Creates a new agent configuration.
     /// </summary>
+    [Authorize(Roles = "Admin")]
     [HttpPost]
     public async Task<IActionResult> CreateConfiguration(
         [FromBody] CreateAgentConfigurationRequest request,
@@ -51,6 +55,7 @@ public sealed class AgentConfigurationsController : ControllerBase
     /// <summary>
     /// Updates an existing agent configuration.
     /// </summary>
+    [Authorize(Roles = "Admin")]
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> UpdateConfiguration(
         Guid id,
@@ -74,6 +79,7 @@ public sealed class AgentConfigurationsController : ControllerBase
     /// <summary>
     /// Deletes an agent configuration by its unique identifier.
     /// </summary>
+    [Authorize(Roles = "Admin")]
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> DeleteConfiguration(
         Guid id,
@@ -94,6 +100,9 @@ public sealed class AgentConfigurationsController : ControllerBase
         [FromQuery] int take = 20,
         CancellationToken ct = default)
     {
+        if (take < 1 || take > 100)
+            return BadRequest("take must be between 1 and 100.");
+
         var query = new ListAgentConfigurationsQuery(status, skip, take);
         var result = await _mediator.Send(query, ct);
         return Ok(result);
@@ -157,3 +166,4 @@ public sealed record UpdateAgentConfigurationRequest(
     string? Name,
     [property: System.ComponentModel.DataAnnotations.StringLength(1000)]
     string? Description);
+

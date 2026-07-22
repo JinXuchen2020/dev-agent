@@ -12,14 +12,15 @@ namespace AgentPlatform.Infrastructure.Persistence;
 /// <summary>
 /// 数据库初始化服务实现，负责数据库迁移、表创建和种子数据填充。
 /// </summary>
-public sealed class DatabaseInitializer : IDatabaseInitializer
+internal sealed class DatabaseInitializer : IDatabaseInitializer
 {
     private readonly AppDbContext _context;
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<DatabaseInitializer> _logger;
     private readonly TenantSettings _tenantSettings;
 
-    // Default tenant GUID used when no tenant is configured (all-zeros is explicit sentinel)
+    // Default tenant GUID used when no tenant is configured — all-zeros is explicit sentinel.
+    // Configure via Tenant:DefaultTenantId in appsettings or user-secrets.
     private static readonly Guid DefaultTenantIdSeed = Guid.Parse("00000000-0000-0000-0000-000000000001");
 
     public DatabaseInitializer(
@@ -40,16 +41,14 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         {
             _logger.LogInformation("Initializing database...");
 
-            // 显式创建数据库和表
-            var created = await _context.Database.EnsureCreatedAsync(ct);
-            if (created)
-            {
-                _logger.LogInformation("Database created for the first time.");
-            }
-            else
-            {
-                _logger.LogInformation("Database already exists.");
-            }
+            // Apply EF Core migrations — the single source of truth for the schema.
+            // Unlike EnsureCreatedAsync (which only creates tables when the database file
+            // does not yet exist), MigrateAsync also upgrades an existing database when new
+            // migrations are added. This is required so tables introduced by later migrations
+            // (e.g. AgentConfigurations, ApiKeys, AuditLogs) get created for databases that were
+            // first created before those migrations existed — otherwise queries fail with
+            // "no such table".
+            await ApplyMigrationsAsync(ct);
 
             // 初始化种子数据
             await SeedDataAsync(ct);
@@ -58,6 +57,35 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         {
             _logger.LogError(ex, "Failed to initialize database");
             throw;
+        }
+    }
+
+    private async Task ApplyMigrationsAsync(CancellationToken ct)
+    {
+        try
+        {
+            var pending = await _context.Database.GetPendingMigrationsAsync(ct);
+            if (pending.Any())
+            {
+                _logger.LogInformation(
+                    "Applying {Count} pending migration(s): {Migrations}",
+                    pending.Count(),
+                    string.Join(", ", pending));
+                await _context.Database.MigrateAsync(ct);
+                _logger.LogInformation("Database migrations applied successfully.");
+            }
+            else
+            {
+                _logger.LogInformation("Database is up to date — no pending migrations.");
+            }
+        }
+        catch (Exception ex)
+        {
+            // Fallback for providers that do not support migrations (e.g. the EF Core
+            // InMemory provider used by some tests). EnsureCreated builds the schema from
+            // the current model.
+            _logger.LogWarning(ex, "MigrateAsync failed; falling back to EnsureCreated for non-migration providers.");
+            await _context.Database.EnsureCreatedAsync(ct);
         }
     }
 

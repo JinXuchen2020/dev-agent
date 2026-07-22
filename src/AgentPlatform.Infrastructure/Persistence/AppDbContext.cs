@@ -3,7 +3,9 @@ using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Domain.Abstractions;
 using AgentPlatform.Domain.Aggregates.AgentConfigurations;
 using AgentPlatform.Domain.Aggregates.Agents;
+using AgentPlatform.Domain.Aggregates.AuditLogs;
 using AgentPlatform.Domain.Aggregates.Conversations;
+using AgentPlatform.Domain.Aggregates.ApiKeys;
 using AgentPlatform.Domain.Aggregates.ToolDefinitions;
 using AgentPlatform.Domain.Aggregates.Workflows;
 using Microsoft.EntityFrameworkCore;
@@ -70,6 +72,16 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
     public DbSet<AgentConfiguration> AgentConfigurations => Set<AgentConfiguration>();
 
     /// <summary>
+    /// Gets the <see cref="DbSet{TEntity}"/> providing access to persisted audit log entries.
+    /// </summary>
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+
+    /// <summary>
+    /// Gets the <see cref="DbSet{TEntity}"/> providing access to persisted API keys.
+    /// </summary>
+    public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
+
+    /// <summary>
     /// Returns all aggregate roots currently tracked by the change tracker, used for dispatching domain events on save.
     /// </summary>
     /// <returns>A read-only collection of tracked <see cref="IAggregateRoot"/> instances.</returns>
@@ -92,7 +104,11 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
             {
                 var param = Expression.Parameter(entity.ClrType, "e");
                 var prop = Expression.Property(param, "TenantId");
-                var body = Expression.Equal(prop, Expression.Constant(_tenantId));
+                // Must use field reference (not Expression.Constant) so EF Core evaluates
+                // _tenantId per DbContext instance at query time, not once at model-build time.
+                // Without this, all requests share the first request's tenant ID — P0 isolation break.
+                var body = Expression.Equal(prop,
+                    Expression.Field(Expression.Constant(this, typeof(AppDbContext)), "_tenantId"));
                 modelBuilder.Entity(entity.ClrType).HasQueryFilter(Expression.Lambda(body, param));
             }
         }

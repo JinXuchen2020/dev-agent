@@ -1,5 +1,7 @@
 using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Domain.Aggregates.AuditLogs;
 using AgentPlatform.Domain.Aggregates.Workflows;
+using AgentPlatform.Domain.Repositories;
 using MediatR;
 
 namespace AgentPlatform.Application.Workflows.Commands.RunWorkflow;
@@ -7,10 +9,14 @@ namespace AgentPlatform.Application.Workflows.Commands.RunWorkflow;
 internal sealed class RunWorkflowCommandHandler : IRequestHandler<RunWorkflowCommand, Workflow>
 {
     private readonly IOrchestrationPrimitive _primitive;
+    private readonly IAuditLogRepository _auditLogRepository;
 
-    public RunWorkflowCommandHandler(IOrchestrationPrimitive primitive)
+    public RunWorkflowCommandHandler(
+        IOrchestrationPrimitive primitive,
+        IAuditLogRepository auditLogRepository)
     {
         _primitive = primitive;
+        _auditLogRepository = auditLogRepository;
     }
 
     public async Task<Workflow> Handle(RunWorkflowCommand request, CancellationToken ct)
@@ -32,6 +38,16 @@ internal sealed class RunWorkflowCommandHandler : IRequestHandler<RunWorkflowCom
         }
 
         // The orchestration primitive handles per-step persistence internally
-        return await _primitive.RunAsync(workflow, request.Preset, ct);
+        var result = await _primitive.RunAsync(workflow, request.Preset, ct);
+
+        var auditLog = AuditLog.Record(
+            tenantId: result.TenantId,
+            action: AuditActionType.RunWorkflow,
+            entity: "Workflow",
+            entityId: result.Id,
+            details: $"Started workflow '{result.Name}'");
+        _auditLogRepository.Add(auditLog);
+
+        return result;
     }
 }
