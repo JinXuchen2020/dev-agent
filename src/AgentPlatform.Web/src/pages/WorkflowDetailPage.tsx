@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Typography, Spin, Descriptions, Tag, Steps, Button, Card, Space, message } from 'antd';
+import { Typography, Spin, Descriptions, Tag, Steps, Button, Card, Space } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { getWorkflow } from '../services/api';
 import type { WorkflowDetail } from '../types';

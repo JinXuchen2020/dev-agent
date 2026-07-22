@@ -9,7 +9,7 @@ const { Title } = Typography;
 const columns: ColumnsType<Agent> = [
   { title: 'Name', dataIndex: 'name', key: 'name' },
   { title: 'Role', dataIndex: 'role', key: 'role', render: (role: { roleCode: string }) => role?.roleCode },
-  { title: 'Model', key: 'model', render: (_, r) => (r as unknown as { modelEndpoint?: { modelId: string } }).modelEndpoint?.modelId },
+  { title: 'Model', key: 'model', render: (_, r) => r.modelEndpoint?.modelId },
   { title: 'System Prompt', dataIndex: 'systemPrompt', key: 'systemPrompt', ellipsis: true },
   { title: 'Status', dataIndex: 'status', key: 'status', render: (s: string) => <Tag color={s === 'active' ? 'green' : 'default'}>{s}</Tag> },
   { title: 'Created', dataIndex: 'createdAt', key: 'createdAt', render: (d: string) => new Date(d).toLocaleString() },

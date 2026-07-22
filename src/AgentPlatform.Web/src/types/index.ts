@@ -2,9 +2,30 @@ export interface Agent {
   id: string;
   name: string;
   role: { roleCode: string };
+  modelEndpoint?: { modelId: string };
   systemPrompt: string;
   status: string;
   createdAt: string;
+}
+
+export interface ApiKey {
+  id: string;
+  name: string;
+  prefix: string;
+  role: string;
+  expiresAt: string;
+  lastUsedAt: string | null;
+  status: string;
+}
+
+export interface Conversation {
+  id: string;
+  agentName?: string;
+  workflowId?: string;
+  messages?: { role: string; content: string }[];
+  status?: string;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface AgentRole {

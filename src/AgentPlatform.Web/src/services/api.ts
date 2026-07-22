@@ -1,5 +1,15 @@
 import axios from 'axios';
-import type { Agent, AgentRole, AgentConfiguration, Workflow, WorkflowDetail, ExecutionLog, ExecutionLogDetail } from '../types';
+import type {
+  Agent,
+  AgentRole,
+  AgentConfiguration,
+  Workflow,
+  WorkflowDetail,
+  ExecutionLog,
+  ExecutionLogDetail,
+  ApiKey,
+  Conversation,
+} from '../types';
 
 const api = axios.create({
   baseURL: '/api/v1',
@@ -50,3 +60,15 @@ export const getExecutionLogSteps = (id: string, params?: { status?: string; ski
   api.get<{ items: ExecutionLogDetail['entries']; totalCount: number }>(`/execution-logs/${id}/steps`, { params }).then((r) => r.data);
 
 export default api;
+
+// Auth (dev/demo login; backend DevLoginEnabled gate)
+export const devLogin = (data: { role: string; userId: string }) =>
+  api.post<{ token: string }>('/auth/dev-login', data).then((r) => r.data);
+
+// API Keys
+export const getApiKeys = () => api.get<ApiKey[]>('/api-keys').then((r) => r.data);
+
+// Conversations
+export const getConversations = () => api.get<Conversation[]>('/conversations').then((r) => r.data);
+export const createConversation = () =>
+  api.post<Conversation>('/conversations', {}).then((r) => r.data);

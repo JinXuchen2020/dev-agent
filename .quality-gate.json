@@ -1,8 +1,9 @@
 {
-  "phase": "phase-5",
-  "reviewer": "ddd-code-reviewer PASSED (2026-07-21 Phase 5 Security Hardening)",
-  "structureGate": "ddd-phase-quality-gate PASS (P0=0 P1=0 P2=0 P3=0)",
-  "codebaseOptimizer": "PASSED (Phase 1 Round 1: 11/11 fixed; Phase 2 scan: 0 issues)",
+  "phase": "frontend-additions",
+  "reviewer": "ddd-code-reviewer PASSED (2026-07-22 frontend additions: LoginPage/ApiKeysPage/ConversationsPage/components/theme/tests; checklist adapted for React/TS)",
+  "structureGate": "ddd-phase-quality-gate PASS (P0=0 P1=0 P2=0 P3=0; components layered, guards added, no god-components)",
+  "codebaseOptimizer": "frontend QA pipeline PASSED (typecheck/lint/build/unit all green; 11 findings fixed: missing api/types/store exports reconciled, dead password field removed, null-guards added, contract test shape corrected)",
   "cleared": true,
-  "notes": "Round 4 code-reviewer findings auto-fixed: KeyPrefix rotation fix, DecryptKey empty guard, null-prefix test. Codebase-optimizer Phase 1+2 completed 2026-07-22."
+  "reportRef": "docs/quality/frontend-additions-gate.md",
+  "notes": "Scoped to THIS commit's added frontend files + foundation reconciliation. Pre-existing tracked defects (backlog B1-B6/O1-O14) live in already-committed files and are out of scope, tracked in features/backlog.md. Dev login remains email-only by design (backend DevLoginEnabled gate)."
 }
