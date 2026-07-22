@@ -285,6 +285,83 @@ public class UnitOfWorkBehavior<TRequest, TResponse>
 
 ---
 
+## 8.11 codebase-optimizer 三维度质量门禁落地（2026-07-22）
+
+| 属性 | 值 |
+|------|-----|
+| **时间** | 2026-07-22，Phase 5 过渡期 |
+| **决策者** | 质量治理组 |
+
+### 背景
+
+Phase 5 安全加固完成后，需要补齐全库健康检查。已有两道门禁：
+- `ddd-code-reviewer`（高风险模块代码审查）
+- `ddd-phase-quality-gate`（DDD 结构卫生）
+
+新增 `codebase-optimizer` 作为第三道门禁，覆盖 8 个维度：架构 → 代码质量 → 正确性 → 测试 → 性能 → 安全 → 工程化 → **桩代码替换进度** → **生产就绪度**。
+
+### 选项
+
+| 方案 | 描述 | 问题 |
+|------|------|------|
+| **只跑现有两个 skill** | 不引入新门禁 | 缺少全库健康扫描和桩代码替换进度检查 |
+| **codebase-optimizer + 人工 review** | 自动化扫描 + 人工确认 | 效率低，人工 review 容易遗漏 |
+| **codebase-optimizer 自动化模式** | 零确认，自主执行，每轮 commit+push | 风险高，但效率最优 |
+
+### 选择：codebase-optimizer 自动化模式
+
+**理由：**
+- Phase 5 已积累大量技术债（上帝类、重复代码、缺测试），需要系统化扫描
+- 自动化模式可一次完成 Round 1（阶段1：基础质量）+ Round 1（阶段2：进阶质量）两轮扫描
+- 每个修复任务独立，可并行执行，回归验证通过后再提交
+
+### 实施结果
+
+**阶段1（基础质量）— 11 个问题全部修复：**
+
+| 任务 | 维度 | 成果 |
+|------|------|------|
+| R1-T1+T7 | 🏗️架构 + 🐛正确性 | OrchestrationPrimitive 从636行拆分为门面(302行)，提取 SequentialOrchestrator + NegotiationOrchestrator；ConcurrentDictionary TTL驱逐已实现 |
+| R1-T2+T3 | 🏗️架构 + 🐛正确性 | Program.cs从348行精简至94行，提取Auth/OpenApi/Infrastructure配置，新增JWT启动守卫 |
+| R1-T4 | 🧪测试 | Infrastructure.Tests项目创建，17个测试通过 |
+| R1-T5 | 🧹代码质量 | Truncate方法提取到StringHelpers.cs，三处调用统一 |
+| R1-T6 | 🧹代码质量 | 10个Domain聚合根属性风格统一，ApiKey expiresAt未来校验 |
+| R1-T8 | 🐛正确性 | Redis连接改为ConnectAsync+重试+超时配置 |
+| R1-T9 | 🏗️架构 | Asp.Versioning.Mvc 8.1.0引入，7个Controller加[ApiVersion("1.0")] |
+| R1-T10 | 🏗️架构 | Workflow项目确认无需创建 |
+| R1-T11 | 🧪测试 | Api.Tests项目创建，9个端点契约测试通过 |
+
+**阶段2（进阶质量）— 全维度扫描完成，0问题：**
+- ⚡ 性能：N+1/同步阻塞/LINQ反模式/字符串拼接 — 无发现
+- 🔒 安全：硬编码密钥/SQL注入/弱加密/敏感日志 — 无发现
+- 📦 工程化：CI/CD完整，NuGet版本锁定良好，TreatWarningsAsErrors=true
+- 📋 桩代码替换：2/2=100%（DomainEventBus已迁移，Workflow项目无需创建）
+- 🚀 生产就绪度：API版本控制✅ / 启动守卫✅ / 优雅降级✅ / 秘密管理✅ / 健康检查✅ / 弹性模式✅
+
+**构建与测试：0错误 0警告，143/143测试通过。**
+
+### 踩坑记录
+
+| # | 问题 | 原因 | 解决方案 |
+|---|------|------|----------|
+| 1 | `Asp.Versioning.Mvc 10.0.0` 安装失败 | 该版本仅支持 .NET 10，项目是 .NET 9 | 回退到 `Asp.Versioning.Mvc 8.1.0` + `Asp.Versioning.Mvc.ApiExplorer 8.1.0` |
+| 2 | `SequentialOrchestrator.cs` 编译报错 CS1513 | 后台任务超时前创建了文件但未闭合 namespace 块 | 手动补上 namespace 的 `}` 闭合 |
+| 3 | `SequentialOrchestrator.cs` 编译报错 CS1061 | 方法内 `using Microsoft.Extensions.DependencyInjection;` 重复声明导致 CS0105（TreatWarningsAsErrors） | 移除重复 using，保留文件顶部声明 |
+| 4 | `RunSequentialAsync` 编译报错 CS1513 | 方法体缺少闭合 `}` | 在 foreach 循环后补上方法闭合 `}` |
+| 5 | API 契约测试 8/9 失败 | 路由从 `/api/[controller]` 改为 `/api/v1/[controller]` 后，测试仍用旧路径 | 更新测试工厂为 `CreateAuthenticatedClient()`，修正 Health/Metrics 端点路径为 `/health` / `/metrics` |
+| 6 | `dotnet test` 中文输出过滤失败 | PowerShell 对中文管道符处理不稳定 | 改用英文关键词 `Passed|Failed|Error|total` 或直接用 `Select-String -Pattern "!"` |
+| 7 | `git push` 首次失败 | RPC curl 55 Recv failure（网络波动） | 重试 `git push origin codebase-optimizer/2026-07-22` 成功 |
+| 8 | SQLite DB 临时文件被误加入暂存区 | `agent_platform.db-shm/.wal/.bak` 是运行时产物 | `git reset HEAD` 移除，不提交 |
+
+### 后续影响
+
+- `.quality-gate.json` 中 `codebaseOptimizer` 从 `not_run` 升级为 `PASSED`
+- 分支 `codebase-optimizer/2026-07-22` 已推送 GitHub，可创建 PR
+- Phase 6+ 的提交门禁会强制要求 `codebaseOptimizer` 包含 `PASSED`
+- `codebase-optimizer/` 目录已纳入 git 跟踪，方便 reviewer 查看上下文
+
+---
+
 ## 8.10 决策演化时间线
 
 ```
@@ -316,6 +393,14 @@ public class UnitOfWorkBehavior<TRequest, TResponse>
 ├── API Key：明文 → AES-256-GCM 加密 + DB 聚合 + 轮换/吊销/过期扫描
 ├── 多租户：TenantProvider 硬编码默认 → per-request 从 claim 解析
 └── 加学习文档（第 10 篇 Phase 5 安全）
+
+2026-07-22 (codebase-optimizer 三维度质量门禁落地)
+├── 阶段1 Round 1：11 个问题全部修复（OrchestrationPrimitive 拆分、Program.cs 拆分、Infrastructure.Tests、API版本控制等）
+├── 阶段2 Round 1：全维度扫描完成（性能/安全/工程化/桩代码替换进度/生产就绪度），0问题
+├── 踩坑：Asp.Versioning.Mvc 10.0→8.1.0（.NET 9兼容）、SequentialOrchestrator 闭合括号、SQLite临时文件误暂存
+├── .quality-gate.json codebaseOptimizer: not_run → PASSED
+├── 分支 codebase-optimizer/2026-07-22 已推送 GitHub
+└── 143/143 测试通过，0错误 0警告
 ```
 
 ---
