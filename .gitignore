@@ -121,6 +121,7 @@ appsettings.*.Development.json
 .omo/run-continuation/
 .workbuddy/
 .opencode/
+.codebase-optimizer/
 
 # ──────────────────────────────────────────────
 # Misc
@@ -132,3 +133,8 @@ dist/
 build/
 *.tar.gz
 *.zip
+
+# Test artifacts / DB backups
+test-results/
+playwright-report/
+*.db.bak
