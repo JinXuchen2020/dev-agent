@@ -48,6 +48,30 @@
   - 症状：`password` 仅受控展示，从不校验也不随请求发送；任意密码（含空）都能登录。
   - 修复：真实凭证登录须校验密码；dev-login 演示模式下应禁用密码框或明确标注「演示，密码不参与校验」。
 
+### RAG / 后端缺陷（R1–R4，来自 `./rag-design.md`）
+
+> 后端 RAG 骨架真实可跑（`IVectorStore` / `PgVectorStore` / 三接线点），但作为功能不成立。以下为阻断点，整改设计见 `./rag-design.md`。
+
+- **[P1] R1 · 知识库无入库通道（RAG 静默 no-op）**
+  - 位置：`src/AgentPlatform.Application/Abstractions/IVectorStore.cs`（`IngestDocumentAsync` 仅定义）、`src/AgentPlatform.Infrastructure/VectorStore/PgVectorStore.cs`（仅实现）、无任何 controller/handler/job 调用
+  - 症状：全仓无 `IngestDocumentAsync` 的运行时调用方；`default` 与 `workflow-context` 两集合**永远为空** → 三处 `SearchAsync` 全返回 0 → 生产环境 RAG 是静默 no-op（会话侧 `if (docs.Count > 0)` 直接跳过，连报错都没有）。Phase 4 验收只验了 store 自身，漏验「有路径入库」。
+  - 修复：新增 `KnowledgeBase` 聚合 + 上传/切分端点（见 rag-design §2.1）；质量门验收须含「入库端点存在且被调用、入库后 Search 返回 >0」。状态：open（blocked：需后端模型）
+
+- **[P1] R2 · 向量检索无租户隔离（多租户互查知识）**
+  - 位置：`src/AgentPlatform.Infrastructure/VectorStore/PgVectorStore.cs`（`document_embeddings` 表无 `tenant_id` 列，`SearchAsync` WHERE 仅按 `collection_name` 过滤）、`IVectorStore` 接口无 `tenantId` 参数
+  - 症状：Phase 5 已落地真实多租户（`AppDbContext.HasQueryFilter`），但向量层无隔离 → 租户 A 能检索到租户 B 的知识，属数据泄漏。
+  - 修复：`document_embeddings` 加 `tenant_id` 列；`IVectorStore.SearchAsync` 增 `tenantId` 参数；WHERE 加 `AND tenant_id = @tenantId`；三调用方传 `TenantProvider.GetTenantId()`；加跨租户回归测试。状态：open（high-risk：多租户安全）
+
+- **[P1] R3 · RAG 部署强耦合，SQLite 默认部署触发 500**
+  - 位置：`src/AgentPlatform.Infrastructure/DependencyInjection.cs`（`PgVectorStore` 无条件注册）、`SendMessageCommandHandler.cs`（检索路径未 try/catch）
+  - 症状：`PgVectorStore` 要求 `ConnectionStrings:PostgreSQL` + pgvector + `OpenAI:Key`，但默认 `Database:Type = sqlite`；SQLite 部署下 RAG 首次触发即抛 `InvalidOperationException`，会话路径不捕获 → 直接 500；工作流路径虽 try/catch 静默降级，但「看起来没接地」。
+  - 修复：条件注册 + `InMemoryVectorStore` 回退（rag-design §2.3 选 ①）；会话 `SearchAsync` 包 try/catch 降级。状态：open
+
+- **[P2] R4 · 检索无相关性阈值 + 工作流 RAG 语义错位**
+  - 位置：`IVectorStore.SearchAsync`（无 `minScore`）、`SequentialOrchestrator` / `NegotiationOrchestrator`（用 `currentStep.StepName` 搜 `workflow-context`）
+  - 症状：对话/工作流把**全部召回**（不看 `Score`）灌入 prompt，低分噪声被一并注入；工作流侧 `workflow-context` 实为「步骤间上下文复用」而非用户理解的「外部知识检索」，语义需先定清。
+  - 修复：`SearchAsync` 加 `double? minScore`，`PgVectorStore` WHERE 加相似度下限；外部知识检索走独立节点（见五节「节点全家桶·Knowledge Retrieval」）。状态：open
+
 ---
 
 ## 二、功能缺口 / 数据正确性
@@ -178,7 +202,7 @@
 ### 待办（open）
 - **P0 · 后端工作流更新端点 + 前端编辑链路修通**
   - 目标：后端加 `PUT /api/v1/workflows/{id}`（草稿更新/元数据改）；前端 `/edit` 改调 PUT 带 id、拆分「保存草稿 / 运行」；SSE 改 `fetch`+`ReadableStream` 带 JWT；`JSON.parse(context)` 加 try/catch。
-  - 关联：backlog B1/B2/B3/B4。状态：open（阻塞：后端端点）
+  - 关联：backlog B1/B2/B3/B4；**设计文档 `./put-workflow-design.md`（端点契约 / 聚合变更 / 命令处理器 / 前端配套 / 验收清单 / 待拍板决策 §7）**。状态：open（阻塞：后端端点，接口契约 high-risk）
 - **P1 · 可视化 DAG 画布 MVP**
   - 目标：后端引入 `WorkflowNode`/`WorkflowEdge` + `StepType` 枚举 + 拓扑序执行；前端画布（拖拽/连线/缩放/小地图/撤销重做）+ 配置侧栏 + 基础节点 Start/End/LLM/Agent/Critic + 单步试运行 + 变量监视。
   - 风险：需后端 DAG 模型，前端从表单式升级为画布。状态：open（high-risk）
@@ -194,6 +218,10 @@
   - 目标：内置 5–10 个行业模板一键克隆。状态：open
 - **P3 · 执行 Trace / 评估视图**
   - 目标：节点级耗时/token/IO 的 trace 视图 + 数据集回归评估（对标 LangSmith/Langfuse）。状态：open
+- **P2 · 工作流调试器（变量监视 + 单步重跑 + 错误分支）**
+  - 目标：Dify 式变量监视面板（实时查看节点输入/输出/中间变量）+ 节点级重跑（不重跑上游）+ 错误分支 / 「忽略异常」默认输出。状态：open（关联 competitive-roadmap §3 C / §4 P2）
+- **P3 · 企业增强（多工作空间 / 用量仪表盘 / 工作流 diff）**
+  - 目标：多工作空间隔离与切换、平台用量统计仪表盘（调用量/token/成本）、Git 式工作流 diff 视图。状态：open（关联 competitive-roadmap §4 P3）
 
 ### 差异化优势（保留，勿稀释）
 - **Negotiation 协商式多智能体 + Critic 收敛**：Dify/n8n 无此原生原语。画布应提供「Agent-Team / Negotiation」专属模式（多 Agent 节点 + Critic + 收敛终止条件）。状态：native（后端已具备，待产品化）
