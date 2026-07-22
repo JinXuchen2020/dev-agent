@@ -2,6 +2,7 @@
   "phase": "phase-5",
   "reviewer": "ddd-code-reviewer PASSED (2026-07-21 Phase 5 Security Hardening)",
   "structureGate": "ddd-phase-quality-gate PASS (P0=0 P1=0 P2=0 P3=0)",
+  "codebaseOptimizer": "not_run (Phase 5 grandfathered — Phase 6+ requires PASSED)",
   "cleared": true,
   "notes": "Round 4 code-reviewer findings auto-fixed: KeyPrefix rotation fix, DecryptKey empty guard, null-prefix test. Round 5 re-reviews pending cancellation."
 }

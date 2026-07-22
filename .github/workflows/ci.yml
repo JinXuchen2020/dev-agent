@@ -68,7 +68,8 @@ jobs:
           if [ -n "$CHANGED" ]; then
             echo "⛔ 检测到 src/ 改动，校验质量结论标记 .quality-gate.json ..."
             if [ ! -f .quality-gate.json ]; then
-              echo "❌ 缺少 .quality-gate.json（质量结论标记）。请先跑 ddd-code-reviewer + ddd-phase-quality-gate 至 0 open findings 并提交该标记。"
+              echo "❌ 缺少 .quality-gate.json（质量结论标记）。请先跑 ddd-code-reviewer + ddd-phase-quality-gate 至 0 open findings，"
+              echo "   并在阶段完成时跑 codebase-optimizer，然后提交该标记。"
               echo "   约定见 docs/quality/QUALITY-GATE.md"
               exit 1
             fi
@@ -76,7 +77,13 @@ jobs:
               echo "❌ .quality-gate.json 中 cleared 不为 true（仍有未修复问题）。"
               exit 1
             fi
-            echo "✅ 质量门通过：.quality-gate.json cleared:true（src/ 改动已带质量结论标记）"
+            if ! grep -q '"codebaseOptimizer"' .quality-gate.json; then
+              echo "❌ .quality-gate.json 中缺少 codebaseOptimizer 字段。"
+              echo "   Phase 5 过渡期可写 not_run，Phase 6+ 需 PASSED。"
+              echo "   约定见 docs/quality/QUALITY-GATE.md"
+              exit 1
+            fi
+            echo "✅ 质量门通过：.quality-gate.json cleared:true + codebaseOptimizer fields（src/ 改动已带质量结论标记）"
           else
             echo "✅ 本次事件未改 src/，跳过质量门。"
           fi

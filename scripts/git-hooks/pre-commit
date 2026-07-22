@@ -3,6 +3,7 @@
 #
 # 规则：凡是改动 src/ 的提交，必须连同「质量结论标记」.quality-gate.json 一起暂存，
 # 且该标记中 cleared 必须为 true（即 ddd-code-reviewer 通过 + ddd-phase-quality-gate 0 open findings）。
+# Phase 6+ 还需 codebaseOptimizer 字段为 PASSED；Phase 5 过渡期仅校验字段存在。
 # 仅改 docs/ 等文档、不动 src/ 的提交不受此门限制（文档提交本身不需质量门）。
 #
 # 启用方式（仓库级，已 commit 进 scripts/git-hooks/）：
@@ -13,6 +14,7 @@ if git diff --cached --name-only | grep -q '^src/'; then
   if ! git diff --cached --name-only | grep -qx '.quality-gate.json'; then
     echo "⛔ 质量门未通过：本次提交改动了 src/，但 .quality-gate.json（质量结论标记）未一同暂存。"
     echo "   请先跑 ddd-code-reviewer + ddd-phase-quality-gate 至 0 open findings，"
+    echo "   再跑 codebase-optimizer（阶段完成时），"
     echo "   生成 .quality-gate.json（cleared: true），并与 src/ 改动一起 git add 后提交。"
     echo "   标记约定见 docs/quality/QUALITY-GATE.md"
     exit 1
@@ -20,6 +22,13 @@ if git diff --cached --name-only | grep -q '^src/'; then
   if ! grep -q '"cleared": *true' .quality-gate.json; then
     echo "⛔ 质量门未通过：.quality-gate.json 中 cleared 不为 true（仍有未修复问题）。"
     echo "   请把质量 skill 跑至 0 open findings 后，将 cleared 改为 true 再提交。"
+    exit 1
+  fi
+  if ! grep -q '"codebaseOptimizer"' .quality-gate.json; then
+    echo "⛔ 质量门未通过：.quality-gate.json 中缺少 codebaseOptimizer 字段。"
+    echo "   请跑 codebase-optimizer 后将结果写入该字段。"
+    echo "   Phase 5 过渡期可写 not_run，Phase 6+ 需 PASSED。"
+    echo "   标记约定见 docs/quality/QUALITY-GATE.md"
     exit 1
   fi
 fi
