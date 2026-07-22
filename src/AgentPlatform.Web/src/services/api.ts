@@ -45,6 +45,10 @@ export const getWorkflow = (id: string) =>
   api.get<WorkflowDetail>(`/workflows/${id}`).then((r) => r.data);
 export const runWorkflow = (data: { name: string; initialContext: string; steps?: string[] }) =>
   api.post<Workflow>('/workflows', data).then((r) => r.data);
+export const updateWorkflow = (id: string, data: { name?: string; initialContext?: string; steps?: string[] }) =>
+  api.put<WorkflowDetail>(`/workflows/${id}`, data).then((r) => r.data);
+export const runExistingWorkflow = (id: string, preset?: string) =>
+  api.post<WorkflowDetail>(`/workflows/${id}/run`, preset ? { preset } : {}).then((r) => r.data);
 
 // Execution Logs
 export const getExecutionLogs = (params?: {

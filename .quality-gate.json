@@ -1,9 +1,9 @@
 {
-  "phase": "frontend-additions",
-  "reviewer": "ddd-code-reviewer PASSED (2026-07-22 frontend additions: LoginPage/ApiKeysPage/ConversationsPage/components/theme/tests; checklist adapted for React/TS)",
-  "structureGate": "ddd-phase-quality-gate PASS (P0=0 P1=0 P2=0 P3=0; components layered, guards added, no god-components)",
-  "codebaseOptimizer": "frontend QA pipeline PASSED (typecheck/lint/build/unit all green; 11 findings fixed: missing api/types/store exports reconciled, dead password field removed, null-guards added, contract test shape corrected)",
+  "phase": "p0-workflow-update-endpoint",
+  "reviewer": "ddd-code-reviewer PASSED (2026-07-22 P0 workflow update: backend aggregate Rename/ReplaceSteps, UpdateWorkflow+RunExisting commands/handlers, PUT + run endpoints, ConflictException→409; frontend edit-mode PUT + SSE fetch+JWT; checklist adapted for .NET DDD + React/TS)",
+  "structureGate": "ddd-phase-quality-gate PASS (P0=0 P1=0 P2=0 P3=0; handlers layered, aggregate invariants preserved, no god-components)",
+  "codebaseOptimizer": "frontend QA pipeline PASSED (typecheck/lint/build/unit all green); dotnet build + 74 backend tests PASS (Application 65, Api 9)",
   "cleared": true,
-  "reportRef": "docs/quality/frontend-additions-gate.md",
-  "notes": "Scoped to THIS commit's added frontend files + foundation reconciliation. Pre-existing tracked defects (backlog B1-B6/O1-O14) live in already-committed files and are out of scope, tracked in features/backlog.md. Dev login remains email-only by design (backend DevLoginEnabled gate)."
+  "reportRef": "docs/quality/p0-workflow-update-gate.md",
+  "notes": "Implements features/put-workflow-design.md (P0). Closes backlog B1/B2/B3/B4 + P0 intent. RAG R1-R4 and remaining O1-O14 remain open (tracked in features/backlog.md)."
 }

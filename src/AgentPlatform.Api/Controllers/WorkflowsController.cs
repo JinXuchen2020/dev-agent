@@ -1,5 +1,7 @@
 using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Application.Workflows.Commands.RunExistingWorkflow;
 using AgentPlatform.Application.Workflows.Commands.RunWorkflow;
+using AgentPlatform.Application.Workflows.Commands.UpdateWorkflow;
 using AgentPlatform.Application.Workflows.Queries.GetWorkflow;
 using AgentPlatform.Application.Workflows.Queries.ListWorkflows;
 using AgentPlatform.Domain.Enums;
@@ -84,6 +86,52 @@ public sealed class WorkflowsController : ControllerBase
         var result = await _mediator.Send(command, ct);
         return Ok(result);
     }
+
+    /// <summary>
+    /// Updates a workflow draft without executing it (partial update). At least one of
+    /// name / initialContext / steps must be supplied.
+    /// </summary>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> UpdateWorkflow(
+        Guid id,
+        [FromBody] UpdateWorkflowRequest request,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name)
+            && string.IsNullOrWhiteSpace(request.InitialContext)
+            && (request.Steps is null || request.Steps.Count == 0))
+        {
+            return BadRequest("nothing to update");
+        }
+
+        var command = new UpdateWorkflowCommand(
+            id,
+            request.Name,
+            request.InitialContext,
+            request.Steps,
+            _tenant.GetTenantId());
+        var result = await _mediator.Send(command, ct);
+        return result == null ? NotFound() : Ok(result);
+    }
+
+    /// <summary>
+    /// Re-runs an existing workflow by id, reusing the same aggregate (no duplicate created).
+    /// </summary>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpPost("{id:guid}/run")]
+    public async Task<IActionResult> RunExistingWorkflow(
+        Guid id,
+        [FromBody] RunExistingWorkflowRequest? request,
+        CancellationToken ct = default)
+    {
+        var command = new RunExistingWorkflowCommand(
+            id,
+            request?.Preset ?? OrchestrationPreset.Sequential,
+            _tenant.GetTenantId());
+        var result = await _mediator.Send(command, ct);
+        return result == null ? NotFound() : Ok(result);
+    }
 }
 
 /// <summary>
@@ -93,4 +141,18 @@ public sealed record RunWorkflowRequest(
     string Name,
     string InitialContext,
     IReadOnlyList<string>? Steps = null);
+
+/// <summary>
+/// Request model for updating a workflow draft. All fields optional (partial update).
+/// </summary>
+public sealed record UpdateWorkflowRequest(
+    string? Name = null,
+    string? InitialContext = null,
+    IReadOnlyList<string>? Steps = null);
+
+/// <summary>
+/// Request model for re-running an existing workflow.
+/// </summary>
+public sealed record RunExistingWorkflowRequest(
+    OrchestrationPreset? Preset = null);
 

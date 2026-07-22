@@ -33,6 +33,7 @@ builder.Services.AddApiVersioning(options =>
 });
 
 builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<AgentPlatform.Api.Exceptions.WorkflowConflictExceptionHandler>();
 builder.Services.AddHealthChecks();
 
 builder.Services.AddOpenApiConfiguration();

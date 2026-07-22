@@ -17,7 +17,7 @@ import '@xyflow/react/dist/style.css';
 import { Button, Typography, Card, Space, Modal, Input, message, Spin } from 'antd';
 import { PlusOutlined, SaveOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
-import { runWorkflow, getWorkflow } from '../services/api';
+import { runWorkflow, getWorkflow, updateWorkflow, runExistingWorkflow } from '../services/api';
 
 const { Title } = Typography;
 
@@ -87,23 +87,59 @@ const WorkflowEditorPage: React.FC = () => {
     setNodes((nds) => [...nds, newNode]);
   }, [nodes.length]);
 
-  const handleSave = async () => {
+  const buildPayload = () => {
+    const stepNames = nodes
+      .filter((n) => n.id.startsWith('step-'))
+      .map((n) => n.data.label as string);
+    const initialContext = JSON.stringify({
+      steps: stepNames,
+      edges: edges.map((e) => ({ from: e.source, to: e.target })),
+    });
+    return { name: name.trim(), initialContext, steps: stepNames };
+  };
+
+  // Edit mode: persist changes via PUT (no execution).
+  const handleSaveDraft = async () => {
+    if (!name.trim()) {
+      message.error('Please enter a workflow name');
+      return;
+    }
+    if (!id) {
+      message.error('Draft save is only available when editing an existing workflow');
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateWorkflow(id, buildPayload());
+      message.success('Workflow saved');
+      setSaveModalOpen(false);
+      navigate('/workflows');
+    } catch {
+      message.error('Failed to save workflow');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Edit mode: PUT then re-run the same workflow (no duplicate). Create mode: POST (create & run).
+  const handleSaveAndRun = async () => {
     if (!name.trim()) {
       message.error('Please enter a workflow name');
       return;
     }
     setSaving(true);
     try {
-      const stepNames = nodes
-        .filter((n) => n.id.startsWith('step-'))
-        .map((n) => n.data.label as string);
-      const initialContext = JSON.stringify({ steps: stepNames, edges: edges.map((e) => ({ from: e.source, to: e.target })) });
-      await runWorkflow({ name, initialContext, steps: stepNames });
-      message.success('Workflow created successfully');
+      if (id) {
+        await updateWorkflow(id, buildPayload());
+        await runExistingWorkflow(id);
+      } else {
+        await runWorkflow(buildPayload());
+      }
+      message.success(id ? 'Workflow updated and run' : 'Workflow created successfully');
       setSaveModalOpen(false);
       navigate('/workflows');
     } catch {
-      message.error('Failed to create workflow');
+      message.error(id ? 'Failed to update or run workflow' : 'Failed to create workflow');
     } finally {
       setSaving(false);
     }
@@ -135,7 +171,31 @@ const WorkflowEditorPage: React.FC = () => {
         </ReactFlow>
       </Card>
 
-      <Modal title="Save Workflow" open={saveModalOpen} onOk={handleSave} onCancel={() => setSaveModalOpen(false)} confirmLoading={saving}>
+      <Modal
+        title="Save Workflow"
+        open={saveModalOpen}
+        onCancel={() => setSaveModalOpen(false)}
+        confirmLoading={saving}
+        footer={
+          id
+            ? [
+                <Button key="draft" onClick={handleSaveDraft} disabled={saving}>
+                  Save Draft
+                </Button>,
+                <Button key="run" type="primary" onClick={handleSaveAndRun} loading={saving}>
+                  Save &amp; Run
+                </Button>,
+              ]
+            : [
+                <Button key="cancel" onClick={() => setSaveModalOpen(false)}>
+                  Cancel
+                </Button>,
+                <Button key="run" type="primary" onClick={handleSaveAndRun} loading={saving}>
+                  Save &amp; Run
+                </Button>,
+              ]
+        }
+      >
         <Input placeholder="Workflow name" value={name} onChange={(e) => setName(e.target.value)} />
       </Modal>
     </div>

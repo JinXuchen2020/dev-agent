@@ -22,21 +22,25 @@
   - 位置：`src/pages/WorkflowEditorPage.tsx:28-29,90-110`
   - 症状：`/workflows/:id/edit` 进入后会从后端把工作流加载进画布，但 `handleSave` 始终调用 `runWorkflow`（POST `/workflows`）并**忽略 `id`** → 等于新建一条工作流而非更新原工作流；按钮叫「Save & Run」会**立即执行**而非仅存草稿。
   - 修复：编辑态应调 `PUT /workflows/{id}`（若后端支持）或在 UI 明确「另存为新工作流」；拆分「保存草稿」与「运行」两个动作；保存前校验至少 1 个 step。
+  - 状态：done（2026-07-22，后端加 `PUT /api/v1/workflows/{id}` + 编辑态拆分「保存草稿/运行」；见 `docs/quality/p0-workflow-update-gate.md`）
 
 - **[P1] B2 · 实时进度 SSE 无法携带 JWT，鉴权下完全失效**
   - 位置：`src/pages/WorkflowDetailPage.tsx:47`、`src/pages/ExecutionLogDetailPage.tsx:42`
   - 症状：原生 `new EventSource('/api/v1/workflows/{id}/progress')` 浏览器**不允许设置 Authorization 头**；Phase 5 开启 JWT 后 SSE 被 401 拒绝，运行中的工作流实时进度/日志更新全部收不到。
   - 修复：后端改走鉴权 Cookie，或前端用 `?token=` 查询参数（需后端支持），或改用带 `Authorization` 的 `fetch` + `ReadableStream` 轮询。（顺带可解 O8 的 XSS 问题）
+  - 状态：done（2026-07-22，前端改 `fetch`+`ReadableStream` 带 `Authorization: Bearer`，后端 `StreamProgress` 已 `[Authorize]`；见 `docs/quality/p0-workflow-update-gate.md`）
 
 - **[P1] B3 · WorkflowDetail SSE 出错时无限重连刷屏**
   - 位置：`src/pages/WorkflowDetailPage.tsx:79-82`
   - 症状：`es.onerror` 仅 `console.warn` 不 `close()`，而 EventSource 默认自动重连；鉴权失败等场景会无限重试、狂刷 console。对比 `ExecutionLogDetailPage:54` 的 `onerror` 已 `close()`，两处不一致。
   - 修复：统一在 `onerror` 中 `close()`，必要时 toast 提示连接失败。
+  - 状态：done（2026-07-22，fetch 流在 unmount 时 `AbortController.abort()` 且非 2xx 直接返回，不再无限重连；见 `docs/quality/p0-workflow-update-gate.md`）
 
 - **[P1] B4 · WorkflowDetail 解析 context 可能整页白屏**
   - 位置：`src/pages/WorkflowDetailPage.tsx:124`
   - 症状：`JSON.parse(wf.context)` 在后端返回空串 / 非 JSON 时抛异常，无 try/catch，整个详情页崩溃。（叠加 O1 无 ErrorBoundary 会白屏）
   - 修复：`try/catch` 包裹，非法/空时显示原始文本或占位，不阻断页面其余部分。
+  - 状态：done（2026-07-22，`JSON.parse(wf.context)` 已包 try/catch 回退原始文本；见 `docs/quality/p0-workflow-update-gate.md`）
 
 - **[P1] B5 · 会话（Conversations）功能不可用**
   - 位置：`src/pages/ConversationsPage.tsx`（列表）、`src/App.tsx:51`（无详情路由）、`src/services/api.ts:98`（`sendMessage` 已实现但无 UI 调用）
@@ -199,10 +203,12 @@
 
 > 以下为对比 Dify / n8n / LangGraph / Coze / Flowise 后识别的**平台级新增功能**。多数涉及后端新增模型/端点 + 前端画布重构，属高风险改动——feature-dev 实施到接口契约/鉴权/路由层级会**停下问人**，不自动改。优先级与路线图分期一致。
 
-### 待办（open）
+### 已完成（done）
 - **P0 · 后端工作流更新端点 + 前端编辑链路修通**
   - 目标：后端加 `PUT /api/v1/workflows/{id}`（草稿更新/元数据改）；前端 `/edit` 改调 PUT 带 id、拆分「保存草稿 / 运行」；SSE 改 `fetch`+`ReadableStream` 带 JWT；`JSON.parse(context)` 加 try/catch。
-  - 关联：backlog B1/B2/B3/B4；**设计文档 `./put-workflow-design.md`（端点契约 / 聚合变更 / 命令处理器 / 前端配套 / 验收清单 / 待拍板决策 §7）**。状态：open（阻塞：后端端点，接口契约 high-risk）
+  - 关联：backlog B1/B2/B3/B4；**设计文档 `./put-workflow-design.md`（端点契约 / 聚合变更 / 命令处理器 / 前端配套 / 验收清单 / 待拍板决策 §7）**。状态：done（2026-07-22 已实现并过质量门；见 `docs/quality/p0-workflow-update-gate.md`）
+
+### 待办（open）
 - **P1 · 可视化 DAG 画布 MVP**
   - 目标：后端引入 `WorkflowNode`/`WorkflowEdge` + `StepType` 枚举 + 拓扑序执行；前端画布（拖拽/连线/缩放/小地图/撤销重做）+ 配置侧栏 + 基础节点 Start/End/LLM/Agent/Critic + 单步试运行 + 变量监视。
   - 风险：需后端 DAG 模型，前端从表单式升级为画布。状态：open（high-risk）

@@ -153,4 +153,38 @@ public sealed class Workflow : ITenantScoped, IAggregateRoot
         _agentAssignments[stepName] = agentId;
         UpdatedAt = DateTime.UtcNow;
     }
+
+    /// <summary>
+    /// Renames the workflow. Intended for draft edits (not while Running/Paused — callers guard).
+    /// </summary>
+    /// <param name="name">The new display name.</param>
+    public void Rename(string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        Name = name;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Wholesale-replaces the ordered step list with the supplied step names.
+    /// Agent assignments whose step name survives in the new list are preserved; the rest are dropped.
+    /// Step order is re-indexed 0..n-1 and new step identities are generated.
+    /// </summary>
+    /// <param name="stepNames">The new, ordered list of step names.</param>
+    public void ReplaceSteps(IReadOnlyList<string> stepNames)
+    {
+        ArgumentNullException.ThrowIfNull(stepNames);
+
+        var kept = _agentAssignments
+            .Where(kv => stepNames.Contains(kv.Key))
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
+        _agentAssignments.Clear();
+        foreach (var kv in kept)
+            _agentAssignments[kv.Key] = kv.Value;
+
+        _steps.Clear();
+        for (var i = 0; i < stepNames.Count; i++)
+            _steps.Add(new WorkflowStep(Guid.NewGuid(), i, stepNames[i]));
+        UpdatedAt = DateTime.UtcNow;
+    }
 }
