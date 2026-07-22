@@ -64,11 +64,8 @@ internal sealed class GetExecutionLogsQueryHandler(
     public async Task<ExecutionLogListResponse> Handle(
         GetExecutionLogsQuery request, CancellationToken ct)
     {
-        if (request.Take < 1 || request.Take > 100)
-            throw new ArgumentOutOfRangeException(nameof(request.Take), "Take must be between 1 and 100.");
-
         var tenantId = tenantProvider.GetTenantId();
-        var take = Math.Min(request.Take, 100);
+        var take = Math.Clamp(request.Take, 1, 100);
 
         var (items, totalCount) = await repository.QueryAsync(
             tenantId,

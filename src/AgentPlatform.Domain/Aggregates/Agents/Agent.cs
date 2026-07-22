@@ -24,22 +24,25 @@ public sealed class Agent : ITenantScoped, IAggregateRoot
     /// <summary>
     /// Gets or sets the display name of the agent.
     /// </summary>
-    public string Name { get; private set; } = null!; // EF Core proxy
+    /// <summary>
+    /// Gets or sets the display name of the agent.
+    /// </summary>
+    public string Name { get; private set; } = null!;
 
     /// <summary>
     /// Gets the functional role assigned to the agent.
     /// </summary>
-    public AgentType Role { get; private init; } = null!; // EF Core proxy
+    public AgentType Role { get; private init; } = null!;
 
     /// <summary>
     /// Gets or sets the model endpoint configuration used by the agent for LLM invocations.
     /// </summary>
-    public ModelEndpoint ModelEndpoint { get; private set; } = null!; // EF Core proxy
+    public ModelEndpoint ModelEndpoint { get; private set; } = null!;
 
     /// <summary>
     /// Gets or sets the system prompt that defines the agent's behavior and instructions.
     /// </summary>
-    public string SystemPrompt { get; private set; } = null!; // EF Core proxy
+    public string SystemPrompt { get; private set; } = null!;
 
     /// <summary>
     /// Gets a read-only list of tool definitions available to the agent.

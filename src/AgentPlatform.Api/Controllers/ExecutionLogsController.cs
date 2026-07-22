@@ -14,6 +14,7 @@ namespace AgentPlatform.Api.Controllers;
 /// </summary>
 [Authorize]
 [ApiController]
+[ApiVersion("1.0")]
 [Route("api/v1/[controller]")]
 public sealed class ExecutionLogsController : ControllerBase
 {
@@ -113,3 +114,4 @@ public sealed class ExecutionLogsController : ControllerBase
         return Ok(result);
     }
 }
+

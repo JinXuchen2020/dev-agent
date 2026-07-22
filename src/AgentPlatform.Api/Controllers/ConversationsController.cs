@@ -16,6 +16,7 @@ namespace AgentPlatform.Api.Controllers;
 /// </summary>
 [Authorize]
 [ApiController]
+[ApiVersion("1.0")]
 [Route("api/v1/[controller]")]
 public sealed class ConversationsController : ControllerBase
 {
@@ -92,3 +93,4 @@ public sealed class ConversationsController : ControllerBase
         return Ok(result);
     }
 }
+

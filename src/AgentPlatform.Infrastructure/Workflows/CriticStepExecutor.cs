@@ -2,6 +2,7 @@ using System.Text.Json;
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Domain.Aggregates.Workflows;
 using AgentPlatform.Domain.Enums;
+using AgentPlatform.Infrastructure.Shared;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -178,7 +179,7 @@ internal sealed class CriticStepExecutor : IStepExecutor
     }
 
     private static string Truncate(string value, int maxLength) =>
-        value.Length <= maxLength ? value : value[..maxLength];
+        StringHelpers.Truncate(value, maxLength);
 }
 
 /// <summary>

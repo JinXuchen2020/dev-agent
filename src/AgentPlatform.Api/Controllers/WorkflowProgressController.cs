@@ -11,6 +11,7 @@ namespace AgentPlatform.Api.Controllers;
 /// </summary>
 [Authorize]
 [ApiController]
+[ApiVersion("1.0")]
 [Route("api/v1/workflows")]
 public sealed class WorkflowProgressController : ControllerBase
 {
@@ -72,7 +73,7 @@ public sealed class WorkflowProgressController : ControllerBase
         }
         catch (OperationCanceledException)
         {
-            // Client disconnected — graceful cleanup
+            // Client disconnected �?graceful cleanup
         }
         finally
         {
@@ -81,3 +82,4 @@ public sealed class WorkflowProgressController : ControllerBase
         }
     }
 }
+

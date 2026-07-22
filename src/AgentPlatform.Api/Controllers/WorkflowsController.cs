@@ -15,6 +15,7 @@ namespace AgentPlatform.Api.Controllers;
 /// </summary>
 [Authorize]
 [ApiController]
+[ApiVersion("1.0")]
 [Route("api/v1/workflows")]
 public sealed class WorkflowsController : ControllerBase
 {
@@ -42,6 +43,9 @@ public sealed class WorkflowsController : ControllerBase
         [FromQuery] int take = 20,
         CancellationToken ct = default)
     {
+        if (take < 1 || take > 100)
+            return BadRequest("take must be between 1 and 100.");
+
         var query = new ListWorkflowsQuery(status, skip, take);
         var result = await _mediator.Send(query, ct);
         return Ok(result);
@@ -89,3 +93,4 @@ public sealed record RunWorkflowRequest(
     string Name,
     string InitialContext,
     IReadOnlyList<string>? Steps = null);
+

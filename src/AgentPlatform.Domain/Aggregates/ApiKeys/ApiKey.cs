@@ -75,6 +75,9 @@ public sealed class ApiKey : ITenantScoped, IAggregateRoot
         ArgumentException.ThrowIfNullOrWhiteSpace(keyPrefix);
         ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
 
+        if (expiresAt.HasValue && expiresAt.Value <= DateTime.UtcNow)
+            throw new ArgumentException("Expiration date must be in the future.", nameof(expiresAt));
+
         Id = id;
         TenantId = tenantId;
         EncryptedKeyHash = encryptedKey;

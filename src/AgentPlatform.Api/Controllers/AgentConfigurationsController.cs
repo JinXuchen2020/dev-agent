@@ -19,6 +19,7 @@ namespace AgentPlatform.Api.Controllers;
 /// </summary>
 [Authorize]
 [ApiController]
+[ApiVersion("1.0")]
 [Route("api/v1/[controller]")]
 public sealed class AgentConfigurationsController : ControllerBase
 {
@@ -99,6 +100,9 @@ public sealed class AgentConfigurationsController : ControllerBase
         [FromQuery] int take = 20,
         CancellationToken ct = default)
     {
+        if (take < 1 || take > 100)
+            return BadRequest("take must be between 1 and 100.");
+
         var query = new ListAgentConfigurationsQuery(status, skip, take);
         var result = await _mediator.Send(query, ct);
         return Ok(result);
@@ -162,3 +166,4 @@ public sealed record UpdateAgentConfigurationRequest(
     string? Name,
     [property: System.ComponentModel.DataAnnotations.StringLength(1000)]
     string? Description);
+

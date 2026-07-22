@@ -21,7 +21,7 @@ public sealed class WorkflowStep
     /// <summary>
     /// Gets the human-readable name of the step.
     /// </summary>
-    public string StepName { get; private init; } = null!; // EF Core proxy
+    public string StepName { get; private init; } = null!;
 
     /// <summary>
     /// Gets or sets the unique identifier of the agent assigned to this step, if any.

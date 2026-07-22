@@ -14,6 +14,7 @@ namespace AgentPlatform.Api.Controllers;
 /// </summary>
 [Authorize]
 [ApiController]
+[ApiVersion("1.0")]
 [Route("api/v1/[controller]")]
 public sealed class AgentRolesController : ControllerBase
 {
@@ -102,3 +103,4 @@ public sealed record CreateAgentRoleRequest(
     [property: System.ComponentModel.DataAnnotations.Required]
     [property: System.ComponentModel.DataAnnotations.StringLength(8000)]
     string SystemPrompt);
+
