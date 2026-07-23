@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Typography, Spin, Descriptions, Tag, Steps, Button, Card, Space } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
-import { getWorkflow } from '../services/api';
+import { getWorkflow, getAuthToken } from '../services/api';
 import type { WorkflowDetail } from '../types';
 
 const { Title } = Typography;
@@ -43,7 +43,7 @@ const WorkflowDetailPage: React.FC = () => {
   // Subscribe to SSE progress events via fetch (carries JWT; native EventSource cannot).
   useEffect(() => {
     if (!id) return;
-    const token = localStorage.getItem('auth_token');
+    const token = getAuthToken();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
 

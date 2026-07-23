@@ -16,6 +16,7 @@ import KnowledgeBasesPage from './pages/KnowledgeBasesPage';
 import KnowledgeBaseDetailPage from './pages/KnowledgeBaseDetailPage';
 import ConversationsPage from './pages/ConversationsPage';
 import ConversationDetailPage from './pages/ConversationDetailPage';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const App: React.FC = () => {
   return (
@@ -28,24 +29,26 @@ const App: React.FC = () => {
       }}
     >
       <AntApp>
-        <Routes>
-          <Route element={<AppLayout />}>
-            <Route path="/" element={<DashboardPage />} />
-            <Route path="/agents" element={<AgentsPage />} />
-            <Route path="/workflows" element={<WorkflowsPage />} />
-          <Route path="/workflows/new" element={<WorkflowCanvasPage />} />
-          <Route path="/workflows/:id" element={<WorkflowDetailPage />} />
-          <Route path="/workflows/:id/edit" element={<WorkflowCanvasPage />} />
-            <Route path="/agent-roles" element={<AgentRolesPage />} />
-            <Route path="/agent-configurations" element={<AgentConfigurationsPage />} />
-            <Route path="/execution-logs" element={<ExecutionLogsPage />} />
-            <Route path="/execution-logs/:id" element={<ExecutionLogDetailPage />} />
-          <Route path="/knowledge-bases" element={<KnowledgeBasesPage />} />
-          <Route path="/knowledge-bases/:id" element={<KnowledgeBaseDetailPage />} />
-          <Route path="/conversations" element={<ConversationsPage />} />
-          <Route path="/conversations/:id" element={<ConversationDetailPage />} />
-          </Route>
-        </Routes>
+        <ErrorBoundary>
+          <Routes>
+            <Route element={<AppLayout />}>
+              <Route path="/" element={<DashboardPage />} />
+              <Route path="/agents" element={<AgentsPage />} />
+              <Route path="/workflows" element={<WorkflowsPage />} />
+            <Route path="/workflows/new" element={<WorkflowCanvasPage />} />
+            <Route path="/workflows/:id" element={<WorkflowDetailPage />} />
+            <Route path="/workflows/:id/edit" element={<WorkflowCanvasPage />} />
+              <Route path="/agent-roles" element={<AgentRolesPage />} />
+              <Route path="/agent-configurations" element={<AgentConfigurationsPage />} />
+              <Route path="/execution-logs" element={<ExecutionLogsPage />} />
+              <Route path="/execution-logs/:id" element={<ExecutionLogDetailPage />} />
+            <Route path="/knowledge-bases" element={<KnowledgeBasesPage />} />
+            <Route path="/knowledge-bases/:id" element={<KnowledgeBaseDetailPage />} />
+            <Route path="/conversations" element={<ConversationsPage />} />
+            <Route path="/conversations/:id" element={<ConversationDetailPage />} />
+            </Route>
+          </Routes>
+        </ErrorBoundary>
       </AntApp>
     </ConfigProvider>
   );

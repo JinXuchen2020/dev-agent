@@ -23,8 +23,7 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const token =
-    typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+  const token = getAuthToken();
   if (token) {
     if (config.headers && typeof (config.headers as { set?: unknown }).set === 'function') {
       (config.headers as { set: (k: string, v: string) => void }).set(
@@ -157,3 +156,22 @@ export const uploadDocument = (id: string, file: File) => {
     })
     .then((r) => r.data);
 };
+
+// Centralized auth token accessor (avoids duplicating the storage key literal).
+export function getAuthToken(): string | null {
+  return typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+}
+
+// Normalize an unknown thrown value into a human-readable message.
+// Preserves axios-style `response.data.title` / `response.data.message` when present.
+export function getErrorMessage(e: unknown): string {
+  if (e && typeof e === 'object') {
+    const err = e as {
+      response?: { data?: { title?: string; message?: string } };
+      message?: string;
+    };
+    return err.response?.data?.title ?? err.response?.data?.message ?? err.message ?? '未知错误';
+  }
+  return String(e);
+}
+

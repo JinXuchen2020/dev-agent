@@ -19,6 +19,7 @@ import {
   setConversationKnowledgeBase,
   removeConversationKnowledgeBase,
   sendMessage,
+  getErrorMessage,
 } from '../services/api';
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
@@ -93,8 +94,8 @@ const ConversationDetailPage: React.FC = () => {
         ...prev,
         { id: `a-${Date.now()}`, role: 'agent', content: res.reply },
       ]);
-    } catch (e: any) {
-      message.error('发送失败：' + (e?.response?.data?.title ?? e.message));
+    } catch (e: unknown) {
+      message.error('发送失败：' + getErrorMessage(e));
       setMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
     } finally {
       setSending(false);
@@ -113,8 +114,8 @@ const ConversationDetailPage: React.FC = () => {
       }
       const updated = await getConversation(id);
       setConversation(updated);
-    } catch (e: any) {
-      message.error('知识库更新失败：' + (e?.response?.data?.title ?? e.message));
+    } catch (e: unknown) {
+      message.error('知识库更新失败：' + getErrorMessage(e));
     } finally {
       setSavingKb(false);
     }
