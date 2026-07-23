@@ -118,7 +118,22 @@ public static class DependencyInjection
         });
 #pragma warning restore SKEXP0001
 
-        services.AddScoped<IVectorStore, PgVectorStore>();
+        // 向量存储：按部署配置由 VectorStoreFactory 选择实现。
+        // postgresql + OpenAI Key 时使用 PgVectorStore；否则回退 InMemoryVectorStore（默认 SQLite 部署不崩）。
+        services.AddScoped<PgVectorStore>();
+        // InMemory 回退必须注册为 Singleton：入库的向量需在进程内跨请求保留，
+        // 否则默认 SQLite 部署下每次请求都是空存储，RAG 检索退化为静默 no-op（R3 失效）。
+        services.AddSingleton<InMemoryVectorStore>();
+        services.AddScoped<IVectorStoreFactory, VectorStoreFactory>();
+        services.AddScoped<IVectorStore>(sp => sp.GetRequiredService<IVectorStoreFactory>().Create());
+
+        // RAG 配置与文档切分器
+        services.Configure<AgentPlatform.Application.Abstractions.RagSettings>(
+            configuration.GetSection("Rag"));
+        services.AddScoped<AgentPlatform.Application.Abstractions.IDocumentChunker,
+            AgentPlatform.Infrastructure.Services.WordWindowChunker>();
+        services.AddScoped<AgentPlatform.Domain.Repositories.IKnowledgeBaseRepository,
+            AgentPlatform.Infrastructure.Persistence.Repositories.KnowledgeBaseRepository>();
         services.AddScoped<ICodeSandbox, DockerCodeSandbox>();
 
         var cacheProvider = configuration.GetSection("Cache:Provider").Value;

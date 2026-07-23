@@ -12,6 +12,8 @@ import type {
   WorkflowNodeRequest,
   WorkflowEdgeRequest,
   WorkflowNodeRunResult,
+  KnowledgeBase,
+  KnowledgeDocument,
 } from '../types';
 
 const api = axios.create({
@@ -109,3 +111,25 @@ export const getApiKeys = () => api.get<ApiKey[]>('/api-keys').then((r) => r.dat
 export const getConversations = () => api.get<Conversation[]>('/conversations').then((r) => r.data);
 export const createConversation = () =>
   api.post<Conversation>('/conversations', {}).then((r) => r.data);
+
+// Knowledge Bases (RAG 地基层 R1-R4)
+export const getKnowledgeBases = () =>
+  api.get<KnowledgeBase[]>('/knowledge-bases').then((r) => r.data);
+export const getKnowledgeBase = (id: string) =>
+  api.get<KnowledgeBase>(`/knowledge-bases/${id}`).then((r) => r.data);
+export const createKnowledgeBase = (data: {
+  name: string;
+  description?: string | null;
+  embeddingModel?: string | null;
+}) => api.post<KnowledgeBase>('/knowledge-bases', data).then((r) => r.data);
+export const deleteKnowledgeBase = (id: string) =>
+  api.delete<void>(`/knowledge-bases/${id}`).then(() => undefined);
+export const uploadDocument = (id: string, file: File) => {
+  const form = new FormData();
+  form.append('file', file);
+  return api
+    .post<KnowledgeDocument>(`/knowledge-bases/${id}/documents`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    .then((r) => r.data);
+};

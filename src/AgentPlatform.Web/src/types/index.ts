@@ -175,3 +175,23 @@ export interface ExecutionLogStepEntry {
   startedAt: string;
   completedAt: string;
 }
+
+// ── RAG 知识库（R1-R4 地基层）──
+export interface KnowledgeDocument {
+  id: string;
+  documentId: string;
+  fileName: string;
+  contentType: string;
+  chunkCount: number;
+  createdAt: string;
+}
+
+export interface KnowledgeBase {
+  id: string;
+  name: string;
+  description: string;
+  collectionName: string;
+  embeddingModel: string;
+  createdAt: string;
+  documents: KnowledgeDocument[];
+}

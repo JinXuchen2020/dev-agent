@@ -6,6 +6,7 @@ using AgentPlatform.Domain.Aggregates.Conversations;
 using AgentPlatform.Domain.Enums;
 using AgentPlatform.Domain.Repositories;
 using AgentPlatform.Domain.ValueObjects;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using NSubstitute.ReturnsExtensions;
@@ -24,6 +25,8 @@ public class SendMessageCommandHandlerTests
     });
     private readonly ITenantProvider _tenant = Substitute.For<ITenantProvider>();
     private readonly IAuditLogRepository _auditLogRepository = Substitute.For<IAuditLogRepository>();
+    private readonly IOptions<RagSettings> _ragOptions = Options.Create(new RagSettings());
+    private readonly ILogger<SendMessageCommandHandler> _logger = Substitute.For<ILogger<SendMessageCommandHandler>>();
     private readonly Guid _tenantId = Guid.NewGuid();
     private readonly SendMessageCommandHandler _handler;
 
@@ -31,7 +34,8 @@ public class SendMessageCommandHandlerTests
     {
         _tenant.GetTenantId().Returns(_tenantId);
         _handler = new SendMessageCommandHandler(
-            _conversationRepository, _router, _vectorStore, _defaults, _tenant, _auditLogRepository);
+            _conversationRepository, _router, _vectorStore, _defaults, _tenant,
+            _auditLogRepository, _ragOptions, _logger);
     }
 
     [Fact]
@@ -114,7 +118,9 @@ public class SendMessageCommandHandlerTests
         _vectorStore.SearchAsync(
                 RoutingConstants.DefaultVectorCollection,
                 "search term",
-                topK: 5,
+                _tenantId,
+                Arg.Any<int>(),
+                Arg.Any<double?>(),
                 Arg.Any<CancellationToken>())
             .Returns(new List<VectorSearchResult>
             {
@@ -142,7 +148,8 @@ public class SendMessageCommandHandlerTests
         _conversationRepository.GetByIdWithMessagesAsync(conversationId, Arg.Any<CancellationToken>())
             .Returns(conversation);
         _vectorStore.SearchAsync(
-                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<Guid>(),
+                Arg.Any<int>(), Arg.Any<double?>(), Arg.Any<CancellationToken>())
             .Returns(new List<VectorSearchResult>());
         _router.RouteAsync(Arg.Any<RoutingRequest>(), Arg.Any<CancellationToken>())
             .Returns(new ModelResponse("Answer", null, "model-1", "stop"));

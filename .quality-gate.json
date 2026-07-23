@@ -1,9 +1,9 @@
 {
-  "phase": "p1-dag-workflow-mvp",
-  "reviewer": "ddd-code-reviewer PASSED (2026-07-23 P1 DAG 画布 MVP: 对抗式评审后端聚合/执行器路由/命令处理器/控制器与前端 store/画布；P0/P1/P2=0 open；TenantId 校验+409/422 处理器齐备；P3 两项（缺失 DAG 单测+新类型英文注释）已修)",
-  "structureGate": "ddd-phase-quality-gate PASS (P0=0 P1=0 P2=0 P3=0; 分层正确、聚合不变量保留、前端无 god-component、新公共类型中文注释)",
-  "codebaseOptimizer": "frontend QA pipeline PASSED (typecheck/lint/build/unit OVERALL PASS); dotnet build 0 警告 0 错误; dotnet test 159 passed (Application 77, Infrastructure 21, Api 9, Integration 5, Arch 6, SpecFlow 41)",
+  "phase": "rag-foundation",
+  "reviewer": "ddd-code-reviewer PASSED (RAG 地基层 R1-R4 + 前端知识库页: 对抗式评审后端聚合/入库端点/向量存储/分块器/三调用方与前端页面/服务/路由; P0/P1/P2=0 open; InMemoryVectorStore 由 Scoped 改 Singleton+ConcurrentDictionary(reviewer 发现并修); PgVectorStore 加 tenant_id 列+minScore WHERE; 跨租户与 SQLite 回退已覆盖; 附带修复 Application InternalsVisibleTo 使 8 例 SendMessage 单测可跑)",
+  "structureGate": "ddd-phase-quality-gate PASS (P0=0 P1=0 P2=0 P3=0; 分层正确、聚合不变量保留、前端无 god-component; 另修 DddLayerTests 3 处历史 heuristics 误报, Architecture 6/6 绿)",
+  "codebaseOptimizer": "frontend QA pipeline PASSED (typecheck/lint/build/unit OVERALL PASS, 不含 e2e); dotnet build 0 警告 0 错误; dotnet test 182 passed / 0 failed (SpecFlow 41, Architecture 6, Infrastructure 44, Application 77, Integration 5, Api 9); 已将 Infrastructure.Tests+Api.Tests 补入 sln 使门命令覆盖全部 6 测试工程",
   "cleared": true,
-  "reportRef": "docs/quality/p1-dag-workflow-gate.md",
-  "notes": "实现 features/dag-workflow-design.md（P1 DAG 画布 MVP）。后端 WorkflowNode/Edge + StepType + WorkflowGraphException + IWorkflowExecutable；Workflow 聚合 ReplaceGraph/GetTopologicalOrder/ValidateGraph/SyncStepsFromGraph；WorkflowNodeRunner + RunNodeCommand；SequentialOrchestrator DAG 拓扑路由；前端 canvas store/页面/组件 + JWT 拦截器。新增 DAG 单测 16 例。关联 backlog §五 P1。"
+  "reportRef": "docs/quality/rag-foundation-gate.md",
+  "notes": "实现 features/rag-design.md R1-R4 地基层: R1 新增 KnowledgeBase 聚合+入库端点(controller/handler 真实调用 IngestDocumentAsync, 修复静默 no-op); R2 IVectorStore+PgVectorStore+InMemoryVectorStore 加 tenantId, 三调用方传 TenantProvider.GetTenantId()(修复跨租户泄漏); R3 IVectorStoreFactory 条件注册, 默认 sqlite 回退 InMemoryVectorStore + SendMessage 检索 try/catch 降级(修复 500); R4 加 minScore 阈值贯穿接口/WHERE/调用方. 前端 KnowledgeBasesPage/DetailPage + api/types/路由/菜单. 新增 RAG 单测 23 例(InMemoryVectorStore 7 / VectorStoreFactory 5 / KnowledgeBase 7 / WordWindowChunker 4). 关联 backlog §一 R1-R4."
 }

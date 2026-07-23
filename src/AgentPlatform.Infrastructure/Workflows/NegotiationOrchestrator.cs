@@ -1,5 +1,6 @@
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Application.Diagnostics;
+using AgentPlatform.Application.Routing;
 using AgentPlatform.Domain.Abstractions;
 using AgentPlatform.Domain.Aggregates.Workflows;
 using AgentPlatform.Domain.Aggregates.Workflows.Events;
@@ -8,6 +9,7 @@ using AgentPlatform.Domain.Repositories;
 using AgentPlatform.Infrastructure.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace AgentPlatform.Infrastructure.Workflows;
 
@@ -276,8 +278,11 @@ internal sealed class NegotiationOrchestrator
         {
             try
             {
+                var tenantProvider = _serviceProvider.GetRequiredService<ITenantProvider>();
+                var ragSettings = _serviceProvider.GetRequiredService<IOptions<RagSettings>>().Value;
                 var searchResults = await _vectorStore.SearchAsync(
-                    "workflow-context", currentStep.Name, topK: 3, ct);
+                    RoutingConstants.WorkflowContextVectorCollection, currentStep.Name,
+                    tenantProvider.GetTenantId(), topK: 3, minScore: ragSettings.DefaultMinScore, ct);
                 if (searchResults.Count > 0)
                 {
                     retrieval = new RetrievalContext

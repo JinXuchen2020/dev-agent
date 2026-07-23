@@ -59,22 +59,22 @@
 - **[P1] R1 · 知识库无入库通道（RAG 静默 no-op）**
   - 位置：`src/AgentPlatform.Application/Abstractions/IVectorStore.cs`（`IngestDocumentAsync` 仅定义）、`src/AgentPlatform.Infrastructure/VectorStore/PgVectorStore.cs`（仅实现）、无任何 controller/handler/job 调用
   - 症状：全仓无 `IngestDocumentAsync` 的运行时调用方；`default` 与 `workflow-context` 两集合**永远为空** → 三处 `SearchAsync` 全返回 0 → 生产环境 RAG 是静默 no-op（会话侧 `if (docs.Count > 0)` 直接跳过，连报错都没有）。Phase 4 验收只验了 store 自身，漏验「有路径入库」。
-  - 修复：新增 `KnowledgeBase` 聚合 + 上传/切分端点（见 rag-design §2.1）；质量门验收须含「入库端点存在且被调用、入库后 Search 返回 >0」。状态：open（blocked：需后端模型）
+  - 修复：新增 `KnowledgeBase` 聚合 + 上传/切分端点（见 rag-design §2.1）；质量门验收须含「入库端点存在且被调用、入库后 Search 返回 >0」。状态：**done**（2026-07-23，R1–R4 地基层已落地并过质量门；报告 `docs/quality/rag-foundation-gate.md`）
 
 - **[P1] R2 · 向量检索无租户隔离（多租户互查知识）**
   - 位置：`src/AgentPlatform.Infrastructure/VectorStore/PgVectorStore.cs`（`document_embeddings` 表无 `tenant_id` 列，`SearchAsync` WHERE 仅按 `collection_name` 过滤）、`IVectorStore` 接口无 `tenantId` 参数
   - 症状：Phase 5 已落地真实多租户（`AppDbContext.HasQueryFilter`），但向量层无隔离 → 租户 A 能检索到租户 B 的知识，属数据泄漏。
-  - 修复：`document_embeddings` 加 `tenant_id` 列；`IVectorStore.SearchAsync` 增 `tenantId` 参数；WHERE 加 `AND tenant_id = @tenantId`；三调用方传 `TenantProvider.GetTenantId()`；加跨租户回归测试。状态：open（high-risk：多租户安全）
+  - 修复：`document_embeddings` 加 `tenant_id` 列；`IVectorStore.SearchAsync` 增 `tenantId` 参数；WHERE 加 `AND tenant_id = @tenantId`；三调用方传 `TenantProvider.GetTenantId()`；加跨租户回归测试。状态：**done**（2026-07-23，见 `docs/quality/rag-foundation-gate.md`）
 
 - **[P1] R3 · RAG 部署强耦合，SQLite 默认部署触发 500**
   - 位置：`src/AgentPlatform.Infrastructure/DependencyInjection.cs`（`PgVectorStore` 无条件注册）、`SendMessageCommandHandler.cs`（检索路径未 try/catch）
   - 症状：`PgVectorStore` 要求 `ConnectionStrings:PostgreSQL` + pgvector + `OpenAI:Key`，但默认 `Database:Type = sqlite`；SQLite 部署下 RAG 首次触发即抛 `InvalidOperationException`，会话路径不捕获 → 直接 500；工作流路径虽 try/catch 静默降级，但「看起来没接地」。
-  - 修复：条件注册 + `InMemoryVectorStore` 回退（rag-design §2.3 选 ①）；会话 `SearchAsync` 包 try/catch 降级。状态：open
+  - 修复：条件注册 + `InMemoryVectorStore` 回退（rag-design §2.3 选 ①）；会话 `SearchAsync` 包 try/catch 降级。状态：**done**（2026-07-23，见 `docs/quality/rag-foundation-gate.md`）
 
 - **[P2] R4 · 检索无相关性阈值 + 工作流 RAG 语义错位**
   - 位置：`IVectorStore.SearchAsync`（无 `minScore`）、`SequentialOrchestrator` / `NegotiationOrchestrator`（用 `currentStep.StepName` 搜 `workflow-context`）
   - 症状：对话/工作流把**全部召回**（不看 `Score`）灌入 prompt，低分噪声被一并注入；工作流侧 `workflow-context` 实为「步骤间上下文复用」而非用户理解的「外部知识检索」，语义需先定清。
-  - 修复：`SearchAsync` 加 `double? minScore`，`PgVectorStore` WHERE 加相似度下限；外部知识检索走独立节点（见五节「节点全家桶·Knowledge Retrieval」）。状态：open
+  - 修复：`SearchAsync` 加 `double? minScore`，`PgVectorStore` WHERE 加相似度下限；外部知识检索走独立节点（见五节「节点全家桶·Knowledge Retrieval」）。状态：**done**（2026-07-23，地基层 minScore 已落地；外部检索节点属「自主配置」期，见 rag-design §3）
 
 ---
 

@@ -6,6 +6,7 @@ using AgentPlatform.Domain.Aggregates.Conversations;
 using AgentPlatform.Domain.Enums;
 using AgentPlatform.Domain.Repositories;
 using MediatR;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace AgentPlatform.Application.Conversations.Commands.SendMessage;
@@ -18,6 +19,8 @@ internal sealed class SendMessageCommandHandler : IRequestHandler<SendMessageCom
     private readonly ModelDefaults _defaults;
     private readonly ITenantProvider _tenant;
     private readonly IAuditLogRepository _auditLogRepository;
+    private readonly RagSettings _ragSettings;
+    private readonly ILogger<SendMessageCommandHandler> _logger;
 
     public SendMessageCommandHandler(
         IConversationRepository conversationRepository,
@@ -25,7 +28,9 @@ internal sealed class SendMessageCommandHandler : IRequestHandler<SendMessageCom
         IVectorStore vectorStore,
         IOptions<ModelDefaults> defaultsOptions,
         ITenantProvider tenant,
-        IAuditLogRepository auditLogRepository)
+        IAuditLogRepository auditLogRepository,
+        IOptions<RagSettings> ragOptions,
+        ILogger<SendMessageCommandHandler> logger)
     {
         _conversationRepository = conversationRepository;
         _router = router;
@@ -33,6 +38,8 @@ internal sealed class SendMessageCommandHandler : IRequestHandler<SendMessageCom
         _defaults = defaultsOptions.Value;
         _tenant = tenant;
         _auditLogRepository = auditLogRepository;
+        _ragSettings = ragOptions.Value;
+        _logger = logger;
     }
 
     public async Task<SendMessageResult> Handle(SendMessageCommand request, CancellationToken ct)
@@ -53,13 +60,28 @@ internal sealed class SendMessageCommandHandler : IRequestHandler<SendMessageCom
 
         if (!string.IsNullOrEmpty(request.SearchQuery))
         {
-            var docs = await _vectorStore.SearchAsync(RoutingConstants.DefaultVectorCollection, request.SearchQuery.Trim(), ct: ct);
-            if (docs.Count > 0)
+            try
             {
-                var context = string.Join("\n", docs.Select(d => d.Content));
-                messages.Insert(1, new ChatMessage(
-                    MessageRole.System,
-                    $"Context from knowledge base:\n{context}"));
+                var docs = await _vectorStore.SearchAsync(
+                    RoutingConstants.DefaultVectorCollection,
+                    request.SearchQuery.Trim(),
+                    _tenant.GetTenantId(),
+                    topK: _ragSettings.DefaultTopK,
+                    minScore: _ragSettings.DefaultMinScore,
+                    ct: ct);
+                if (docs.Count > 0)
+                {
+                    var context = string.Join("\n", docs.Select(d => d.Content));
+                    messages.Insert(1, new ChatMessage(
+                        MessageRole.System,
+                        $"Context from knowledge base:\n{context}"));
+                }
+            }
+            catch (Exception ex)
+            {
+                // RAG 检索失败时降级为不使用上下文，而不是让整条消息 500。
+                _logger.LogWarning(ex,
+                    "知识库检索失败，降级为不使用上下文（tenant={TenantId}）", _tenant.GetTenantId());
             }
         }
 

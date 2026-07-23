@@ -12,6 +12,8 @@ import AgentRolesPage from './pages/AgentRolesPage';
 import AgentConfigurationsPage from './pages/AgentConfigurationsPage';
 import ExecutionLogsPage from './pages/ExecutionLogsPage';
 import ExecutionLogDetailPage from './pages/ExecutionLogDetailPage';
+import KnowledgeBasesPage from './pages/KnowledgeBasesPage';
+import KnowledgeBaseDetailPage from './pages/KnowledgeBaseDetailPage';
 
 const App: React.FC = () => {
   return (
@@ -36,6 +38,8 @@ const App: React.FC = () => {
             <Route path="/agent-configurations" element={<AgentConfigurationsPage />} />
             <Route path="/execution-logs" element={<ExecutionLogsPage />} />
             <Route path="/execution-logs/:id" element={<ExecutionLogDetailPage />} />
+            <Route path="/knowledge-bases" element={<KnowledgeBasesPage />} />
+            <Route path="/knowledge-bases/:id" element={<KnowledgeBaseDetailPage />} />
           </Route>
         </Routes>
       </AntApp>

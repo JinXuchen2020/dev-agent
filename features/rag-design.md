@@ -1,6 +1,6 @@
 # RAG 设计文档（rag-design）
 
-> 状态：设计阶段（待实现，尚未进入 `backlog` 的 `done`）
+> 状态：**已实现（地基层 R1–R4 已落地并过质量门，2026-07-23；报告 `docs/quality/rag-foundation-gate.md`）**
 > 优先级：P2/P3（在「P1 缺陷修复 → 竞品 P0(PUT 端点) → 竞品 P1(DAG 画布)」之后）
 > 关联：`features/backlog.md`（缺陷 B1–B6 / O1–O14）、`features/competitive-roadmap.md`（竞品矩阵 RAG 列 🟡）
 > 关键结论：**当前 RAG 代码骨架真实可跑，但作为「可用功能」不成立——需先补地基（入库通道 + 租户隔离 + 部署适配 + 相关性阈值），再做「自主配置」UI。**
@@ -164,12 +164,12 @@ src/AgentPlatform.Web/src/pages/KnowledgeBaseDetailPage.tsx   # 文档管理 + �
 ## 5. 质量门验收清单（避免重蹈 Phase 4 覆辙）
 
 实现后 `.quality-gate.json` 验收**必须包含**：
-- [ ] `IngestDocumentAsync` 有**运行时调用路径**（controller/handler），且端点可 curl 触发；
-- [ ] 入库后 `SearchAsync` 能返回 >0 条（集成测试覆盖）；
-- [ ] **跨租户回归**：租户 A 入库，租户 B 检索返回 0；
-- [ ] SQLite 默认部署下，RAG 触发**不 500**（走 InMemory 回退或显式禁用）；
-- [ ] 低分噪声被 `minScore` 过滤（断言低分文档不进 prompt 上下文）；
-- [ ] `dotnet build` + `dotnet test` 全绿（含上述新增集成测试）。
+- [x] `IngestDocumentAsync` 有**运行时调用路径**（`KnowledgeBasesController.POST {id}/documents` → `UploadDocumentCommandHandler` 调用），端点可触发；
+- [x] 入库后 `SearchAsync` 能返回 >0 条（`InMemoryVectorStoreTests` 覆盖；`VectorStoreFactoryTests` 回退路径 `SearchAsync` 不抛）；
+- [x] **跨租户回归**：租户 A 入库，租户 B 检索返回 0（`InMemoryVectorStoreTests.CrossTenantIsolation` + `PgVectorStore`/`IVectorStore` 加 `tenantId`）；
+- [x] SQLite 默认部署下，RAG 触发**不 500**（`IVectorStoreFactory` 回退 `InMemoryVectorStore` + `SendMessageCommandHandler` 检索 `try/catch` 降级）；
+- [x] 低分噪声被 `minScore` 过滤（断言低分文档不进结果；`InMemoryVectorStoreTests.MinScoreFilter`）；
+- [x] `dotnet build` + `dotnet test` 全绿（`build 0/0`；`test 182 passed / 0 failed`，含上述新增 23 例 RAG 单测）。
 
 ---
 

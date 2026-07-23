@@ -10,6 +10,7 @@ import {
   FileTextOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  BookOutlined,
 } from '@ant-design/icons';
 import { useAppStore } from '../stores/appStore';
 
@@ -23,6 +24,7 @@ const menuItems = [
   { key: '/agent-roles', icon: <TeamOutlined />, label: 'Agent Roles' },
   { key: '/agent-configurations', icon: <SettingOutlined />, label: 'Configurations' },
   { key: '/execution-logs', icon: <FileTextOutlined />, label: 'Execution Logs' },
+  { key: '/knowledge-bases', icon: <BookOutlined />, label: '知识库' },
 ];
 
 const AppLayout: React.FC = () => {
