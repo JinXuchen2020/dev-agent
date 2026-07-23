@@ -119,7 +119,7 @@ DELETE /api/v1/knowledge-bases/{id}             # 删库（级联删 document_em
 - **文档管理**：上传（PDF/Markdown/TXT/HTML）、自动切分、查看切片、删除、重新嵌入。
 - **检索参数可配**：topK、相关性阈值 minScore、集合（知识库）选择。
 - **接入点**：
-  - 对话：用户可在会话/助手配置里挂知识库（前端传 `SearchQuery` + `collectionName`，修复 B5 的死胡同）。
+  - 对话：用户可在会话/助手配置里挂知识库（前端传 `SearchQuery` + `collectionName`，修复 B5 的死胡同）。**已实现**：`features/conversation-kb-linkage.md`（2026-07-23，会话详情页 + 知识库选择器挂载/解除持久化，检索走 KB 集合 + default 并集，质量门 PASS）。
   - 工作流：新增 **「知识检索」节点类型**（属 DAG 节点家族，见 competitive-roadmap P1），节点配置 topK/minScore/知识库。
 
 ### 3.2 前端页面草案

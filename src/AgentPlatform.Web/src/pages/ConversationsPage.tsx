@@ -1,22 +1,30 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Spin, Button, message } from 'antd';
+import { useNavigate } from 'react-router-dom';
+import { Table, Spin, Button, message, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import type { Conversation } from '../types';
-import { getConversations, createConversation } from '../services/api';
+import type { Conversation, KnowledgeBase } from '../types';
+import { getConversations, createConversation, getKnowledgeBases } from '../services/api';
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
 import StatusBadge from '../components/StatusBadge';
 import { colors } from '../theme/tokens';
 
 const ConversationsPage: React.FC = () => {
+  const navigate = useNavigate();
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [kbNameByCollection, setKbNameByCollection] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
 
   const fetch = () => {
     setLoading(true);
-    getConversations()
-      .then((d) => setConversations(Array.isArray(d) ? d : []))
+    Promise.all([getConversations(), getKnowledgeBases().catch(() => [] as KnowledgeBase[])])
+      .then(([convos, kbs]) => {
+        setConversations(Array.isArray(convos) ? convos : []);
+        setKbNameByCollection(
+          new Map((kbs ?? []).map((kb) => [kb.collectionName, kb.name])),
+        );
+      })
       .finally(() => setLoading(false));
   };
   useEffect(() => {
@@ -26,9 +34,10 @@ const ConversationsPage: React.FC = () => {
   const handleCreate = async () => {
     setCreating(true);
     try {
-      await createConversation();
+      const conv = await createConversation();
       message.success('已创建新会话');
-      fetch();
+      if (conv?.id) navigate(`/conversations/${conv.id}`);
+      else fetch();
     } catch {
       message.error('创建失败，请确认已登录');
     } finally {
@@ -51,6 +60,16 @@ const ConversationsPage: React.FC = () => {
       title: 'Agent / 工作流',
       key: 'agent',
       render: (_, r) => r.agentName ?? r.workflowId ?? '-',
+    },
+    {
+      title: '知识库',
+      key: 'kb',
+      render: (_, r) =>
+        r.collectionName && kbNameByCollection.get(r.collectionName) ? (
+          <Tag color="blue">{kbNameByCollection.get(r.collectionName)}</Tag>
+        ) : (
+          <span style={{ color: colors.textMuted }}>-</span>
+        ),
     },
     {
       title: '消息数',
@@ -96,6 +115,10 @@ const ConversationsPage: React.FC = () => {
             rowKey="id"
             pagination={{ pageSize: 10 }}
             locale={{ emptyText: '暂无会话记录' }}
+            onRow={(record) => ({
+              onClick: () => navigate(`/conversations/${record.id}`),
+              style: { cursor: 'pointer' },
+            })}
           />
         )}
       </Card>

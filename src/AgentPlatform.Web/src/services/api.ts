@@ -111,6 +111,30 @@ export const getApiKeys = () => api.get<ApiKey[]>('/api-keys').then((r) => r.dat
 export const getConversations = () => api.get<Conversation[]>('/conversations').then((r) => r.data);
 export const createConversation = () =>
   api.post<Conversation>('/conversations', {}).then((r) => r.data);
+export const getConversation = (id: string) =>
+  api.get<Conversation>(`/conversations/${id}`).then((r) => r.data);
+export const setConversationKnowledgeBase = (id: string, knowledgeBaseId: string) =>
+  api
+    .put<{ id: string }>(`/conversations/${id}/knowledge-base`, { knowledgeBaseId })
+    .then((r) => r.data);
+export const removeConversationKnowledgeBase = (id: string) =>
+  api.delete<{ id: string }>(`/conversations/${id}/knowledge-base`).then((r) => r.data);
+
+export interface SendMessageOptions {
+  searchQuery?: string;
+  model?: string;
+}
+export const sendMessage = (
+  id: string,
+  content: string,
+  options?: SendMessageOptions,
+) =>
+  api
+    .post<{ reply: string; modelId: string; tokenUsage?: { promptTokens: number; completionTokens: number } }>(
+      `/conversations/${id}/messages`,
+      { content, searchQuery: options?.searchQuery, model: options?.model },
+    )
+    .then((r) => r.data);
 
 // Knowledge Bases (RAG 地基层 R1-R4)
 export const getKnowledgeBases = () =>

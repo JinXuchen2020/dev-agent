@@ -22,6 +22,8 @@ export interface Conversation {
   id: string;
   agentName?: string;
   workflowId?: string;
+  knowledgeBaseId?: string;
+  collectionName?: string;
   messages?: { role: string; content: string }[];
   status?: string;
   createdAt: string;

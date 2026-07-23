@@ -54,6 +54,7 @@ internal sealed class ConversationRepository : IConversationRepository
     {
         return await _context.Conversations
             .Where(c => c.TenantId == tenantId)
+            .Include(c => c.Messages)
             .ToListAsync(ct);
     }
 

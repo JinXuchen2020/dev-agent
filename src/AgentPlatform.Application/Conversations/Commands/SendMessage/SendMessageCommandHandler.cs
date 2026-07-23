@@ -58,23 +58,45 @@ internal sealed class SendMessageCommandHandler : IRequestHandler<SendMessageCom
             new(MessageRole.User, request.Content)
         };
 
-        if (!string.IsNullOrEmpty(request.SearchQuery))
+        if (!string.IsNullOrWhiteSpace(request.SearchQuery) ||
+            !string.IsNullOrWhiteSpace(conversation.CollectionName))
         {
             try
             {
-                var docs = await _vectorStore.SearchAsync(
-                    RoutingConstants.DefaultVectorCollection,
-                    request.SearchQuery.Trim(),
-                    _tenant.GetTenantId(),
-                    topK: _ragSettings.DefaultTopK,
-                    minScore: _ragSettings.DefaultMinScore,
-                    ct: ct);
-                if (docs.Count > 0)
+                // 检索词：显式 SearchQuery 优先；否则用消息正文（会话挂 KB 时实现自动接地）。
+                var query = (request.SearchQuery ?? request.Content)?.Trim();
+                if (!string.IsNullOrWhiteSpace(query))
                 {
-                    var context = string.Join("\n", docs.Select(d => d.Content));
-                    messages.Insert(1, new ChatMessage(
-                        MessageRole.System,
-                        $"Context from knowledge base:\n{context}"));
+                    // 检索集合：default 并集（若会话已挂载 KB）其集合名，满足「KB + default 并集」语义。
+                    var collections = new List<string> { RoutingConstants.DefaultVectorCollection };
+                    if (!string.IsNullOrWhiteSpace(conversation.CollectionName))
+                        collections.Add(conversation.CollectionName);
+
+                    var merged = new List<VectorSearchResult>();
+                    var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var collection in collections)
+                    {
+                        var docs = await _vectorStore.SearchAsync(
+                            collection,
+                            query,
+                            _tenant.GetTenantId(),
+                            topK: _ragSettings.DefaultTopK,
+                            minScore: _ragSettings.DefaultMinScore,
+                            ct: ct);
+                        foreach (var doc in docs)
+                        {
+                            if (seen.Add(doc.Content))
+                                merged.Add(doc);
+                        }
+                    }
+
+                    if (merged.Count > 0)
+                    {
+                        var context = string.Join("\n", merged.Select(d => d.Content));
+                        messages.Insert(1, new ChatMessage(
+                            MessageRole.System,
+                            $"Context from knowledge base:\n{context}"));
+                    }
                 }
             }
             catch (Exception ex)

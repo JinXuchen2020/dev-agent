@@ -22,6 +22,10 @@ internal sealed class ConversationConfiguration : IEntityTypeConfiguration<Conve
         builder.Property(c => c.Status)
             .HasConversion<string>()
             .HasMaxLength(50);
+        builder.Property(c => c.KnowledgeBaseId).IsRequired(false);
+        builder.Property(c => c.CollectionName)
+            .IsRequired(false)
+            .HasMaxLength(120);
         builder.OwnsOne(c => c.TotalTokenUsage, t =>
         {
             t.Property(p => p.PromptTokens).HasColumnName("PromptTokens");
