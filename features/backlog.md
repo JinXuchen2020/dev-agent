@@ -211,7 +211,7 @@
 ### 待办（open）
 - **P1 · 可视化 DAG 画布 MVP**
   - 目标：后端引入 `WorkflowNode`/`WorkflowEdge` + `StepType` 枚举 + 拓扑序执行；前端画布（拖拽/连线/缩放/小地图/撤销重做）+ 配置侧栏 + 基础节点 Start/End/LLM/Agent/Critic + 单步试运行 + 变量监视。
-  - 风险：需后端 DAG 模型，前端从表单式升级为画布。状态：open（high-risk）
+  - 风险：需后端 DAG 模型，前端从表单式升级为画布。状态：**doing**（2026-07-23，设计文档 `./dag-workflow-design.md`，已拍板按 §8 全部默认推荐）
 - **P2 · 工作流版本管理 + 导入导出**
   - 目标：Workflow 版本快照 + 回滚 + JSON 导入导出（对齐 Coze/Dify）。状态：open
 - **P2 · 节点全家桶**
