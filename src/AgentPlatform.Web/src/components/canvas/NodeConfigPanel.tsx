@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { Input, Select, Button, Typography, Form } from 'antd';
 import { DeleteOutlined } from '@ant-design/icons';
 import { useCanvasStore, STEP_TYPE_LABEL } from '../../stores/workflowCanvasStore';
-import { getAgents } from '../../services/api';
+import { getAgents, getKnowledgeBases } from '../../services/api';
 import { StepType } from '../../types';
-import type { Agent } from '../../types';
+import type { Agent, KnowledgeBase } from '../../types';
 
 const panelStyle: React.CSSProperties = {
   width: 300,
@@ -22,6 +22,7 @@ export default function NodeConfigPanel() {
   const initialContext = useCanvasStore((s) => s.initialContext);
   const setInitialContext = useCanvasStore((s) => s.setInitialContext);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
 
   const stepType = node?.data.stepType;
   useEffect(() => {
@@ -29,6 +30,11 @@ export default function NodeConfigPanel() {
       getAgents()
         .then(setAgents)
         .catch(() => setAgents([]));
+    }
+    if (stepType === StepType.Knowledge) {
+      getKnowledgeBases()
+        .then(setKnowledgeBases)
+        .catch(() => setKnowledgeBases([]));
     }
   }, [stepType]);
 
@@ -112,6 +118,30 @@ export default function NodeConfigPanel() {
               placeholder="检查输出是否满足要求，给出通过/不通过理由"
             />
           </Form.Item>
+        )}
+
+        {type === StepType.Knowledge && (
+          <>
+            <Form.Item label="知识库" tooltip="从该知识库的向量集合检索">
+              <Select
+                allowClear
+                placeholder="选择知识库"
+                value={config?.knowledgeBaseId ?? undefined}
+                onFocus={snapshot}
+                onChange={(value) => patchConfig({ knowledgeBaseId: value ?? null })}
+                options={knowledgeBases.map((kb) => ({ value: kb.id, label: kb.name }))}
+              />
+            </Form.Item>
+            <Form.Item label="查询（可选）" tooltip="留空则使用上游节点输出作为查询">
+              <Input.TextArea
+                rows={3}
+                value={config?.query ?? ''}
+                onFocus={snapshot}
+                onChange={(e) => patchConfig({ query: e.target.value })}
+                placeholder="例如：产品退货政策"
+              />
+            </Form.Item>
+          </>
         )}
 
         {type === StepType.End && (

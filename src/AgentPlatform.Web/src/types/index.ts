@@ -77,6 +77,7 @@ export const StepType = {
   LLM: 2,
   Agent: 3,
   Critic: 4,
+  Knowledge: 5,
 } as const;
 export type StepType = (typeof StepType)[keyof typeof StepType];
 
@@ -87,6 +88,8 @@ export interface NodeConfig {
   criteria?: string;
   summary?: string;
   initialContext?: string;
+  knowledgeBaseId?: string | null;
+  query?: string;
 }
 
 // Backend response: a single graph node.

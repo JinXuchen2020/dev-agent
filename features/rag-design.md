@@ -116,11 +116,11 @@ DELETE /api/v1/knowledge-bases/{id}             # 删库（级联删 document_em
 
 ### 3.1 用户侧能力（对标 Dify/Coze「知识库检索」）
 - **知识库 CRUD**：名称、描述、embedding 模型选择。
-- **文档管理**：上传（PDF/Markdown/TXT/HTML）、自动切分、查看切片、删除、重新嵌入。
+- **文档管理**：上传（PDF/Markdown/TXT/HTML）、自动切分、查看切片、删除、重新嵌入。**已实现**：`KnowledgeBasesController.UploadDocument` 按 `contentType`/扩展名分发 `IDocumentTextExtractor`（PDF 零依赖 ZLibStream 抽取、HTML 标签剥离、文本兜底），`KnowledgeBaseDetailPage` 上传 `accept` 含 `.pdf/.htm`（2026-07-23，`features/rag-self-config-closure.md` 质量门 PASS）。
 - **检索参数可配**：topK、相关性阈值 minScore、集合（知识库）选择。
 - **接入点**：
-  - 对话：用户可在会话/助手配置里挂知识库（前端传 `SearchQuery` + `collectionName`，修复 B5 的死胡同）。**已实现**：`features/conversation-kb-linkage.md`（2026-07-23，会话详情页 + 知识库选择器挂载/解除持久化，检索走 KB 集合 + default 并集，质量门 PASS）。
-  - 工作流：新增 **「知识检索」节点类型**（属 DAG 节点家族，见 competitive-roadmap P1），节点配置 topK/minScore/知识库。
+  - 对话：用户可在会话/助手配置里挂知识库（前端传 `SearchQuery` + `collectionName`，修复 B5 的死胡同）。**已实现**：`features/conversation-kb-linkage.md`（2026-07-23，会话详情页 + 知识库选择器挂载/解除持久化，检索走 KB 集合 + default 并集，质量门 PASS）；发消息 RBAC 同期放开为「所有已认证租户用户可发消息」。
+  - 工作流：新增 **「知识检索」节点类型**（属 DAG 节点家族，见 competitive-roadmap P1），节点配置 topK/minScore/知识库。**已实现**：`StepType.Knowledge=5` + `KnowledgeRetrievalStepExecutor`（按 `HandlesType` 分发、跨租户校验、结果作下游 artifact），前端画布节点/调色板/配置面板全联动（2026-07-23，`features/rag-self-config-closure.md`）。
 
 ### 3.2 前端页面草案
 ```

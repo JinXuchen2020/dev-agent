@@ -5,6 +5,7 @@ import {
   ThunderboltOutlined,
   RobotOutlined,
   AuditOutlined,
+  BookOutlined,
 } from '@ant-design/icons';
 import type { ReactNode } from 'react';
 import { StepType } from '../../types';
@@ -16,6 +17,7 @@ const TYPE_ICON: Record<StepType, ReactNode> = {
   [StepType.LLM]: <ThunderboltOutlined />,
   [StepType.Agent]: <RobotOutlined />,
   [StepType.Critic]: <AuditOutlined />,
+  [StepType.Knowledge]: <BookOutlined />,
 };
 
 const STATE_COLOR: Record<string, string> = {

@@ -132,6 +132,15 @@ public static class DependencyInjection
             configuration.GetSection("Rag"));
         services.AddScoped<AgentPlatform.Application.Abstractions.IDocumentChunker,
             AgentPlatform.Infrastructure.Services.WordWindowChunker>();
+
+        // 文档文本提取器：顺序敏感 —— Html 必须在 Plain 之前（text/html 两者都匹配，
+        // 优先走标签剥离而非原文读出）。
+        services.AddScoped<AgentPlatform.Application.Abstractions.IDocumentTextExtractor,
+            AgentPlatform.Infrastructure.Services.PdfTextExtractor>();
+        services.AddScoped<AgentPlatform.Application.Abstractions.IDocumentTextExtractor,
+            AgentPlatform.Infrastructure.Services.HtmlTextExtractor>();
+        services.AddScoped<AgentPlatform.Application.Abstractions.IDocumentTextExtractor,
+            AgentPlatform.Infrastructure.Services.PlainTextExtractor>();
         services.AddScoped<AgentPlatform.Domain.Repositories.IKnowledgeBaseRepository,
             AgentPlatform.Infrastructure.Persistence.Repositories.KnowledgeBaseRepository>();
         services.AddScoped<ICodeSandbox, DockerCodeSandbox>();
@@ -223,6 +232,7 @@ public static class DependencyInjection
         // Step executors for the engine
         services.AddScoped<IStepExecutor, AgentCallStepExecutor>();
         services.AddScoped<IStepExecutor, CriticStepExecutor>();
+        services.AddScoped<IStepExecutor, KnowledgeRetrievalStepExecutor>();
 
         // Single-node runner for DAG debugging (POST /{id}/nodes/{nodeId}/run)
         services.AddScoped<IWorkflowNodeRunner, WorkflowNodeRunner>();

@@ -27,6 +27,9 @@ public interface IWorkflowExecutable
     /// <summary>Explicit step type for DAG routing; null for legacy linear steps.</summary>
     StepType? Type { get; }
 
+    /// <summary>Node/step configuration as a JSON string (DAG nodes); "{}" for legacy steps.</summary>
+    string ConfigJson { get; }
+
     /// <summary>Sets the execution state.</summary>
     void SetState(WorkflowState state);
 

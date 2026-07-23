@@ -22,12 +22,17 @@ public sealed class KnowledgeBasesController : ControllerBase
 {
     private readonly IMediator _mediator;
     private readonly ITenantProvider _tenant;
+    private readonly IEnumerable<IDocumentTextExtractor> _extractors;
 
     /// <summary>初始化 <see cref="KnowledgeBasesController"/> 的新实例。</summary>
-    public KnowledgeBasesController(IMediator mediator, ITenantProvider tenant)
+    public KnowledgeBasesController(
+        IMediator mediator,
+        ITenantProvider tenant,
+        IEnumerable<IDocumentTextExtractor> extractors)
     {
         _mediator = mediator;
         _tenant = tenant;
+        _extractors = extractors;
     }
 
     /// <summary>创建新知识库。</summary>
@@ -55,12 +60,23 @@ public sealed class KnowledgeBasesController : ControllerBase
         if (file is null || file.Length == 0)
             return BadRequest("file is required");
 
-        string content;
-        await using (var stream = file.OpenReadStream())
-        using (var reader = new StreamReader(stream))
+        byte[] bytes;
+        await using (var readStream = file.OpenReadStream())
+        using (var ms = new MemoryStream())
         {
-            content = await reader.ReadToEndAsync(ct);
+            await readStream.CopyToAsync(ms, ct);
+            bytes = ms.ToArray();
         }
+
+        var extractor = _extractors.FirstOrDefault(e => e.Supports(file.FileName, file.ContentType))
+            ?? throw new UnsupportedContentTypeException(file.ContentType ?? file.FileName);
+
+        string content;
+        using (var ms = new MemoryStream(bytes))
+            content = extractor.Extract(ms, file.FileName, file.ContentType);
+
+        if (string.IsNullOrWhiteSpace(content))
+            return BadRequest("无法从文件中提取文本，请检查文件内容");
 
         var command = new UploadDocumentCommand(
             _tenant.GetTenantId(), id, file.FileName, file.ContentType, content);

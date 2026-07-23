@@ -77,13 +77,13 @@ const KnowledgeBaseDetailPage: React.FC = () => {
     <div>
       <PageHeader
         title={kb?.name ?? '知识库详情'}
-        subtitle="上传文本文档（.txt/.md/.csv/.json 等），系统自动切分并向量入库"
+        subtitle="上传文档（.txt/.md/.csv/.json/.html/.pdf 等），系统自动提取文本、切分并向量入库"
         actions={
           <Space>
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/knowledge-bases')}>
               返回列表
             </Button>
-            <Upload beforeUpload={handleUpload} showUploadList={false} accept=".txt,.md,.csv,.json,.html,.xml">
+            <Upload beforeUpload={handleUpload} showUploadList={false} accept=".txt,.md,.csv,.json,.html,.htm,.xml,.pdf">
               <Button type="primary" icon={<UploadOutlined />} loading={uploading}>
                 上传文档
               </Button>

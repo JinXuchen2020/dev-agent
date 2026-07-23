@@ -120,7 +120,6 @@ public sealed class ConversationsController : ControllerBase
     /// <param name="request">The request payload containing the message content and optional overrides.</param>
     /// <param name="ct">A token to observe for cancellation of the request.</param>
     /// <returns>An <see cref="IActionResult"/> containing the reply, the model identifier, and token usage.</returns>
-    [Authorize(Roles = "Admin,Operator")]
     [HttpPost("{conversationId}/messages")]
     public async Task<IActionResult> SendMessage(
         Guid conversationId,

@@ -46,7 +46,7 @@
   - 位置：`src/pages/ConversationsPage.tsx`（列表）、`src/App.tsx:51`（无详情路由）、`src/services/api.ts:98`（`sendMessage` 已实现但无 UI 调用）
   - 症状：「新建会话」只能建空会话；前端**没有会话详情/聊天界面**，路由也无 conversation 详情页；`sendMessage` API 已实现但点不进去、发不了消息。会话列表是死胡同。
   - 修复：新增 `/conversations/:id` 详情路由 + 消息气泡 + 输入框，接 `sendMessage`；列表行可点击进入；并叠加「会话挂知识库」UI 联动（见 `features/conversation-kb-linkage.md`）。
-  - 状态：**done**（2026-07-23，聊天页打通 + 知识库选择器挂载/解除持久化，质量门 `docs/quality/conversation-kb-linkage-gate.md` PASS；仅发消息/挂载的 RBAC 仍限 Admin/Operator，与既有 SendMessage 一致，非新增阻断）
+  - 状态：**done**（2026-07-23，聊天页打通 + 知识库选择器挂载/解除持久化，质量门 `docs/quality/conversation-kb-linkage-gate.md` PASS；发消息 RBAC 已于「自主配置收尾」放开为「所有已认证租户用户可发消息」`docs/quality/rag-self-config-closure-gate.md`；仅 KB 挂载/解除（`PUT/DELETE {id}/knowledge-base`）仍限 Admin/Operator，属管理面操作，保持收紧）
 
 - **[P1] B6 · 登录密码形同虚设**
   - 位置：`src/pages/LoginPage.tsx:14,87`

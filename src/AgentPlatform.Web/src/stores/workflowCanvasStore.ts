@@ -42,6 +42,7 @@ export const STEP_TYPE_TO_NODE_TYPE: Record<StepType, string> = {
   [StepType.LLM]: 'llm',
   [StepType.Agent]: 'agent',
   [StepType.Critic]: 'critic',
+  [StepType.Knowledge]: 'knowledge',
 };
 
 export const NODE_TYPE_TO_STEP_TYPE: Record<string, StepType> = {
@@ -50,6 +51,7 @@ export const NODE_TYPE_TO_STEP_TYPE: Record<string, StepType> = {
   llm: StepType.LLM,
   agent: StepType.Agent,
   critic: StepType.Critic,
+  knowledge: StepType.Knowledge,
 };
 
 export const STEP_TYPE_LABEL: Record<StepType, string> = {
@@ -58,6 +60,7 @@ export const STEP_TYPE_LABEL: Record<StepType, string> = {
   [StepType.LLM]: 'LLM',
   [StepType.Agent]: 'Agent',
   [StepType.Critic]: 'Critic',
+  [StepType.Knowledge]: 'Knowledge',
 };
 
 function newId(): string {
@@ -77,6 +80,8 @@ function defaultConfig(stepType: StepType): NodeConfig {
       return { criteria: '' };
     case StepType.End:
       return { summary: 'all' };
+    case StepType.Knowledge:
+      return { knowledgeBaseId: '' };
     default:
       return {};
   }

@@ -19,7 +19,10 @@ public enum StepType
     Agent = 3,
 
     /// <summary>A critic / review step (convergence / evaluation).</summary>
-    Critic = 4
+    Critic = 4,
 
-    // P2 reserved: Code, Http, Tool, Knowledge, Condition, Loop, Variable, SubWorkflow, Delay, UserInput
+    /// <summary>知识库检索节点：从指定知识库的向量集合检索相关片段作为下游 artifact。</summary>
+    Knowledge = 5
+
+    // P2 reserved: Code, Http, Tool, Condition, Loop, Variable, SubWorkflow, Delay, UserInput
 }

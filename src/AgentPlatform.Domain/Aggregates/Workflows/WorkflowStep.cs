@@ -82,4 +82,7 @@ public sealed class WorkflowStep : IWorkflowExecutable
 
     /// <inheritdoc/>
     StepType? IWorkflowExecutable.Type => null;
+
+    /// <inheritdoc/>
+    string IWorkflowExecutable.ConfigJson => "{}";
 }

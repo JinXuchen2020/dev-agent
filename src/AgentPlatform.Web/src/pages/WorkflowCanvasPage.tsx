@@ -49,6 +49,7 @@ const nodeTypes: NodeTypes = {
   llm: DagNode,
   agent: DagNode,
   critic: DagNode,
+  knowledge: DagNode,
 };
 
 const CanvasInner: React.FC = () => {
