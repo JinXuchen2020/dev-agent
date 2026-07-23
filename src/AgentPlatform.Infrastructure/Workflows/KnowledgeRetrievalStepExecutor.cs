@@ -76,7 +76,7 @@ internal sealed class KnowledgeRetrievalStepExecutor : IStepExecutor
             }
 
             var chunks = docs.Select(d => d.Content).ToArray();
-            var sources = docs.Select(d => d.DocumentId).Where(s => !string.IsNullOrWhiteSpace(s)).ToArray()!;
+            var sources = docs.Select(d => d.DocumentId).OfType<string>().ToArray();
             var output = string.Join("\n", chunks);
 
             _logger.LogInformation("知识检索节点 {StepName}：检索到 {Count} 个片段", step.Name, chunks.Length);
@@ -116,7 +116,7 @@ internal sealed class KnowledgeRetrievalStepExecutor : IStepExecutor
         return string.Join("\n", parts).Trim();
     }
 
-    private static KnowledgeNodeConfig ParseConfig(string? configJson)
+    private KnowledgeNodeConfig ParseConfig(string? configJson)
     {
         if (string.IsNullOrWhiteSpace(configJson))
             return new KnowledgeNodeConfig(null, null, null, null, null);
@@ -141,8 +141,9 @@ internal sealed class KnowledgeRetrievalStepExecutor : IStepExecutor
 
             return new KnowledgeNodeConfig(kbId, collection, query, topK, minScore);
         }
-        catch (JsonException)
+        catch (JsonException ex)
         {
+            _logger.LogWarning(ex, "知识检索节点配置 JSON 解析失败，按空配置处理");
             return new KnowledgeNodeConfig(null, null, null, null, null);
         }
     }

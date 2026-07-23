@@ -52,6 +52,7 @@ public sealed class KnowledgeBasesController : ControllerBase
 
     /// <summary>上传文档到知识库：切分并入库向量存储。</summary>
     [HttpPost("{id:guid}/documents")]
+    [RequestSizeLimit(100 * 1024 * 1024)]
     public async Task<IActionResult> UploadDocument(
         Guid id,
         IFormFile file,
@@ -59,6 +60,9 @@ public sealed class KnowledgeBasesController : ControllerBase
     {
         if (file is null || file.Length == 0)
             return BadRequest("file is required");
+
+        if (file.Length > 100 * 1024 * 1024)
+            return BadRequest("file too large (max 100MB)");
 
         byte[] bytes;
         await using (var readStream = file.OpenReadStream())

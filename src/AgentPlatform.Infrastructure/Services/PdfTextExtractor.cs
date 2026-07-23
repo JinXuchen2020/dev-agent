@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.RegularExpressions;
 using AgentPlatform.Application.Abstractions;
+using Microsoft.Extensions.Logging;
 
 namespace AgentPlatform.Infrastructure.Services;
 
@@ -15,6 +16,13 @@ internal sealed class PdfTextExtractor : IDocumentTextExtractor
 {
     private static readonly byte[] StreamMarker = "stream"u8.ToArray();
     private static readonly byte[] EndStreamMarker = "endstream"u8.ToArray();
+
+    private readonly ILogger<PdfTextExtractor>? _logger;
+
+    public PdfTextExtractor(ILogger<PdfTextExtractor>? logger = null)
+    {
+        _logger = logger;
+    }
 
     private static readonly Regex Tj =
         new(@"\((?<t>(?:\\.|[^()\\])*)\)\s*Tj", RegexOptions.Compiled);
@@ -38,10 +46,10 @@ internal sealed class PdfTextExtractor : IDocumentTextExtractor
     {
         using var ms = new MemoryStream();
         content.CopyTo(ms);
-        return ExtractText(ms.ToArray());
+        return ExtractText(ms.ToArray(), _logger);
     }
 
-    internal static string ExtractText(byte[] data)
+    internal static string ExtractText(byte[] data, ILogger? logger = null)
     {
         var sb = new StringBuilder();
 
@@ -49,7 +57,7 @@ internal sealed class PdfTextExtractor : IDocumentTextExtractor
         CollectFromSource(Encoding.Latin1.GetString(data), sb);
 
         // 2) 解压所有 /FlateDecode 流并扫描
-        foreach (var decompressed in DecompressStreams(data))
+        foreach (var decompressed in DecompressStreams(data, logger))
         {
             CollectFromSource(Encoding.Latin1.GetString(decompressed), sb);
         }
@@ -74,7 +82,7 @@ internal sealed class PdfTextExtractor : IDocumentTextExtractor
         }
     }
 
-    private static List<byte[]> DecompressStreams(byte[] data)
+    private static List<byte[]> DecompressStreams(byte[] data, ILogger? logger = null)
     {
         var result = new List<byte[]>();
         var latin1 = Encoding.Latin1;
@@ -102,17 +110,30 @@ internal sealed class PdfTextExtractor : IDocumentTextExtractor
             {
                 var streamBytes = new byte[end - after];
                 Array.Copy(data, after, streamBytes, 0, streamBytes.Length);
+
+                // 剥离 endstream 前的尾随 EOL，避免合法 zlib 流被误判为损坏而跳过
+                int len = streamBytes.Length;
+                while (len > 0 && (streamBytes[len - 1] == '\r' || streamBytes[len - 1] == '\n'))
+                    len--;
+
+                if (len == 0)
+                {
+                    i = end + EndStreamMarker.Length;
+                    continue;
+                }
+
                 try
                 {
-                    using var input = new MemoryStream(streamBytes);
+                    using var input = new MemoryStream(streamBytes, 0, len);
                     using var zlib = new ZLibStream(input, CompressionMode.Decompress);
                     using var outMs = new MemoryStream();
                     zlib.CopyTo(outMs);
                     result.Add(outMs.ToArray());
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // 解压失败（损坏/非 zlib 负载）跳过该流
+                    // 解压失败（损坏/非 zlib 负载）跳过该流，但记录以便排查内容丢失
+                    logger?.LogWarning(ex, "PDF FlateDecode 流解压失败，已跳过该流");
                 }
             }
 

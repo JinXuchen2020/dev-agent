@@ -16,12 +16,18 @@ internal sealed class PlainTextExtractor : IDocumentTextExtractor
 
     public bool Supports(string fileName, string contentType)
     {
-        if (!string.IsNullOrWhiteSpace(contentType)
-            && (contentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase)
-                || contentType.Equals("application/json", StringComparison.OrdinalIgnoreCase)
-                || contentType.Equals("application/xml", StringComparison.OrdinalIgnoreCase)))
+        if (!string.IsNullOrWhiteSpace(contentType))
         {
-            return true;
+            // HTML 由 HtmlTextExtractor 独占，避免与 text/* 兜底重叠导致顺序依赖
+            if (contentType.Equals("text/html", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            if (contentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase)
+                || contentType.Equals("application/json", StringComparison.OrdinalIgnoreCase)
+                || contentType.Equals("application/xml", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
         }
 
         var ext = Path.GetExtension(fileName);
