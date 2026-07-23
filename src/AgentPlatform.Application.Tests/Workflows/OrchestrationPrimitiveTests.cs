@@ -1,4 +1,5 @@
 using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Domain.Abstractions;
 using AgentPlatform.Domain.Aggregates.Workflows;
 using AgentPlatform.Domain.Enums;
 using AgentPlatform.Domain.Repositories;
@@ -46,25 +47,25 @@ public sealed class OrchestrationPrimitiveTests
         return workflow;
     }
 
-    private static IStepExecutor CreateStepExecutor(Func<WorkflowStep, WorkflowContext, StepExecutionResult> execute)
+    private static IStepExecutor CreateStepExecutor(Func<IWorkflowExecutable, WorkflowContext, StepExecutionResult> execute)
     {
         var executor = Substitute.For<IStepExecutor>();
         executor.StepType.Returns("*");
         executor.ExecuteAsync(default!, default!, default)
             .ReturnsForAnyArgs(call => execute(
-                call.ArgAt<WorkflowStep>(0),
+                call.ArgAt<IWorkflowExecutable>(0),
                 call.ArgAt<WorkflowContext>(1)));
         return executor;
     }
 
     private static IStepExecutor CreateStepExecutor(
-        Func<WorkflowStep, WorkflowContext, CancellationToken, Task<StepExecutionResult>> execute)
+        Func<IWorkflowExecutable, WorkflowContext, CancellationToken, Task<StepExecutionResult>> execute)
     {
         var executor = Substitute.For<IStepExecutor>();
         executor.StepType.Returns("*");
         executor.ExecuteAsync(default!, default!, default)
             .ReturnsForAnyArgs(call => execute(
-                call.ArgAt<WorkflowStep>(0),
+                call.ArgAt<IWorkflowExecutable>(0),
                 call.ArgAt<WorkflowContext>(1),
                 call.ArgAt<CancellationToken>(2)));
         return executor;
@@ -130,8 +131,8 @@ public sealed class OrchestrationPrimitiveTests
         _repository.GetByIdAsync(workflow.Id, default).Returns(workflow);
 
         var executor = CreateStepExecutor((step, ctx) =>
-            StepExecutionResult.Success($"output-{step.StepName}",
-                $"{{\"step\":\"{step.StepName}\"}}"));
+            StepExecutionResult.Success($"output-{step.Name}",
+                $"{{\"step\":\"{step.Name}\"}}"));
         SetupExecutor(executor);
 
         var result = await _primitive.RunAsync(workflow, OrchestrationPreset.Sequential);
@@ -224,7 +225,7 @@ public sealed class OrchestrationPrimitiveTests
         _repository.GetByIdAsync(workflow.Id, default).Returns(workflow);
 
         var executor = CreateStepExecutor((step, ctx) =>
-            StepExecutionResult.Success($"output-{step.StepName}"));
+            StepExecutionResult.Success($"output-{step.Name}"));
         SetupExecutor(executor);
 
         await _primitive.PauseAsync(workflow.Id);
@@ -248,7 +249,7 @@ public sealed class OrchestrationPrimitiveTests
         _repository.GetByIdAsync(workflow.Id, default).Returns(workflow);
 
         var executor = CreateStepExecutor((step, ctx) =>
-            StepExecutionResult.Success($"retried-{step.StepName}"));
+            StepExecutionResult.Success($"retried-{step.Name}"));
         SetupExecutor(executor);
 
         await _primitive.RetryStepAsync(workflow.Id, 0);
@@ -346,7 +347,7 @@ public sealed class OrchestrationPrimitiveTests
         var executor = CreateStepExecutor((step, ctx) =>
         {
             executionOrder.Add(step.Order);
-            return StepExecutionResult.Success($"output-{step.StepName}");
+            return StepExecutionResult.Success($"output-{step.Name}");
         });
         SetupExecutor(executor);
 
@@ -366,7 +367,7 @@ public sealed class OrchestrationPrimitiveTests
         _repository.GetByIdAsync(workflow.Id, default).Returns(workflow);
 
         var executor = CreateStepExecutor((step, ctx) =>
-            StepExecutionResult.Success($"output-{step.StepName}"));
+            StepExecutionResult.Success($"output-{step.Name}"));
         var termination = Substitute.For<ITerminationCondition>();
         termination.ShouldTerminateAsync(Arg.Any<WorkflowContext>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(true));
@@ -388,7 +389,7 @@ public sealed class OrchestrationPrimitiveTests
         _repository.GetByIdAsync(workflow.Id, default).Returns(workflow);
 
         var executor = CreateStepExecutor((step, ctx) =>
-            StepExecutionResult.Success($"output-{step.StepName}"));
+            StepExecutionResult.Success($"output-{step.Name}"));
         var termination = Substitute.For<ITerminationCondition>();
         termination.ShouldTerminateAsync(Arg.Any<WorkflowContext>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(false));
@@ -409,7 +410,7 @@ public sealed class OrchestrationPrimitiveTests
         _repository.GetByIdAsync(workflow.Id, default).Returns(workflow);
 
         var executor = CreateStepExecutor((step, ctx) =>
-            StepExecutionResult.Success($"output-{step.StepName}"));
+            StepExecutionResult.Success($"output-{step.Name}"));
         var termination = Substitute.For<ITerminationCondition>();
         bool firstCheck = true;
         termination.ShouldTerminateAsync(Arg.Any<WorkflowContext>(), Arg.Any<CancellationToken>())
@@ -441,7 +442,7 @@ public sealed class OrchestrationPrimitiveTests
             callCount++;
             return callCount <= 1
                 ? StepExecutionResult.RetryableFailure("transient error")
-                : StepExecutionResult.Success($"output-{step.StepName}");
+                : StepExecutionResult.Success($"output-{step.Name}");
         });
         var termination = Substitute.For<ITerminationCondition>();
         bool firstCall = true;
@@ -503,8 +504,8 @@ public sealed class OrchestrationPrimitiveTests
         var executed = new List<string>();
         var executor = CreateStepExecutor((step, ctx) =>
         {
-            executed.Add(step.StepName);
-            return StepExecutionResult.Success($"output-{step.StepName}");
+            executed.Add(step.Name);
+            return StepExecutionResult.Success($"output-{step.Name}");
         });
         SetupExecutor(executor);
 
@@ -538,7 +539,7 @@ public sealed class OrchestrationPrimitiveTests
                 try { await Task.Delay(Timeout.InfiniteTimeSpan, ct); }
                 catch (OperationCanceledException) { throw; }
             }
-            return StepExecutionResult.Success($"output-{step.StepName}");
+            return StepExecutionResult.Success($"output-{step.Name}");
         });
         SetupExecutor(executor);
 

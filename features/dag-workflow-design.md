@@ -269,3 +269,21 @@ run 处理器调用 `GetTopologicalOrder()` 拓扑序执行（§3.1）。
 - **回归**：现有 P0 端点（`PUT` 仅 `steps`、`POST /{id}/run`）必须保持可用——双模式兼容（§4.1/§8.4）保障。
 - **数据迁移**：已存 `WorkflowStep` 记录在 `ReplaceSteps` 链化 + 读取投影下不破坏；EF 迁移新增 `WorkflowNodes`/`WorkflowEdges` 表，旧 `WorkflowSteps` 表可保留或迁移脚本转写。
 - **多租户**：`WorkflowNode`/`WorkflowEdge` 继承 `ITenantScoped`（或经 `WorkflowId` 间接隔离），`HasQueryFilter` 已覆盖聚合根，需确认导航属性隔离生效（参考 R2 教训，加租户回归测试）。
+
+## 12. 质量门清单（Quality Gate Checklist）
+
+> 嵌入本设计文档（ddd-phase-quality-gate 约定：清单随设计文档，不另建文件）。结论见 `docs/quality/p1-dag-workflow-gate.md`。
+
+| 类别 | 检查项 | 结果 | 证据 |
+|------|--------|------|------|
+| 结构 P0 | 命令/查询处理器在 Application，执行器在 Infrastructure，聚合不依赖基础设施 | PASS | `RunNodeCommand`/`UpdateWorkflowCommand` 在 Application；`WorkflowNodeRunner` 在 Infrastructure |
+| 结构 P0 | 聚合不变量保留（`ValidateGraph`/`GetTopologicalOrder`/`SyncStepsFromGraph`） | PASS | `Workflow.cs` 领域方法 + `WorkflowGraphTests` |
+| 结构 P1 | 多租户隔离（节点/边经聚合根 OwnsMany，全局 HasQueryFilter 级联） | PASS | `WorkflowConfiguration.OwnsMany` + Phase 5 `HasQueryFilter` |
+| 结构 P1 | DAG 执行排除 Start/End 标记，拓扑序收敛 | PASS | `SequentialOrchestrator.DagExecutionOrder` + 测试 |
+| 结构 P2 | 前端无 god-component（store/页面/组件分离） | PASS | `workflowCanvasStore` / `WorkflowCanvasPage` / `DagNode` 等职责分离 |
+| 结构 P3 | 新公共类型/成员中文 XML 注释（项目约定） | PASS | `WorkflowNode`/`WorkflowEdge`/`WorkflowGraphException`/`IWorkflowNodeRunner` 摘要已中文化 |
+| 评审 P0/P1 | 对抗式评审无崩溃/数据丢失/越权/逻辑错误 | PASS | `ddd-code-reviewer`：0 open；TenantId 校验 + 409/422 处理器齐备 |
+| 评审 P2 | 测试覆盖设计 §9 验收（ValidateGraph/GetTopologicalOrder/ResolveExecutor/roundtrip） | PASS | `WorkflowGraphTests`(12) + `WorkflowNodeRunnerTests`(4) |
+| 优化 | 前端 QA 五闸门 + 后端 build/test 全绿 | PASS | `qa.mjs` OVERALL PASS；`dotnet build` 0/0；`dotnet test` 159 passed |
+
+**门结论**：reviewer / structureGate / codebaseOptimizer 等价检查 **全部 PASS（0 open）**，`.quality-gate.json` cleared:true，与 `src/` 改动一同提交（commit 含 `Quality-Gate:` 行）。

@@ -1,8 +1,8 @@
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Application.Workflows.Queries.GetWorkflow;
+using AgentPlatform.Domain;
 using AgentPlatform.Domain.Aggregates.Workflows;
 using AgentPlatform.Domain.Enums;
-using AgentPlatform.Domain;
 using AgentPlatform.Domain.Repositories;
 using MediatR;
 
@@ -32,21 +32,23 @@ internal sealed class UpdateWorkflowCommandHandler
             wf.Rename(request.Name);
         if (!string.IsNullOrWhiteSpace(request.InitialContext))
             wf.UpdateContext(request.InitialContext);
-        if (request.Steps is { Count: > 0 })
+
+        if (request.Nodes is { Count: > 0 })
+        {
+            wf.ReplaceGraph(
+                request.Nodes.Select(n => (n.Id, n.Type, n.Name, n.Position.X, n.Position.Y, n.Config, n.AssignedAgentId)).ToList(),
+                request.Edges?
+                    .Select(e => (e.Id, e.Source, e.Target, e.Label))
+                    .ToList()
+                    ?? new List<(Guid, Guid, Guid, string?)>());
+        }
+        else if (request.Steps is { Count: > 0 })
+        {
             wf.ReplaceSteps(request.Steps);
+        }
 
         _repo.Update(wf); // tracked entity; UnitOfWorkBehavior commits
 
-        return ToDetailResponse(wf);
+        return GetWorkflowQuery.ToDetailResponse(wf);
     }
-
-    internal static WorkflowDetailResponse ToDetailResponse(Workflow wf) => new(
-        wf.Id,
-        wf.Name,
-        wf.CurrentState,
-        wf.Steps.Select(s => new WorkflowStepResponse(
-            s.Id, s.Order, s.StepName, s.AssignedAgentId, s.State, s.Result, s.ErrorDetail)).ToList(),
-        wf.Context,
-        wf.CreatedAt,
-        wf.UpdatedAt);
 }

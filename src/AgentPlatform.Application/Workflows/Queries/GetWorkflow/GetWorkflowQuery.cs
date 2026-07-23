@@ -1,43 +1,47 @@
+using AgentPlatform.Domain.Aggregates.Workflows;
 using AgentPlatform.Domain.Enums;
 using MediatR;
 
 namespace AgentPlatform.Application.Workflows.Queries.GetWorkflow;
 
 /// <summary>
-/// Query to retrieve the full detail of a workflow by its ID, including all steps.
+/// Query to retrieve the full detail of a workflow by its ID, including steps, graph nodes, and edges.
 /// </summary>
 /// <param name="Id">The workflow identifier.</param>
-public sealed record GetWorkflowQuery(Guid Id) : IRequest<WorkflowDetailResponse?>;
+public sealed record GetWorkflowQuery(Guid Id) : IRequest<WorkflowDetailResponse?>
+{
+    /// <summary>Maps a <see cref="Workflow"/> aggregate to its detail response. Shared by query and command handlers.</summary>
+    internal static WorkflowDetailResponse ToDetailResponse(Workflow wf) => new(
+        wf.Id,
+        wf.Name,
+        wf.CurrentState,
+        wf.Steps.Select(s => new WorkflowStepResponse(
+            s.Id, s.Order, s.StepName, s.AssignedAgentId, s.State, s.Result, s.ErrorDetail)).ToList(),
+        wf.Nodes.Select(n => new WorkflowNodeResponse(
+            n.Id, n.Type, n.Name, n.Order, n.PositionX, n.PositionY, n.ConfigJson,
+            n.State, n.Result, n.ErrorDetail, n.AssignedAgentId)).ToList(),
+        wf.Edges.Select(e => new WorkflowEdgeResponse(
+            e.Id, e.SourceNodeId, e.TargetNodeId, e.Label)).ToList(),
+        wf.Context,
+        wf.CreatedAt,
+        wf.UpdatedAt);
+}
 
 /// <summary>
-/// Full detail of a workflow including all steps.
+/// Full detail of a workflow including steps, graph nodes, and edges.
 /// </summary>
-/// <param name="Id">The workflow identifier.</param>
-/// <param name="Name">The workflow name.</param>
-/// <param name="CurrentState">The current execution state.</param>
-/// <param name="Steps">The workflow steps.</param>
-/// <param name="Context">The shared context JSON.</param>
-/// <param name="CreatedAt">When the workflow was created.</param>
-/// <param name="UpdatedAt">When the workflow was last updated.</param>
 public sealed record WorkflowDetailResponse(
     Guid Id,
     string Name,
     WorkflowState CurrentState,
     IReadOnlyList<WorkflowStepResponse> Steps,
+    IReadOnlyList<WorkflowNodeResponse> Nodes,
+    IReadOnlyList<WorkflowEdgeResponse> Edges,
     string Context,
     DateTime CreatedAt,
     DateTime UpdatedAt);
 
-/// <summary>
-/// Response model for a single workflow step.
-/// </summary>
-/// <param name="Id">The step identifier.</param>
-/// <param name="Order">The zero-based step order.</param>
-/// <param name="StepName">The step name.</param>
-/// <param name="AssignedAgentId">The assigned agent ID, if any.</param>
-/// <param name="State">The step execution state.</param>
-/// <param name="Result">The step result, if any.</param>
-/// <param name="ErrorDetail">The error detail, if any.</param>
+/// <summary>Response model for a single workflow step (legacy linear projection).</summary>
 public sealed record WorkflowStepResponse(
     Guid Id,
     int Order,
@@ -47,8 +51,28 @@ public sealed record WorkflowStepResponse(
     string? Result,
     string? ErrorDetail);
 
-internal sealed class GetWorkflowQueryHandler(
-    Domain.Repositories.IWorkflowRepository repository)
+/// <summary>Response model for a single workflow graph node.</summary>
+public sealed record WorkflowNodeResponse(
+    Guid Id,
+    StepType Type,
+    string Name,
+    int Order,
+    double PositionX,
+    double PositionY,
+    string ConfigJson,
+    WorkflowState State,
+    string? Result,
+    string? ErrorDetail,
+    Guid? AssignedAgentId);
+
+/// <summary>Response model for a single workflow graph edge.</summary>
+public sealed record WorkflowEdgeResponse(
+    Guid Id,
+    Guid SourceNodeId,
+    Guid TargetNodeId,
+    string? Label);
+
+internal sealed class GetWorkflowQueryHandler(Domain.Repositories.IWorkflowRepository repository)
     : IRequestHandler<GetWorkflowQuery, WorkflowDetailResponse?>
 {
     public async Task<WorkflowDetailResponse?> Handle(
@@ -58,14 +82,6 @@ internal sealed class GetWorkflowQueryHandler(
         if (workflow == null)
             return null;
 
-        return new WorkflowDetailResponse(
-            workflow.Id,
-            workflow.Name,
-            workflow.CurrentState,
-            workflow.Steps.Select(s => new WorkflowStepResponse(
-                s.Id, s.Order, s.StepName, s.AssignedAgentId, s.State, s.Result, s.ErrorDetail)).ToList(),
-            workflow.Context,
-            workflow.CreatedAt,
-            workflow.UpdatedAt);
+        return GetWorkflowQuery.ToDetailResponse(workflow);
     }
 }

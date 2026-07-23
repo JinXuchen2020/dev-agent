@@ -7,7 +7,7 @@ import DashboardPage from './pages/DashboardPage';
 import AgentsPage from './pages/AgentsPage';
 import WorkflowsPage from './pages/WorkflowsPage';
 import WorkflowDetailPage from './pages/WorkflowDetailPage';
-import WorkflowEditorPage from './pages/WorkflowEditorPage';
+import WorkflowCanvasPage from './pages/WorkflowCanvasPage';
 import AgentRolesPage from './pages/AgentRolesPage';
 import AgentConfigurationsPage from './pages/AgentConfigurationsPage';
 import ExecutionLogsPage from './pages/ExecutionLogsPage';
@@ -29,9 +29,9 @@ const App: React.FC = () => {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/agents" element={<AgentsPage />} />
             <Route path="/workflows" element={<WorkflowsPage />} />
-            <Route path="/workflows/new" element={<WorkflowEditorPage />} />
-            <Route path="/workflows/:id" element={<WorkflowDetailPage />} />
-            <Route path="/workflows/:id/edit" element={<WorkflowEditorPage />} />
+          <Route path="/workflows/new" element={<WorkflowCanvasPage />} />
+          <Route path="/workflows/:id" element={<WorkflowDetailPage />} />
+          <Route path="/workflows/:id/edit" element={<WorkflowCanvasPage />} />
             <Route path="/agent-roles" element={<AgentRolesPage />} />
             <Route path="/agent-configurations" element={<AgentConfigurationsPage />} />
             <Route path="/execution-logs" element={<ExecutionLogsPage />} />

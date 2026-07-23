@@ -9,12 +9,31 @@ import type {
   ExecutionLogDetail,
   ApiKey,
   Conversation,
+  WorkflowNodeRequest,
+  WorkflowEdgeRequest,
+  WorkflowNodeRunResult,
 } from '../types';
 
 const api = axios.create({
   baseURL: '/api/v1',
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
+});
+
+api.interceptors.request.use((config) => {
+  const token =
+    typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+  if (token) {
+    if (config.headers && typeof (config.headers as { set?: unknown }).set === 'function') {
+      (config.headers as { set: (k: string, v: string) => void }).set(
+        'Authorization',
+        `Bearer ${token}`,
+      );
+    } else {
+      config.headers = { ...(config.headers as object), Authorization: `Bearer ${token}` } as typeof config.headers;
+    }
+  }
+  return config;
 });
 
 api.interceptors.response.use(
@@ -45,10 +64,24 @@ export const getWorkflow = (id: string) =>
   api.get<WorkflowDetail>(`/workflows/${id}`).then((r) => r.data);
 export const runWorkflow = (data: { name: string; initialContext: string; steps?: string[] }) =>
   api.post<Workflow>('/workflows', data).then((r) => r.data);
-export const updateWorkflow = (id: string, data: { name?: string; initialContext?: string; steps?: string[] }) =>
-  api.put<WorkflowDetail>(`/workflows/${id}`, data).then((r) => r.data);
+export const updateWorkflow = (
+  id: string,
+  data: {
+    name?: string;
+    initialContext?: string;
+    steps?: string[];
+    nodes?: WorkflowNodeRequest[];
+    edges?: WorkflowEdgeRequest[];
+  },
+) => api.put<WorkflowDetail>(`/workflows/${id}`, data).then((r) => r.data);
 export const runExistingWorkflow = (id: string, preset?: string) =>
   api.post<WorkflowDetail>(`/workflows/${id}/run`, preset ? { preset } : {}).then((r) => r.data);
+
+// P1: run a single node for debugging; returns the node's new state/result.
+export const runWorkflowNode = (id: string, nodeId: string) =>
+  api
+    .post<WorkflowNodeRunResult>(`/workflows/${id}/nodes/${nodeId}/run`)
+    .then((r) => r.data);
 
 // Execution Logs
 export const getExecutionLogs = (params?: {

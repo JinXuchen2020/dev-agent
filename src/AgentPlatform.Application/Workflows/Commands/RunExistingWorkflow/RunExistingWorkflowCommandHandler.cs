@@ -47,6 +47,6 @@ internal sealed class RunExistingWorkflowCommandHandler
             details: $"Re-ran workflow '{result.Name}'");
         _auditLogRepository.Add(auditLog);
 
-        return UpdateWorkflowCommandHandler.ToDetailResponse(result);
+        return GetWorkflowQuery.ToDetailResponse(result);
     }
 }

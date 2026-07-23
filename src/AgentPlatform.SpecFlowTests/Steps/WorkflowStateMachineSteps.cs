@@ -1,4 +1,5 @@
 using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Domain.Abstractions;
 using AgentPlatform.Domain.Aggregates.Workflows;
 using AgentPlatform.Domain.Enums;
 using System.Collections.Concurrent;
@@ -248,6 +249,8 @@ public class WorkflowStateMachineSteps
 
         public string StepType => "*";
 
+        public StepType? HandlesType => null;
+
         public bool IsBranchExecutor { get; set; }
         public bool BranchSucceeds { get; set; }
         public bool WasInvoked { get; private set; }
@@ -267,10 +270,10 @@ public class WorkflowStateMachineSteps
             return _executionCounts.TryGetValue(stepName, out var c) ? c : 0;
         }
 
-        public Task<StepExecutionResult> ExecuteAsync(WorkflowStep step, WorkflowContext ctx, CancellationToken ct)
+        public Task<StepExecutionResult> ExecuteAsync(IWorkflowExecutable step, WorkflowContext ctx, CancellationToken ct)
         {
             WasInvoked = true;
-            var key = step.StepName;
+            var key = step.Name;
             _executionCounts.AddOrUpdate(key, 1, (_, c) => c + 1);
 
             if (IsBranchExecutor)
@@ -285,7 +288,7 @@ public class WorkflowStateMachineSteps
                 return Task.FromResult(StepExecutionResult.RetryableFailure("Step always fails"));
             }
 
-            return Task.FromResult(StepExecutionResult.Success($"Output from {step.StepName}", "{}"));
+            return Task.FromResult(StepExecutionResult.Success($"Output from {step.Name}", "{}"));
         }
     }
 

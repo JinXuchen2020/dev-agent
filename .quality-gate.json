@@ -1,9 +1,9 @@
 {
-  "phase": "p0-workflow-update-endpoint",
-  "reviewer": "ddd-code-reviewer PASSED (2026-07-22 P0 workflow update: backend aggregate Rename/ReplaceSteps, UpdateWorkflow+RunExisting commands/handlers, PUT + run endpoints, ConflictException→409; frontend edit-mode PUT + SSE fetch+JWT; checklist adapted for .NET DDD + React/TS)",
-  "structureGate": "ddd-phase-quality-gate PASS (P0=0 P1=0 P2=0 P3=0; handlers layered, aggregate invariants preserved, no god-components)",
-  "codebaseOptimizer": "frontend QA pipeline PASSED (typecheck/lint/build/unit all green); dotnet build + 74 backend tests PASS (Application 65, Api 9)",
+  "phase": "p1-dag-workflow-mvp",
+  "reviewer": "ddd-code-reviewer PASSED (2026-07-23 P1 DAG 画布 MVP: 对抗式评审后端聚合/执行器路由/命令处理器/控制器与前端 store/画布；P0/P1/P2=0 open；TenantId 校验+409/422 处理器齐备；P3 两项（缺失 DAG 单测+新类型英文注释）已修)",
+  "structureGate": "ddd-phase-quality-gate PASS (P0=0 P1=0 P2=0 P3=0; 分层正确、聚合不变量保留、前端无 god-component、新公共类型中文注释)",
+  "codebaseOptimizer": "frontend QA pipeline PASSED (typecheck/lint/build/unit OVERALL PASS); dotnet build 0 警告 0 错误; dotnet test 159 passed (Application 77, Infrastructure 21, Api 9, Integration 5, Arch 6, SpecFlow 41)",
   "cleared": true,
-  "reportRef": "docs/quality/p0-workflow-update-gate.md",
-  "notes": "Implements features/put-workflow-design.md (P0). Closes backlog B1/B2/B3/B4 + P0 intent. RAG R1-R4 and remaining O1-O14 remain open (tracked in features/backlog.md)."
+  "reportRef": "docs/quality/p1-dag-workflow-gate.md",
+  "notes": "实现 features/dag-workflow-design.md（P1 DAG 画布 MVP）。后端 WorkflowNode/Edge + StepType + WorkflowGraphException + IWorkflowExecutable；Workflow 聚合 ReplaceGraph/GetTopologicalOrder/ValidateGraph/SyncStepsFromGraph；WorkflowNodeRunner + RunNodeCommand；SequentialOrchestrator DAG 拓扑路由；前端 canvas store/页面/组件 + JWT 拦截器。新增 DAG 单测 16 例。关联 backlog §五 P1。"
 }

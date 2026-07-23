@@ -209,6 +209,9 @@ public static class DependencyInjection
         services.AddScoped<IStepExecutor, AgentCallStepExecutor>();
         services.AddScoped<IStepExecutor, CriticStepExecutor>();
 
+        // Single-node runner for DAG debugging (POST /{id}/nodes/{nodeId}/run)
+        services.AddScoped<IWorkflowNodeRunner, WorkflowNodeRunner>();
+
         // Strategy implementations for presets
         services.AddScoped<ISelectionStrategy, RoleBasedSelectionStrategy>();
         services.AddScoped<ITerminationCondition, CriticConvergenceTermination>();
