@@ -17,6 +17,8 @@ import KnowledgeBaseDetailPage from './pages/KnowledgeBaseDetailPage';
 import ConversationsPage from './pages/ConversationsPage';
 import ConversationDetailPage from './pages/ConversationDetailPage';
 import ErrorBoundary from './components/ErrorBoundary';
+import LoginPage from './pages/LoginPage';
+import NotFoundPage from './pages/NotFoundPage';
 
 const App: React.FC = () => {
   return (
@@ -31,6 +33,7 @@ const App: React.FC = () => {
       <AntApp>
         <ErrorBoundary>
           <Routes>
+            <Route path="/login" element={<LoginPage />} />
             <Route element={<AppLayout />}>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/agents" element={<AgentsPage />} />
@@ -46,6 +49,7 @@ const App: React.FC = () => {
             <Route path="/knowledge-bases/:id" element={<KnowledgeBaseDetailPage />} />
             <Route path="/conversations" element={<ConversationsPage />} />
             <Route path="/conversations/:id" element={<ConversationDetailPage />} />
+              <Route path="*" element={<NotFoundPage />} />
             </Route>
           </Routes>
         </ErrorBoundary>

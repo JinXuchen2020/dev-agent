@@ -19,12 +19,12 @@ const LoginPage: React.FC = () => {
       // 优先走后端 dev-login 换取真实 JWT（需 Security:DevLoginEnabled=true）
       const res = await devLogin({ role: 'Admin', userId: email });
       localStorage.setItem('auth_token', res.token);
-      login(email);
+      login(res.token, email);
       message.success('登录成功');
       navigate(from?.pathname || '/', { replace: true });
     } catch {
-      // 后端未开启 dev-login 时，降级为本地演示登录
-      login(email);
+      // 后端未开启 dev-login 时，降级为本地演示登录（无令牌，邮箱回退到输入框）
+      login(undefined, email);
       message.warning('后端未开启 Dev Login，已使用本地演示会话');
       navigate(from?.pathname || '/', { replace: true });
     } finally {

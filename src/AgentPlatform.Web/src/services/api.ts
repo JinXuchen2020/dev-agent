@@ -175,3 +175,19 @@ export function getErrorMessage(e: unknown): string {
   return String(e);
 }
 
+// 客户端解码 JWT payload（仅用于展示真实身份，不做签名校验；后端仍是鉴权权威）。
+// 后端 dev-login 令牌声明：sub/name（= 邮箱）、role（见 DevLoginEndpoint.cs:35-39；无 tenant_id）。
+export function decodeJwt(token: string): Record<string, string | undefined> | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const bin = atob(b64);
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    const json = new TextDecoder().decode(bytes);
+    return JSON.parse(json) as Record<string, string | undefined>;
+  } catch {
+    return null;
+  }
+}
+
