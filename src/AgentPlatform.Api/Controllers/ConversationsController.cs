@@ -7,6 +7,7 @@ using AgentPlatform.Application.Conversations.Commands.SetConversationKnowledgeB
 using AgentPlatform.Application.Conversations.Queries.GetConversationById;
 using AgentPlatform.Application.Conversations.Queries.GetConversations;
 using AgentPlatform.Application.Routing.Queries.GetCostReport;
+using AgentPlatform.Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -53,14 +54,20 @@ public sealed class ConversationsController : ControllerBase
     }
 
     /// <summary>
-    /// Retrieves all conversations belonging to the current tenant.
+    /// Retrieves conversations belonging to the current tenant, optionally filtered
+    /// by lifecycle <paramref name="status"/> and a free-text <paramref name="q"/> match.
     /// </summary>
+    /// <param name="status">Optional lifecycle status to filter by.</param>
+    /// <param name="q">Optional free-text search across id, workflow id, knowledge base id, collection name, and message contents.</param>
     /// <param name="ct">A token to observe for cancellation of the request.</param>
     /// <returns>An <see cref="IActionResult"/> containing a list of conversations.</returns>
     [HttpGet]
-    public async Task<IActionResult> GetConversations(CancellationToken ct)
+    public async Task<IActionResult> GetConversations(
+        [FromQuery] ConversationStatus? status,
+        [FromQuery] string? q,
+        CancellationToken ct)
     {
-        var conversations = await _mediator.Send(new GetConversationsQuery(), ct);
+        var conversations = await _mediator.Send(new GetConversationsQuery(status, q), ct);
         return Ok(conversations);
     }
 

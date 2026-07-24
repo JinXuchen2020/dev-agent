@@ -20,7 +20,7 @@ namespace AgentPlatform.Api.Controllers;
 [Authorize]
 [ApiController]
 [ApiVersion("1.0")]
-[Route("api/v1/[controller]")]
+[Route("api/v1/agent-configurations")]
 public sealed class AgentConfigurationsController : ControllerBase
 {
     private readonly IMediator _mediator;

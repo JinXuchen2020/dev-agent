@@ -36,9 +36,16 @@ api.interceptors.response.use(
     if (status === 401) {
       // Notify the router layer to redirect to /login inside the SPA
       // (no full-page reload, no unhandled rejection white screen).
+      // Expected during an unauthenticated session check — do NOT log as error.
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('auth:unauthorized'));
       }
+      return Promise.reject(error);
+    }
+    // Requests aborted mid-flight (e.g. SPA navigation away) are expected;
+    // logging them only adds console noise.
+    if (error?.code === 'ERR_CANCELED' || /canceled/i.test(error?.message ?? '')) {
+      return Promise.reject(error);
     }
     console.error('API Error:', error.response?.data || error.message);
     return Promise.reject(error);
@@ -55,12 +62,30 @@ export const getAgentRole = (roleCode: string) =>
   api.get<AgentRole>(`/agent-roles/${roleCode}`).then((r) => r.data);
 
 // Agent Configurations
-export const getAgentConfigurations = (params?: { type?: string; skip?: number; take?: number }) =>
-  api.get<{ items: AgentConfiguration[]; totalCount: number }>('/agent-configurations', { params }).then((r) => r.data);
+export const getAgentConfigurations = (opts?: {
+  type?: string;
+  skip?: number;
+  take?: number;
+  signal?: AbortSignal;
+}) => {
+  const { signal, ...params } = opts ?? {};
+  return api
+    .get<{ items: AgentConfiguration[]; totalCount: number }>('/agent-configurations', { params, signal })
+    .then((r) => r.data);
+};
 
 // Workflows
-export const getWorkflows = (params?: { status?: string; skip?: number; take?: number }) =>
-  api.get<{ items: Workflow[]; totalCount: number }>('/workflows', { params }).then((r) => r.data);
+export const getWorkflows = (opts?: {
+  status?: string | number;
+  skip?: number;
+  take?: number;
+  signal?: AbortSignal;
+}) => {
+  const { signal, ...params } = opts ?? {};
+  return api
+    .get<{ items: Workflow[]; totalCount: number }>('/workflows', { params, signal })
+    .then((r) => r.data);
+};
 export const getWorkflow = (id: string) =>
   api.get<WorkflowDetail>(`/workflows/${id}`).then((r) => r.data);
 export const runWorkflow = (data: { name: string; initialContext: string; steps?: string[] }) =>
@@ -85,13 +110,19 @@ export const runWorkflowNode = (id: string, nodeId: string) =>
     .then((r) => r.data);
 
 // Execution Logs
-export const getExecutionLogs = (params?: {
-  status?: string;
+export const getExecutionLogs = (opts?: {
+  status?: string | number;
   from?: string;
   to?: string;
   skip?: number;
   take?: number;
-}) => api.get<{ items: ExecutionLog[]; totalCount: number }>('/execution-logs', { params }).then((r) => r.data);
+  signal?: AbortSignal;
+}) => {
+  const { signal, ...params } = opts ?? {};
+  return api
+    .get<{ items: ExecutionLog[]; totalCount: number }>('/execution-logs', { params, signal })
+    .then((r) => r.data);
+};
 export const getExecutionLogDetail = (id: string) =>
   api.get<ExecutionLogDetail>(`/execution-logs/${id}`).then((r) => r.data);
 export const getExecutionLogSteps = (id: string, params?: { status?: string; skip?: number; take?: number }) =>
@@ -102,8 +133,17 @@ export default api;
 // API Keys
 export const getApiKeys = () => api.get<ApiKey[]>('/api-keys').then((r) => r.data);
 
-// Conversations
-export const getConversations = () => api.get<Conversation[]>('/conversations').then((r) => r.data);
+// Conversations (F3 extension: server-side status + q filtering)
+export const getConversations = (params?: {
+  status?: number | string;
+  q?: string;
+  signal?: AbortSignal;
+}) => {
+  const { status, q, signal } = params ?? {};
+  return api
+    .get<Conversation[]>('/conversations', { params: { status, q }, signal })
+    .then((r) => r.data);
+};
 export const createConversation = () =>
   api.post<Conversation>('/conversations', {}).then((r) => r.data);
 export const getConversation = (id: string) =>
@@ -132,8 +172,8 @@ export const sendMessage = (
     .then((r) => r.data);
 
 // Knowledge Bases (RAG 地基层 R1-R4)
-export const getKnowledgeBases = () =>
-  api.get<KnowledgeBase[]>('/knowledge-bases').then((r) => r.data);
+export const getKnowledgeBases = (signal?: AbortSignal) =>
+  api.get<KnowledgeBase[]>('/knowledge-bases', { signal }).then((r) => r.data);
 export const getKnowledgeBase = (id: string) =>
   api.get<KnowledgeBase>(`/knowledge-bases/${id}`).then((r) => r.data);
 export const createKnowledgeBase = (data: {
