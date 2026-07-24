@@ -1,3 +1,4 @@
+using System;
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Application.EventHandlers;
 using AgentPlatform.Application.Routing.Services;
@@ -132,6 +133,8 @@ public static class DependencyInjection
             configuration.GetSection("Rag"));
         services.Configure<AgentPlatform.Application.Abstractions.SandboxSettings>(
             configuration.GetSection("Sandbox"));
+        services.Configure<AgentPlatform.Application.Abstractions.SearchSettings>(
+            configuration.GetSection("Search"));
         services.AddHttpClient();
         services.AddScoped<AgentPlatform.Application.Abstractions.IDocumentChunker,
             AgentPlatform.Infrastructure.Services.WordWindowChunker>();
@@ -152,6 +155,15 @@ public static class DependencyInjection
             services.AddScoped<ICodeSandbox, DockerCodeSandbox>();
         else
             services.AddScoped<ICodeSandbox, ProcessCodeSandbox>();
+
+        // 搜索提供方：真实 HTTP（SerpApi），密钥走 SearchSettings / 环境变量，不落库。
+        // Provider 决定具体实现（当前仅 SerpApi；其余值启动即报错，避免静默失败）。
+        var searchProviderName = configuration.GetSection("Search:Provider").Value ?? "SerpApi";
+        if (string.Equals(searchProviderName, "SerpApi", StringComparison.Ordinal))
+            services.AddScoped<AgentPlatform.Application.Abstractions.ISearchProvider,
+                AgentPlatform.Infrastructure.Search.SerpApiSearchProvider>();
+        else
+            throw new InvalidOperationException($"不支持的搜索提供方：{searchProviderName}");
 
         var cacheProvider = configuration.GetSection("Cache:Provider").Value;
         if (string.Equals(cacheProvider, "Redis", StringComparison.Ordinal))

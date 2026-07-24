@@ -225,3 +225,61 @@ export interface LoginRequest {
 export interface LoginResponse {
   user: AuthUser;
 }
+
+// ── Research Agent (F6: 联网多步调研) ──
+// Backend serializes the event `Type` as a numeric enum (System.Text.Json default),
+// matching the rest of the API's int-enum convention. Mirror it with a const map.
+export const ResearchEventTypeValue = {
+  Plan: 0,
+  SearchStart: 1,
+  SearchDone: 2,
+  Synthesize: 3,
+  Report: 4,
+  Error: 5,
+} as const;
+export type ResearchEventTypeValue =
+  (typeof ResearchEventTypeValue)[keyof typeof ResearchEventTypeValue];
+
+export interface ResearchSource {
+  title: string;
+  url: string;
+  snippet: string;
+}
+
+export interface ResearchSection {
+  heading: string;
+  body: string;
+}
+
+export interface ResearchTokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+}
+
+export interface ResearchReport {
+  question: string;
+  searchQueries: string[];
+  sources: ResearchSource[];
+  answer: string;
+  sections: ResearchSection[];
+  stepsUsed: number;
+  tokenUsage: ResearchTokenUsage | null;
+  generatedAt: string;
+}
+
+export interface ResearchProgressEvent {
+  type: ResearchEventTypeValue;
+  message?: string | null;
+  queries?: string[] | null;
+  query?: string | null;
+  snippetCount?: number | null;
+  report?: ResearchReport | null;
+  error?: string | null;
+}
+
+export interface ResearchRequest {
+  question: string;
+  maxSteps?: number | null;
+  modelId?: string | null;
+  focusInstructions?: string | null;
+}

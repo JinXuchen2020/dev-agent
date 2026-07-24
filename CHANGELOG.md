@@ -1,5 +1,31 @@
 # 变更日志
 
+## v2.5 (2026-07-24)
+
+### F6 · Research Agent 联网多步调研完成（feature-builder 全栈实跑，🔴高风险）
+
+把「开放问题 → 多步联网检索 → 结构化报告」做成一等能力（Research Agent）。原蓝图阶段四 TODO「Research Agent」落地。
+
+**核心改动：**
+- **真实联网检索**：新增 `ISearchProvider` + `SerpApiSearchProvider`，对 `serpapi.com/search.json` 发起**真实 GET** 并解析 `organic_results`（标题/URL/摘要）；缺 key / 非 2xx / 超时 / 传输错误 → `Success=false` + 真实 `ErrorMessage`，**绝不伪造成功**。密钥走 `SearchSettings` / 环境变量 `Search__SerpApiKey`，**不落库**（不复用 `ToolDefinition.EndpointUrl`）
+- **多步链真实串联**：`ResearchCommand` + `ResearchCommandHandler`（注入 `IModelClient` / `ISearchProvider` / `ITokenCounter` / `IOptions<StateMachineSettings>` / `IOptions<SearchSettings>`）按 `plan → search×N → synthesize` 自驱循环；`Sources` 按 URL 去重累积；多轮发现超 `MaxSummaryTokens`(8000) 预算截断。LLM 规划/综合均经注入 `IModelClient`（生产真实 SemanticKernel，测试 stub）
+- **SSE 流式端点**：`ResearchController`（`POST /api/v1/research`，`[Authorize]` 全认证租户用户）以 `text/event-stream` 流式写出 `ResearchProgressEvent`（`Plan → SearchStart/SearchDone×N → Synthesize → Report`，异常为 `Error`+空 `Report`），终端 `event: done` 收尾；序列化 camelCase、事件 `Type` 整型枚举（0–5）
+- **配置**：新增 `SearchSettings`（`Application.Abstractions`）+ `appsettings.json` 的 `Search` 节（`Provider`/`SerpApiKey`/`BaseUrl`/`TimeoutSeconds`/`DefaultMaxResults`）；`DI` 按 `Provider` 选择实现（未知值启动报错）+ `AddHttpClient()`
+- **前端**：新增 `ResearchPage`（提问 + 实时 Timeline 进度 + 结构化报告渲染：来源卡片 / 答案 / 分节）、`types/index.ts` 的 Research 类型、`api.ts` 的 `runResearch`（fetch + `credentials:'include'` 逐帧解析 SSE）、`App.tsx` 路由 `/research`、`AppLayout.tsx` 菜单项
+
+**质量与测试：**
+- 三道质量门禁全 PASS（`ddd-code-reviewer` / `ddd-phase-quality-gate` / `codebase-optimizer`）；`.quality-gate.json` 推进 `f6-research-agent`
+- 已核对**真实副作用验收**：`SerpApiSearchProviderTests`（StubHttpMessageHandler 模拟 SerpAPI）覆盖真实 GET 构造 + `organic_results` 解析 + 缺 key/非 2xx/超时/传输错误；`ResearchCommandHandlerTests` 覆盖搜索调用 N 次 / `Sources` 去重 / `Sections` 非空 / 计划·综合失败精准回打
+- `dotnet test src/AgentPlatform.sln` **238 passed / 0 failed**（含 F6 新增 8 例）；前端 `tsc --noEmit` **0 error** + `vite build` 通过
+- 模型一致性：后端 camelCase、事件 `Type` 整型枚举，前端 `ResearchEventTypeValue` 常量对象一一对应
+
+**已知残留（非阻断）：**
+- `SerpApiKey` 为空时各查询失败但报告仍基于已规划内容生成（优雅降级）
+- 真实 SerpApi 端到端需生产密钥（单测用 mock transport 覆盖真实 HTTP 路径）
+- 报告正文体为 Markdown 文本前端以 `pre-wrap` 渲染（未引 `react-markdown` 依赖，结构化字段 `Sources`/`Answer`/`Sections` 已拆分）
+
+**分支：** `feat/f6-research-agent`
+
 ## v2.4 (2026-07-24)
 
 ### F5 · 行动层落地（Agent 真正能做事）完成（feature-builder 全栈实跑，🔴高风险）

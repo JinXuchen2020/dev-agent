@@ -17,6 +17,8 @@ import type {
   AuthUser,
   LoginRequest,
   LoginResponse,
+  ResearchRequest,
+  ResearchProgressEvent,
 } from '../types';
 
 const api = axios.create({
@@ -214,4 +216,58 @@ export function getErrorMessage(e: unknown): string {
     return err.response?.data?.title ?? err.response?.data?.message ?? err.message ?? '未知错误';
   }
   return String(e);
+}
+
+// Research Agent (F6: 联网多步调研). The endpoint streams Server-Sent Events, but
+// EventSource only supports GET, so we use fetch + a manual SSE frame parser.
+// Each `data:` frame is a JSON-encoded ResearchProgressEvent. The terminal frame is
+// `event: done` with an empty `data: {}`, which we ignore.
+export async function runResearch(
+  req: ResearchRequest,
+  onEvent: (e: ResearchProgressEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await fetch('/api/v1/research', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(req),
+    signal,
+  });
+
+  if (!res.ok || !res.body) {
+    let detail = `HTTP ${res.status}`;
+    try {
+      const text = await res.text();
+      if (text) detail = text;
+    } catch {
+      /* ignore body read failure */
+    }
+    throw new Error(detail);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let sep: number;
+    while ((sep = buffer.indexOf('\n\n')) >= 0) {
+      const frame = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+      const dataLine = frame
+        .split('\n')
+        .find((line) => line.startsWith('data:'));
+      if (!dataLine) continue;
+      const json = dataLine.slice(5).trim();
+      if (!json || json === '{}') continue; // terminal `event: done` frame
+      try {
+        onEvent(JSON.parse(json) as ResearchProgressEvent);
+      } catch {
+        /* ignore malformed frame */
+      }
+    }
+  }
 }

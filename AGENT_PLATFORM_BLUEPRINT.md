@@ -335,7 +335,7 @@ Scenario Outline: 主模型超时后降级到备用模型
 ### 阶段四 · 前沿特性与收尾
 
 - [ ] **Code Agent 闭环**：Docker.DotNet 操作沙箱，生成-运行-调试-修复闭环
-- [ ] **Research Agent**：SK 集成 SerpAPI，实现多步调研
+- [x] **Research Agent**：`POST /api/v1/research` 联网多步调研（plan→search×N→synthesize），真实 SerpAPI HTTP + SSE 进度流（F6 实现）
 - [ ] **性能压测与优化**：达到 P0 目标（单租户并发 5 工作流、步骤 P95 延迟 < 10s、模型调用 P95 < 15s）
 - [ ] 补全 BDD 全量验收用例，接入 CI/CD（阶段二实现）
 - [ ] 整理文档与简历作品集描述（.NET 工程化规范天然适合作为企业级作品）
