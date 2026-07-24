@@ -1,26 +1,29 @@
-import React, { useEffect } from 'react';
+import React, { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
-import { ConfigProvider, App as AntApp } from 'antd';
+import { ConfigProvider, App as AntApp, Spin } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import AppLayout from './layouts/AppLayout';
-import DashboardPage from './pages/DashboardPage';
-import AgentsPage from './pages/AgentsPage';
-import WorkflowsPage from './pages/WorkflowsPage';
-import WorkflowDetailPage from './pages/WorkflowDetailPage';
-import WorkflowCanvasPage from './pages/WorkflowCanvasPage';
-import AgentRolesPage from './pages/AgentRolesPage';
-import AgentConfigurationsPage from './pages/AgentConfigurationsPage';
-import ExecutionLogsPage from './pages/ExecutionLogsPage';
-import ExecutionLogDetailPage from './pages/ExecutionLogDetailPage';
-import KnowledgeBasesPage from './pages/KnowledgeBasesPage';
-import KnowledgeBaseDetailPage from './pages/KnowledgeBaseDetailPage';
-import ConversationsPage from './pages/ConversationsPage';
-import ConversationDetailPage from './pages/ConversationDetailPage';
 import ErrorBoundary from './components/ErrorBoundary';
 import ProtectedRoute from './components/ProtectedRoute';
-import LoginPage from './pages/LoginPage';
-import NotFoundPage from './pages/NotFoundPage';
 import { useAppStore } from './stores/appStore';
+
+// 路由级按需加载（O6）：壳层（AppLayout / ProtectedRoute / ErrorBoundary）保持 eager，
+// 页面组件拆为独立 chunk，配合 vite.config.ts 的 manualChunks 供应商分包。
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const AgentsPage = lazy(() => import('./pages/AgentsPage'));
+const WorkflowsPage = lazy(() => import('./pages/WorkflowsPage'));
+const WorkflowDetailPage = lazy(() => import('./pages/WorkflowDetailPage'));
+const WorkflowCanvasPage = lazy(() => import('./pages/WorkflowCanvasPage'));
+const AgentRolesPage = lazy(() => import('./pages/AgentRolesPage'));
+const AgentConfigurationsPage = lazy(() => import('./pages/AgentConfigurationsPage'));
+const ExecutionLogsPage = lazy(() => import('./pages/ExecutionLogsPage'));
+const ExecutionLogDetailPage = lazy(() => import('./pages/ExecutionLogDetailPage'));
+const KnowledgeBasesPage = lazy(() => import('./pages/KnowledgeBasesPage'));
+const KnowledgeBaseDetailPage = lazy(() => import('./pages/KnowledgeBaseDetailPage'));
+const ConversationsPage = lazy(() => import('./pages/ConversationsPage'));
+const ConversationDetailPage = lazy(() => import('./pages/ConversationDetailPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 const App: React.FC = () => {
   const navigate = useNavigate();
@@ -53,28 +56,43 @@ const App: React.FC = () => {
     >
       <AntApp>
         <ErrorBoundary>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route element={<ProtectedRoute />}>
-              <Route element={<AppLayout />}>
-                <Route path="/" element={<DashboardPage />} />
-                <Route path="/agents" element={<AgentsPage />} />
-                <Route path="/workflows" element={<WorkflowsPage />} />
-                <Route path="/workflows/new" element={<WorkflowCanvasPage />} />
-                <Route path="/workflows/:id" element={<WorkflowDetailPage />} />
-                <Route path="/workflows/:id/edit" element={<WorkflowCanvasPage />} />
-                <Route path="/agent-roles" element={<AgentRolesPage />} />
-                <Route path="/agent-configurations" element={<AgentConfigurationsPage />} />
-                <Route path="/execution-logs" element={<ExecutionLogsPage />} />
-                <Route path="/execution-logs/:id" element={<ExecutionLogDetailPage />} />
-                <Route path="/knowledge-bases" element={<KnowledgeBasesPage />} />
-                <Route path="/knowledge-bases/:id" element={<KnowledgeBaseDetailPage />} />
-                <Route path="/conversations" element={<ConversationsPage />} />
-                <Route path="/conversations/:id" element={<ConversationDetailPage />} />
-                <Route path="*" element={<NotFoundPage />} />
+          <Suspense
+            fallback={
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  height: '100vh',
+                }}
+              >
+                <Spin size="large" />
+              </div>
+            }
+          >
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route element={<ProtectedRoute />}>
+                <Route element={<AppLayout />}>
+                  <Route path="/" element={<DashboardPage />} />
+                  <Route path="/agents" element={<AgentsPage />} />
+                  <Route path="/workflows" element={<WorkflowsPage />} />
+                  <Route path="/workflows/new" element={<WorkflowCanvasPage />} />
+                  <Route path="/workflows/:id" element={<WorkflowDetailPage />} />
+                  <Route path="/workflows/:id/edit" element={<WorkflowCanvasPage />} />
+                  <Route path="/agent-roles" element={<AgentRolesPage />} />
+                  <Route path="/agent-configurations" element={<AgentConfigurationsPage />} />
+                  <Route path="/execution-logs" element={<ExecutionLogsPage />} />
+                  <Route path="/execution-logs/:id" element={<ExecutionLogDetailPage />} />
+                  <Route path="/knowledge-bases" element={<KnowledgeBasesPage />} />
+                  <Route path="/knowledge-bases/:id" element={<KnowledgeBaseDetailPage />} />
+                  <Route path="/conversations" element={<ConversationsPage />} />
+                  <Route path="/conversations/:id" element={<ConversationDetailPage />} />
+                  <Route path="*" element={<NotFoundPage />} />
+                </Route>
               </Route>
-            </Route>
-          </Routes>
+            </Routes>
+          </Suspense>
         </ErrorBoundary>
       </AntApp>
     </ConfigProvider>

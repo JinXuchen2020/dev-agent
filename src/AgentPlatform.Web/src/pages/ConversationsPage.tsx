@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Spin, Button, message, Tag, Input, Space, Select } from 'antd';
+import { Table, Spin, Button, App as AntApp, Tag, Input, Space, Select } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { Conversation, KnowledgeBase } from '../types';
 import { getConversations, createConversation, getKnowledgeBases } from '../services/api';
@@ -27,6 +27,7 @@ const ConversationsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [appliedQ, setAppliedQ] = useState('');
   const [statusFilter, setStatusFilter] = useState<number | undefined>(undefined);
+  const { message } = AntApp.useApp();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -125,6 +126,7 @@ const ConversationsPage: React.FC = () => {
         <Space style={{ marginBottom: 16, display: 'flex', flexWrap: 'wrap' }}>
           <Input.Search
             allowClear
+            aria-label="搜索会话"
             placeholder="搜索 ID / Agent / 工作流 / 知识库"
             style={{ width: 320 }}
             value={search}

@@ -1,5 +1,25 @@
 # 变更日志
 
+## v2.3 (2026-07-24)
+
+### F4 · 前端工程化完成（feature-builder 全栈实跑）
+
+补齐前端工程化短板：拆包、去静态 message、清死代码、补 a11y、补单测。
+
+**核心改动：**
+- **O6 路由级拆包**：`App.tsx` 全部页面改 `React.lazy` + `<Suspense>`；`vite.config.ts` 的 `manualChunks` 函数式拆 `react-vendor` / `antd` / `xyflow` 三块供应商分包。首屏主包由 ~1.38MB 降至 `index` 9KB，供应商与页面按需并行加载（build 产物已验证）
+- **O9 静态 `message` → `App.useApp()`**：LoginPage / WorkflowCanvasPage / ApiKeysPage / ConversationDetailPage / ConversationsPage / KnowledgeBaseDetailPage / KnowledgeBasesPage 共 7 个页面（WorkflowsPage/AppLayout 已于 F3 完成），消除 antd 静态 message 的 context 丢失告警；grep 全仓 0 处静态 `message.`
+- **O10 死代码清理**：`appStore` 移除从未被读取的死字段 `userRole`（接口 + 5 处赋值）；编辑器节点编辑/删除（NodeConfigPanel + 删除按钮 + Delete 键）经核实已满足，不重复实现
+- **O14 可访问性**：侧栏折叠按钮、会话搜索框、聊天输入框补 `aria-label`
+- **O7 关键页单测**：新增 `appStore` 鉴权态迁移（5 例）、`useApiState` 加载/错误/retry/卸载安全（4 例）、`LoginPage`（3 例）、`NotFoundPage`（1 例），覆盖鉴权态 / 异步错误态 / 登录 / 404
+
+**质量与测试：**
+- 三道质量门禁全 PASS（`ddd-code-reviewer` / `ddd-phase-quality-gate` / `codebase-optimizer`）；`.quality-gate.json` 推进 `f4-frontend-engineering`
+- **前端四道闸门 PASS**：`node scripts/qa.mjs`（typecheck / lint / build / unit）全绿
+- e2e 闸门因沙箱无后端实例未执行，留待有后端环境补跑 `node scripts/qa.mjs --e2e`
+
+**分支：** `feat/f4-frontend-engineering`
+
 ## v2.2 (2026-07-24)
 
 ### F3 · 页面交互打磨完成（feature-builder 全栈实跑）

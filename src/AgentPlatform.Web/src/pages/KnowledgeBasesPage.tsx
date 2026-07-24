@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Button, Modal, Form, Input, Spin, Space, Tag, Popconfirm, message } from 'antd';
+import { Table, Button, Modal, Form, Input, Spin, Space, Tag, Popconfirm, App as AntApp } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { PlusOutlined, DeleteOutlined, EyeOutlined, BookOutlined } from '@ant-design/icons';
 import type { KnowledgeBase } from '../types';
@@ -20,6 +20,7 @@ const KnowledgeBasesPage: React.FC = () => {
   const [createOpen, setCreateOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
+  const { message } = AntApp.useApp();
 
   const load = () => {
     setLoading(true);

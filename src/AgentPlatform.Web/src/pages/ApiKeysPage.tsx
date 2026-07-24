@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Spin, Button, Alert, Space, message } from 'antd';
+import { Table, Spin, Button, Alert, Space, App as AntApp } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { ApiKey } from '../types';
 import { getApiKeys } from '../services/api';
@@ -17,6 +17,7 @@ const statusLabel: Record<string, string> = {
 const ApiKeysPage: React.FC = () => {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
+  const { message } = AntApp.useApp();
 
   useEffect(() => {
     getApiKeys().then(setKeys).finally(() => setLoading(false));

@@ -103,6 +103,7 @@ const AppLayout: React.FC = () => {
         >
           <Button
             type="text"
+            aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
             icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
             onClick={toggleSidebar}
           />
