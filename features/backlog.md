@@ -18,7 +18,7 @@
 
 > 每个史诗含：目标 + 验收子项（原 B/O/P 归并，保留 `文件:行号` 锚点）+ 优先级 + 风险 + 设计文档链接。验收子项里的前端细项可由 `feature-dev` 直接取做。
 
-### F1 · 前端数据真实性 & 全局错误态  [P2]  doing  （feature-builder 试跑中；设计文档 features/frontend-data-truth.md 已建）
+### F1 · 前端数据真实性 & 全局错误态  [P2]  done  （已于 2026-07-23 经 feature-builder 流水线端到端实现并提交 `96fa5ee`；设计文档 features/frontend-data-truth.md + 质量报告 docs/quality/frontend-data-truth-gate.md）
 - 设计文档：`features/frontend-data-truth.md`（已建）
 - 目标：UI 展示真实登录身份、失败有兜底，消灭静默吞错与无 404 白屏。纯前端、低风险，无后端契约变更。
 - 验收子项：
