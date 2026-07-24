@@ -5,6 +5,7 @@
   "codebaseOptimizer": "codebase-optimizer PASSED (Round F4-01, 0 open; 七维度扫描 F4 前端改动: 架构复用 Card/PageHeader/StatusBadge/AntApp、代码质量 0 any+strict(grep 0 any/@ts-ignore)、正确性 错误兜底经 App.useApp、测试 新增 4 单测、性能 路由级懒加载+供应商分包、安全 0 dangerouslySetInnerHTML/无硬编码密钥、工程化 lint 净/无死代码; console.* 命中均合法错误日志非桩)",
   "cleared": true,
   "reportRef": "docs/quality/f4-frontend-engineering-gate.md",
+  "qaReport": "src/AgentPlatform.Web/qa-report.json",
   "notes": "实现 features/frontend-engineering.md (F4): O6 路由级 React.lazy + manualChunks 函数式拆 react-vendor/antd/xyflow 三供应商分包(首屏主包由 1.38MB 降至 index 9KB + 并行供应商); O9 8 个页面静态 message 改 App.useApp()(grep 全仓 0 处静态 message.); O10 移除死字段 userRole(接口+5 处赋值, grep 0 残留读取); O14 3 处 aria-label(侧栏折叠/会话搜索/聊天输入); O7 新增 4 单测(appStore 鉴权态/useApiState 加载错误重试卸载安全/LoginPage/NotFoundPage). 纯前端无后端契约变更. 验证: tsc 0 error; node scripts/qa.mjs 四道闸门全 PASS(typecheck/lint/build/unit). e2e 因沙箱无后端未执行, 留待有后端环境补跑.",
   "verifiedAt": "2026-07-24"
 }
