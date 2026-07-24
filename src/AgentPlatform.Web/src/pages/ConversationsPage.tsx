@@ -1,13 +1,23 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Spin, Button, message, Tag } from 'antd';
+import { Table, Spin, Button, message, Tag, Input, Space, Select } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { Conversation, KnowledgeBase } from '../types';
 import { getConversations, createConversation, getKnowledgeBases } from '../services/api';
+import {
+  conversationStatusLabel,
+  conversationStatusNumber,
+  CONVERSATION_STATUS_META,
+} from '../status';
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
 import StatusBadge from '../components/StatusBadge';
 import { colors } from '../theme/tokens';
+
+const CONVERSATION_STATUS_OPTIONS = Object.entries(CONVERSATION_STATUS_META).map(([value, meta]) => ({
+  value: Number(value),
+  label: meta.label,
+}));
 
 const ConversationsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -15,21 +25,40 @@ const ConversationsPage: React.FC = () => {
   const [kbNameByCollection, setKbNameByCollection] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<number | undefined>(undefined);
 
-  const fetch = () => {
+  useEffect(() => {
+    const controller = new AbortController();
     setLoading(true);
-    Promise.all([getConversations(), getKnowledgeBases().catch(() => [] as KnowledgeBase[])])
+    Promise.all([
+      getConversations(controller.signal),
+      getKnowledgeBases(controller.signal).catch(() => [] as KnowledgeBase[]),
+    ])
       .then(([convos, kbs]) => {
         setConversations(Array.isArray(convos) ? convos : []);
-        setKbNameByCollection(
-          new Map((kbs ?? []).map((kb) => [kb.collectionName, kb.name])),
-        );
+        setKbNameByCollection(new Map((kbs ?? []).map((kb) => [kb.collectionName, kb.name])));
+      })
+      .catch((err: unknown) => {
+        if ((err as { name?: string })?.name !== 'CanceledError') console.error('[Conversations] fetch failed', err);
       })
       .finally(() => setLoading(false));
-  };
-  useEffect(() => {
-    fetch();
+    return () => controller.abort();
   }, []);
+
+  const filtered = useMemo(() => {
+    const kw = search.trim().toLowerCase();
+    return conversations.filter((c) => {
+      const matchStatus = statusFilter === undefined || conversationStatusNumber(c.status, c.updatedAt) === statusFilter;
+      const matchKw =
+        !kw ||
+        (c.id ?? '').toLowerCase().includes(kw) ||
+        (c.agentName ?? '').toLowerCase().includes(kw) ||
+        (c.workflowId ?? '').toLowerCase().includes(kw) ||
+        (c.collectionName ?? '').toLowerCase().includes(kw);
+      return matchStatus && matchKw;
+    });
+  }, [conversations, search, statusFilter]);
 
   const handleCreate = async () => {
     setCreating(true);
@@ -37,7 +66,10 @@ const ConversationsPage: React.FC = () => {
       const conv = await createConversation();
       message.success('已创建新会话');
       if (conv?.id) navigate(`/conversations/${conv.id}`);
-      else fetch();
+      else {
+        const controller = new AbortController();
+        getConversations(controller.signal).then(setConversations).catch(() => undefined);
+      }
     } catch {
       message.error('创建失败，请确认已登录');
     } finally {
@@ -81,16 +113,14 @@ const ConversationsPage: React.FC = () => {
       title: '状态',
       key: 'status',
       width: 120,
-      render: (_, r) => <StatusBadge status={r.status ?? (r.updatedAt ? '已结束' : '进行中')} />,
+      render: (_, r) => <StatusBadge status={conversationStatusLabel(r.status, r.updatedAt)} />,
     },
     {
       title: '开始时间',
       dataIndex: 'createdAt',
       key: 'createdAt',
       render: (d: string) => (
-        <span style={{ color: colors.textMuted }}>
-          {d ? new Date(d).toLocaleString() : '-'}
-        </span>
+        <span style={{ color: colors.textMuted }}>{d ? new Date(d).toLocaleString() : '-'}</span>
       ),
     },
   ];
@@ -106,12 +136,29 @@ const ConversationsPage: React.FC = () => {
         }
       />
       <Card title="会话列表">
+        <Space style={{ marginBottom: 16, display: 'flex', flexWrap: 'wrap' }}>
+          <Input.Search
+            allowClear
+            placeholder="搜索 ID / Agent / 工作流 / 知识库"
+            style={{ width: 320 }}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <Select<number>
+            allowClear
+            placeholder="状态筛选"
+            style={{ width: 160 }}
+            value={statusFilter}
+            onChange={(v) => setStatusFilter(v ?? undefined)}
+            options={CONVERSATION_STATUS_OPTIONS}
+          />
+        </Space>
         {loading ? (
           <Spin style={{ display: 'block', margin: '60px auto' }} />
         ) : (
           <Table
             columns={columns}
-            dataSource={conversations}
+            dataSource={filtered}
             rowKey="id"
             pagination={{ pageSize: 10 }}
             locale={{ emptyText: '暂无会话记录' }}

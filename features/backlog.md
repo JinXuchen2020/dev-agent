@@ -41,8 +41,8 @@
 - 三道质量门禁全 PASS（ddd-code-reviewer / ddd-phase-quality-gate / codebase-optimizer）；质量报告 `docs/quality/f2-auth-gate.md`。
 - 已知残留（非阻断）：多租户登录（P2 waiver，目标后续 feature）；`JwtSecretKey`/`AesEncryptionKey` dev 兜底值（生产须环境变量覆盖）；种子默认密码生产须改。
 
-### F3 · 页面交互打磨  [P2]  open
-- 设计文档：`features/page-polish.md`（待建）
+### F3 · 页面交互打磨  [P2]  done  （2026-07-24，分支 feat/f3-page-polish，设计文档 features/page-polish.md，质量报告 docs/quality/f3-page-polish-gate.md；纯前端，无后端契约变更）
+- 设计文档：`features/page-polish.md`（已建）
 - 目标：列表/筛选/表单交互正确且一致。
 - 验收子项：
   - **B9** AgentConfigurations 的 YAML 从不展示（`AgentConfigurationsPage.tsx:11-17`）→ 详情抽屉展示 `yamlContent`（语法高亮可选）。

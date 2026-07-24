@@ -1,9 +1,9 @@
 {
-  "phase": "f2-login-auth-state",
-  "reviewer": "ddd-code-reviewer PASSED (F2 后端对抗式审查: 修复 2 P3 — 登录 JWT 补 ClaimTypes.Email、补 Pbkdf2PasswordHasherTests 5 例; P0/P1/P2=0, P3=0; 后端 dotnet test 214 passed/0 failed)",
-  "structureGate": "ddd-phase-quality-gate PASS (P0=0 P1=0 P2=0 P3=0; 12 类审计全扫: 硬编码值0/死代码0/any0/XSS0/hook依赖已disable/React key 完备/未用依赖0; .NET 专属 DI/EF/层违规/CTA/XML/Swagger 无新增后端契约违规; 1 项 P2 waiver: 多租户登录按默认租户查用户, 目标后续多租户登录 feature)",
-  "codebaseOptimizer": "codebase-optimizer PASSED (Round F2-01, 0 open; 七维度扫描 F2 改动 4 项 P2×3+P3×1 全修: AuthEndpoints.cs:32 缩进/User.cs 注释/新增 AuthEndpointsTests 5 例/ApiContractTestFactory 钉死 Tenant:DefaultTenantId+fixture 幂等种子默认用户(修复 Test 环境不跑 DatabaseInitializer 致登录 401 根因); 后端 214 passed/0 failed, 前端 qa.mjs OVERALL PASS)",
+  "phase": "f3-page-polish",
+  "reviewer": "ddd-code-reviewer PASSED (F3 前端对抗式审查: 修复 1 P3 — ConversationsPage getKnowledgeBases 透传 AbortSignal 实现取消对称; P0/P1/P2=0; 前端 node scripts/qa.mjs 四道闸门全 PASS)",
+  "structureGate": "ddd-phase-quality-gate PASS (P0=0 P1=0 P2=0 P3=0; 12 类审计中 .NET DDD 专属 DI/EF/Swagger/XML/蓝图漂移 因前端无后端改动全空; 前端相关 硬编码值/并发(AbortController)/死代码/空值守卫 全扫 0 open; checklist 已嵌 features/page-polish.md §6)",
+  "codebaseOptimizer": "codebase-optimizer PASSED (Round F3-01, 0 open; 七维度扫描 F3 前端改动: 架构复用 Card/PageHeader/StatusBadge/mapWorkflowStatus、代码质量 0 any+strict、正确性 错误兜底+取消、测试 新增 e2e/page-polish.spec.ts、性能 服务端分页+AbortController、安全 无 XSS/无硬编码密钥、工程化 lint 净/无死代码)",
   "cleared": true,
-  "reportRef": "docs/quality/f2-auth-gate.md",
-  "notes": "实现 features/auth-ux.md (F2): B6 真实验密(PBKDF2)+ O8 httpOnly Cookie 鉴权(Smart 策略从 cookie 读 JWT)+ O2(401 派发 auth:unauthorized 事件 SPA 内跳转)+ O3(demo 会话一致性)+ B6-UI(密码框). 突破鉴权红线(red-line): 新增 User 聚合/EF 迁移/真实密码校验/Cookie 发行读取/CORS 改造/前端 withCredentials+401 事件+ProtectedRoute+bootstrapAuth+SSE credentials. 三道门禁全 PASS. 已知残留(非阻断): JwtSecretKey/AesEncryptionKey dev 兜底值(生产须环境变量覆盖); 多租户登录 P2 waiver; 种子默认密码生产须改."
+  "reportRef": "docs/quality/f3-page-polish-gate.md",
+  "notes": "实现 features/page-polish.md (F3): B9 AgentConfigurations YAML 详情抽屉 + O12 服务端分页 + O13 AbortController; B10 状态枚举前端映射(mapWorkflowStatus/WORKFLOW_STATUS_FILTER_OPTIONS 整数枚举, 修复因后端枚举按整数序列化导致的色块错乱); B11 Workflows 快速运行空名 warning+失败 error toast; Conversations 搜索/状态筛选客户端 + 状态映射. 纯前端, 无后端契约变更. 模型一致性: 字段/类型/枚举已对齐(tsc + qa 全绿). 文档同步见 Phase 6 (CHANGELOG + backlog)."
 }

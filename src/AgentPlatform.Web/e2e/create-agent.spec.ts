@@ -1,7 +1,11 @@
 import { test, expect } from '@playwright/test';
 
 // 验证 Agents 页「新建 Agent」按钮已接通：点击打开表单弹窗，且无 console error。
-// 不提交，避免污染后端数据。依赖后端 5000 的 /api/dev/login 可用。
+// 不提交，避免污染后端数据。依赖后端 5000 的真实登录（cookie 鉴权）可用。
+const API = process.env.API_BASE || 'http://localhost:5000';
+const EMAIL = 'admin@acme.io';
+const PASSWORD = 'Admin@123456';
+
 const BENIGN = [/favicon/i, /antd v5 support React/i];
 
 test.describe('agents create dialog', () => {
@@ -12,14 +16,14 @@ test.describe('agents create dialog', () => {
     });
     page.on('pageerror', (e) => errors.push(e.message));
 
-    const resp = await page.request.post('/api/dev/login', { data: { role: 'Admin' } });
+    const resp = await page.request.post(`${API}/api/v1/auth/login`, {
+      data: { email: EMAIL, password: PASSWORD },
+    });
     if (!resp.ok()) {
-      test.skip(true, 'backend /api/dev/login unavailable');
+      test.skip(true, 'backend auth login unavailable');
       return;
     }
-    const { token } = await resp.json();
-    await page.goto('/login');
-    await page.evaluate((t) => localStorage.setItem('auth_token', t), token);
+
     await page.goto('/agents');
 
     await expect(page.getByRole('button', { name: /新建 Agent/ })).toBeVisible();
