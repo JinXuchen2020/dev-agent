@@ -205,6 +205,8 @@ public static class DependencyInjection
 
         services.AddHttpContextAccessor();
         services.AddScoped<ITenantProvider, TenantProvider>();
+        services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
+        services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IAesEncryptor, AesGcmEncryptor>();
         services.AddScoped<IPromptSanitizer, PromptSanitizer>();
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();

@@ -47,7 +47,7 @@ const ExecutionLogDetailPage: React.FC = () => {
   // SSE subscription for real-time updates
   useEffect(() => {
     if (!log?.workflowId) return;
-    const es = new EventSource(`/api/v1/workflows/${log.workflowId}/progress`);
+    const es = new EventSource(`/api/v1/workflows/${log.workflowId}/progress`, { withCredentials: true });
     es.onmessage = (event) => {
       try {
         // Skip server-sent keepalive comments

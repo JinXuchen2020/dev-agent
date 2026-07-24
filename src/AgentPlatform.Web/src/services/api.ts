@@ -14,32 +14,32 @@ import type {
   WorkflowNodeRunResult,
   KnowledgeBase,
   KnowledgeDocument,
+  AuthUser,
+  LoginRequest,
+  LoginResponse,
 } from '../types';
 
 const api = axios.create({
   baseURL: '/api/v1',
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
+  // Send the httpOnly auth cookie on every request (F2: cookie-based auth).
+  withCredentials: true,
 });
 
-api.interceptors.request.use((config) => {
-  const token = getAuthToken();
-  if (token) {
-    if (config.headers && typeof (config.headers as { set?: unknown }).set === 'function') {
-      (config.headers as { set: (k: string, v: string) => void }).set(
-        'Authorization',
-        `Bearer ${token}`,
-      );
-    } else {
-      config.headers = { ...(config.headers as object), Authorization: `Bearer ${token}` } as typeof config.headers;
-    }
-  }
-  return config;
-});
-
+// No Authorization header injection: the auth cookie is sent automatically via
+// `withCredentials`. JWT is never exposed to JavaScript (httpOnly).
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    const status = error?.response?.status;
+    if (status === 401) {
+      // Notify the router layer to redirect to /login inside the SPA
+      // (no full-page reload, no unhandled rejection white screen).
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+      }
+    }
     console.error('API Error:', error.response?.data || error.message);
     return Promise.reject(error);
   },
@@ -99,10 +99,6 @@ export const getExecutionLogSteps = (id: string, params?: { status?: string; ski
 
 export default api;
 
-// Auth (dev/demo login; backend DevLoginEnabled gate)
-export const devLogin = (data: { role: string; userId: string }) =>
-  api.post<{ token: string }>('/auth/dev-login', data).then((r) => r.data);
-
 // API Keys
 export const getApiKeys = () => api.get<ApiKey[]>('/api-keys').then((r) => r.data);
 
@@ -117,7 +113,7 @@ export const setConversationKnowledgeBase = (id: string, knowledgeBaseId: string
     .put<{ id: string }>(`/conversations/${id}/knowledge-base`, { knowledgeBaseId })
     .then((r) => r.data);
 export const removeConversationKnowledgeBase = (id: string) =>
-  api.delete<{ id: string }>(`/conversations/${id}/knowledge-base`).then((r) => r.data);
+  api.delete<{ id: string }>(`/conversations/${id}/knowledge-base`).then(() => undefined);
 
 export interface SendMessageOptions {
   searchQuery?: string;
@@ -157,10 +153,15 @@ export const uploadDocument = (id: string, file: File) => {
     .then((r) => r.data);
 };
 
-// Centralized auth token accessor (avoids duplicating the storage key literal).
-export function getAuthToken(): string | null {
-  return typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
-}
+// Auth (F2: cookie-based; identity via GET /auth/me, no client-side JWT decode)
+export const loginRequest = (data: LoginRequest) =>
+  api.post<LoginResponse>('/auth/login', data).then((r) => r.data);
+
+export const getAuthMe = () =>
+  api.get<AuthUser>('/auth/me').then((r) => r.data);
+
+export const logoutRequest = () =>
+  api.post<void>('/auth/logout').then(() => undefined);
 
 // Normalize an unknown thrown value into a human-readable message.
 // Preserves axios-style `response.data.title` / `response.data.message` when present.
@@ -174,20 +175,3 @@ export function getErrorMessage(e: unknown): string {
   }
   return String(e);
 }
-
-// 客户端解码 JWT payload（仅用于展示真实身份，不做签名校验；后端仍是鉴权权威）。
-// 后端 dev-login 令牌声明：sub/name（= 邮箱）、role（见 DevLoginEndpoint.cs:35-39；无 tenant_id）。
-export function decodeJwt(token: string): Record<string, string | undefined> | null {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    const bin = atob(b64);
-    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
-    const json = new TextDecoder().decode(bytes);
-    return JSON.parse(json) as Record<string, string | undefined>;
-  } catch {
-    return null;
-  }
-}
-

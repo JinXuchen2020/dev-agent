@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using AgentPlatform.Api.Configuration;
 using AgentPlatform.Api.Endpoints;
 using AgentPlatform.Api.Middleware;
+using AgentPlatform.Api.Security;
 using AgentPlatform.Application;
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Infrastructure;
@@ -44,6 +45,7 @@ builder.Services.AddInfrastructureConfiguration(builder.Configuration);
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddScoped<AgentPlatform.Infrastructure.Security.IJwtTokenService, JwtTokenService>();
 
 // JWT startup guard — reject dev default key outside development
 var jwtKey = builder.Configuration["Security:JwtSecretKey"];
@@ -90,6 +92,9 @@ app.MapPrometheusScrapingEndpoint("/metrics");
 // ── Dev-only endpoints ────────────────────────────────────────────
 if (builder.Configuration.GetValue<bool>("Security:DevLoginEnabled"))
     DevLoginEndpoint.Map(app, builder.Configuration);
+
+// ── Auth endpoints (real email+password login + /auth/me) ─────────
+AuthEndpoints.Map(app);
 
 app.Run();
 

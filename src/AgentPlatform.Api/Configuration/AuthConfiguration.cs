@@ -2,6 +2,7 @@ using System.Text;
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Infrastructure.Auth;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
 
@@ -37,6 +38,9 @@ internal static class AuthConfiguration
                 {
                     if (context.Request.Headers.ContainsKey("Authorization"))
                         return "Bearer";
+                    // httpOnly cookie auth: present cookie → validate as Bearer.
+                    if (context.Request.Cookies.ContainsKey("ap_access_token"))
+                        return "Bearer";
                     if (!string.IsNullOrEmpty(context.Request.Headers[apiKeyHeaderName].FirstOrDefault()))
                         return "ApiKey";
                     // No credential present: challenge as Bearer so clients get a WWW-Authenticate hint.
@@ -56,6 +60,17 @@ internal static class AuthConfiguration
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.FromMinutes(1)
+                };
+                // Read the JWT from the httpOnly cookie when no Authorization header is present.
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        var cookie = context.Request.Cookies["ap_access_token"];
+                        if (!string.IsNullOrEmpty(cookie))
+                            context.Token = cookie;
+                        return Task.CompletedTask;
+                    }
                 };
             })
             .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>("ApiKey", null);

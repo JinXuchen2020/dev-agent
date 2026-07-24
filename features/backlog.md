@@ -29,14 +29,17 @@
   - **O1** 顶层 ErrorBoundary —— ✅ **done（漂移校正）**：`components/ErrorBoundary.tsx` 已在 `App.tsx:32` 挂载包裹全部路由。
   - **O11** 404 兜底（新增 `NotFoundPage` + `App.tsx` `*` catch-all）→ open（本次实现）。文档链接原引用已失效（前端无硬编码文档链接），聚焦 404。
 
-### F2 · 登录与鉴权态一致性  [P1]  open  ⚠️高风险（auth）
-- 设计文档：`features/auth-ux.md`（待建）
+### F2 · 登录与鉴权态一致性  [P1]  done  ✅（2026-07-23，分支 `feat/f2-login-auth-state`，commit 19af124）
+- 设计文档：`features/auth-ux.md`（已建）
 - 目标：登录凭证真实校验、401 不破坏 SPA、鉴权态前后一致。
-- 验收子项：
-  - **B6** 登录密码形同虚设（`LoginPage.tsx:14,87`）→ 真实校验密码；demo 模式禁用密码框或标注「密码不参与校验」。
-  - **O2** 401 处理整页跳转破坏 SPA（`api.ts:34-43`）→ 回调/自定义事件通知路由层用 `<Navigate>`。
-  - **O3** 鉴权态不一致 demo 路径（`LoginPage.tsx:26-33`；`appStore.ts:25`）→ demo 也写占位 token 或 store 区分 `demo` 跳过 401 跳。
-  - **O8** JWT 存 localStorage XSS 风险（`api.ts:22`；`appStore.ts:27`）→ 改 httpOnly + SameSite Cookie（顺带解 B2 SSE 鉴权）。
+- 验收子项（全勾）：
+  - **B6** 真实密码校验（PBKDF2）+ `LoginPage` 密码框 → ✅ 已实现。
+  - **O2** 401 派发 `auth:unauthorized` 事件 → App 路由层 `<Navigate>` 跳转 `/login`，无整页刷新 → ✅。
+  - **O3** demo 会话隔离（`isDemo` 跳过 401 跳，本地占位身份）→ ✅。
+  - **O8** httpOnly + SameSite Cookie 鉴权（去 localStorage + 顺带解 B2 SSE 鉴权）→ ✅。
+  - **O8 衍生** CORS 去 AllowAnyOrigin 改 WithOrigins+AllowCredentials；`/auth/me` 替代前端 JWT 解码 → ✅。
+- 三道质量门禁全 PASS（ddd-code-reviewer / ddd-phase-quality-gate / codebase-optimizer）；质量报告 `docs/quality/f2-auth-gate.md`。
+- 已知残留（非阻断）：多租户登录（P2 waiver，目标后续 feature）；`JwtSecretKey`/`AesEncryptionKey` dev 兜底值（生产须环境变量覆盖）；种子默认密码生产须改。
 
 ### F3 · 页面交互打磨  [P2]  open
 - 设计文档：`features/page-polish.md`（待建）

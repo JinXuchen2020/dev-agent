@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Typography, Spin, Descriptions, Tag, Steps, Button, Card, Space } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
-import { getWorkflow, getAuthToken } from '../services/api';
+import { getWorkflow } from '../services/api';
 import type { WorkflowDetail } from '../types';
 
 const { Title } = Typography;
@@ -40,10 +40,9 @@ const WorkflowDetailPage: React.FC = () => {
     }).finally(() => setLoading(false));
   }, [id]);
 
-  // Subscribe to SSE progress events via fetch (carries JWT; native EventSource cannot).
+  // Subscribe to SSE progress events via fetch (cookie auth via withCredentials).
   useEffect(() => {
     if (!id) return;
-    const token = getAuthToken();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
 
@@ -83,7 +82,8 @@ const WorkflowDetailPage: React.FC = () => {
     const connect = async () => {
       try {
         const res = await fetch(`/api/v1/workflows/${id}/progress`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          method: 'GET',
+          credentials: 'include',
           signal: ctrl.signal,
         });
         if (!res.ok || !res.body) {
