@@ -15,11 +15,17 @@ internal static class InfrastructureConfiguration
     {
         services.AddCors(options =>
         {
+            // Cookie-based auth requires explicit origins + AllowCredentials.
+            // AllowAnyOrigin + AllowCredentials are mutually exclusive, so a dev
+            // default (the Vite dev server) is used when no origins are configured.
             var origins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
-            if (origins is { Length: > 0 })
-                options.AddDefaultPolicy(p => p.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod());
-            else
-                options.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
+            if (origins is not { Length: > 0 })
+                origins = new[] { "http://localhost:5173", "https://localhost:5173" };
+            options.AddDefaultPolicy(p => p
+                .WithOrigins(origins)
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials());
         });
 
         services.AddRateLimiter(options =>

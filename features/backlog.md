@@ -29,8 +29,8 @@
   - **O1** 顶层 ErrorBoundary —— ✅ **done（漂移校正）**：`components/ErrorBoundary.tsx` 已在 `App.tsx:32` 挂载包裹全部路由。
   - **O11** 404 兜底（新增 `NotFoundPage` + `App.tsx` `*` catch-all）→ open（本次实现）。文档链接原引用已失效（前端无硬编码文档链接），聚焦 404。
 
-### F2 · 登录与鉴权态一致性  [P1]  open  ⚠️高风险（auth）
-- 设计文档：`features/auth-ux.md`（待建）
+### F2 · 登录与鉴权态一致性  [P1]  doing  ⚠️高风险（auth）
+- 设计文档：`features/auth-ux.md`（已建；分支 `feat/f2-login-auth-state`，实现前待用户确认红线范围）
 - 目标：登录凭证真实校验、401 不破坏 SPA、鉴权态前后一致。
 - 验收子项：
   - **B6** 登录密码形同虚设（`LoginPage.tsx:14,87`）→ 真实校验密码；demo 模式禁用密码框或标注「密码不参与校验」。

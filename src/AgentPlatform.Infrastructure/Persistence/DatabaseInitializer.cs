@@ -1,7 +1,9 @@
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Domain.Aggregates.AgentConfigurations;
 using AgentPlatform.Domain.Aggregates.AgentRoleDefinitions;
+using AgentPlatform.Domain.Aggregates.Users;
 using AgentPlatform.Domain.ValueObjects;
+using AgentPlatform.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -94,6 +96,36 @@ internal sealed class DatabaseInitializer : IDatabaseInitializer
         try
         {
             _logger.LogInformation("Seeding initial data...");
+
+            // Seed a default admin user for email + password login.
+            // Idempotent: only seeds when the Users table is empty.
+            try
+            {
+                var userCount = await _context.Users.CountAsync(ct);
+                if (userCount == 0)
+                {
+                    var hasher = _serviceProvider.GetRequiredService<IPasswordHasher>();
+                    var defaultTenantId = _tenantSettings.DefaultTenantId != Guid.Empty
+                        ? _tenantSettings.DefaultTenantId
+                        : DefaultTenantIdSeed;
+                    const string defaultPassword = "Admin@123456";
+                    var admin = new User(
+                        Guid.NewGuid(),
+                        defaultTenantId,
+                        "admin@acme.io",
+                        hasher.Hash(defaultPassword),
+                        "Admin");
+                    _context.Users.Add(admin);
+                    await _context.SaveChangesAsync(ct);
+                    _logger.LogWarning(
+                        "Seeded default admin user admin@acme.io (password: {Password}). CHANGE THIS IN PRODUCTION.",
+                        defaultPassword);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to seed default user, but continuing with startup");
+            }
 
             // 检查是否已经有数据
             var roleCount = await _context.AgentRoleDefinitions.CountAsync(ct);

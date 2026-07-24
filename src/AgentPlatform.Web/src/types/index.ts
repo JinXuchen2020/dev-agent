@@ -200,3 +200,20 @@ export interface KnowledgeBase {
   createdAt: string;
   documents: KnowledgeDocument[];
 }
+
+// ── Auth (F2: cookie-based auth; identity comes from GET /auth/me) ──
+export interface AuthUser {
+  id: string;
+  email: string;
+  role: string;
+  tenantId: string;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  user: AuthUser;
+}

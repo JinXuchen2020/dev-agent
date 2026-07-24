@@ -57,6 +57,13 @@ public sealed class ApiContractTestFactory : WebApplicationFactory<Program>, IAs
                 ["ConnectionStrings:DefaultConnection"] = "DataSource=:memory:",
                 ["Database:Type"] = "sqlite",
 
+                // Pin the default tenant so the seeded admin user, the tenant
+                // resolved by TenantProvider at login, and the test Bearer token
+                // (which carries tenant_id 00000000-0000-0000-0000-000000000001)
+                // all agree. Without this, the login endpoint could resolve a
+                // different default tenant than the one the seed wrote the user to.
+                ["Tenant:DefaultTenantId"] = "00000000-0000-0000-0000-000000000001",
+
                 // Valid JWT secret key (must differ from dev default)
                 ["Security:JwtSecretKey"] = TestJwtSecretKey,
                 ["Security:DevLoginEnabled"] = "false",
