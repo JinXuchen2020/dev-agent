@@ -28,7 +28,7 @@ curl -X POST "http://localhost:5000/api/v1/conversations/$CONV_ID/messages" \
 | `AgentPlatform.Domain` | 领域层 — 聚合根、值对象（`AgentType`）、仓储接口，零外部依赖 |
 | `AgentPlatform.Application` | 应用层 — MediatR Command/Query、路由策略、状态机事件处理器、工具调度 |
 | `AgentPlatform.Infrastructure` | 基础设施 — EF Core、Semantic Kernel、Redis 短期记忆、AutoGen 编排、状态机引擎、ExecutionLog |
-| `AgentPlatform.Api` | 表现层 — ASP.NET Core Web API 含 Agents/AgentRoles/ExecutionLogs 端点、JWT/API-Key 认证（Smart policy scheme）、RBAC、限流、提示注入中间件、Swagger/Scalar、CORS |
+| `AgentPlatform.Api` | 表现层 — ASP.NET Core Web API 含 Agents/AgentRoles/ExecutionLogs/Auth 端点、JWT（Cookie 承载）+ API-Key 认证（Smart policy scheme）、RBAC、限流、提示注入中间件、Swagger/Scalar、CORS |
 | `AgentPlatform.Workflow` | 工作流引擎（预留） |
 | `AgentPlatform.SpecFlowTests` | BDD 验收测试（SpecFlow + xUnit，11 个 .feature 文件） |
 
@@ -56,6 +56,7 @@ dotnet user-secrets set "OpenAI:Key" "sk-your-key-here"
 - **MediatR 管道**: UnitOfWorkBehavior 自动管理事务和领域事件分发（仅 `ICommand<T>` 触发 SaveChanges）
 - **模型路由**: 基于优先级列表的降级/重试/成本控制
 - **多租户**: ITenantScoped + EF Core Global Query Filter（Phase 1 单租户）
+- **认证**: httpOnly + SameSite Cookie 承载 JWT（前端 `withCredentials`，不落 localStorage）+ PBKDF2 密码哈希；API-Key 与 Bearer 并存于 Smart policy
 - **状态机引擎**: 自研 `WorkflowStateMachineEngine`，支持分支/重试（可配置次数）/回滚
 - **多 Agent 编排**: `AutoGenAgentOrchestrator` 顺序管线，6 种预置角色 + 自定义 `AgentType` 值对象
 - **短期记忆**: Redis 实现 `IShortTermMemory`，`IConnectionMultiplexer` Singleton，连接失败降级到内存

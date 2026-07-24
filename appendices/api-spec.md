@@ -25,33 +25,32 @@
 
 ### I.2 认证 API
 
+> **传输方式**：登录成功后 JWT 写入 **`ap_access_token` httpOnly Cookie**（SameSite=Lax、HTTPS 下 Secure、MaxAge=1h）。前端 `axios` 设 `withCredentials: true`，**不在 JS / localStorage 存 token**；`AuthConfiguration` 的 Smart 策略从 cookie 读 JWT 完成鉴权。登出即删 cookie。
+
 | 方法 | 路径 | 说明 | 权限 |
 | :--- | :--- | :--- | :--- |
-| POST | `/api/v1/auth/login` | 登录 | public |
-| POST | `/api/v1/auth/refresh` | 刷新 Token | public |
-| POST | `/api/v1/auth/logout` | 登出 | authenticated |
-| GET | `/api/v1/auth/me` | 获取当前用户信息 | authenticated |
+| POST | `/api/v1/auth/login` | 登录（邮箱+密码，PBKDF2 校验），成功设 cookie | public |
+| GET | `/api/v1/auth/me` | 获取当前用户信息（从 cookie 解析 ClaimsPrincipal） | authenticated |
+| POST | `/api/v1/auth/logout` | 登出（删除 cookie） | authenticated |
+| POST | `/api/dev/login` | 开发登录（仅 `DevLoginEnabled=true` 时启用，默认 false），返回裸 JWT 供 Swagger/Scalar 调试 | public |
+
+> 说明：**无 Refresh Token 端点**——cookie 1h 过期后重新登录即可。前端另提供「本地演示会话」路径（不请求后端、不写 cookie，`isDemo` 跳过 401 跳转），用于纯前端演示。
 
 ```json
 // POST /api/v1/auth/login 请求
 {
-  "email": "user@example.com",
-  "password": "********"
+  "email": "admin@acme.io",
+  "password": "Admin@123456"
 }
 
-// 响应
+// 响应（无 token 字段，身份由 cookie 携带）
 {
   "data": {
-    "token": "eyJhbGciOiJIUzI1NiIs...",
-    "refreshToken": "dGhpcyBpcyBhIHJlZnJl...",
-    "expiresAt": "2026-07-02T09:00:00Z",
     "user": {
       "id": "guid",
-      "name": "张三",
-      "email": "user@example.com",
-      "role": "admin",
-      "tenantId": "guid",
-      "permissions": ["read:workflow", "write:workflow", "admin:tenant"]
+      "email": "admin@acme.io",
+      "role": "Admin",
+      "tenantId": "guid"
     }
   }
 }

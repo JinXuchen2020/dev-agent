@@ -101,7 +101,7 @@
 
 ### 功能缺陷 / 后端（原一~二节 done）
 - **B1** 工作流编辑器「编辑模式」失效且保存即运行 → done（2026-07-22，`PUT /api/v1/workflows/{id}` + 拆分「保存草稿/运行」；`docs/quality/p0-workflow-update-gate.md`）
-- **B2** 实时进度 SSE 无法携带 JWT → done（fetch+ReadableStream 带 Bearer；`p0-workflow-update-gate.md`）
+- **B2** 实时进度 SSE 鉴权 → done（F2 起 SSE 改用 cookie：`fetch(..., {credentials:'include'})` / `new EventSource(url, {withCredentials:true})`，不再手动塞 Bearer；`p0-workflow-update-gate.md` + `docs/quality/f2-auth-gate.md`）
 - **B3** WorkflowDetail SSE 无限重连刷屏 → done（AbortController.abort + 非 2xx 返回；`p0-workflow-update-gate.md`）
 - **B4** WorkflowDetail 解析 context 白屏 → done（try/catch 回退原始文本；`p0-workflow-update-gate.md`）
 - **B5** 会话功能不可用 → done（2026-07-23 聊天页打通 + KB 联动；`docs/quality/conversation-kb-linkage-gate.md`；发消息 RBAC 放开为「所有已认证租户用户」）

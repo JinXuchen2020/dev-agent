@@ -522,7 +522,7 @@ public class CorrelationIdMiddleware
 <a name="九安全与鉴权"></a>
 ## 九、安全与鉴权
 
-> **实现阶段**：阶段二（阶段一使用跳过/模拟模式，完整 JWT/Identity/RBAC 在阶段二实现）
+> **实现阶段**：阶段五（安全加固）落地认证 / 多租户 / RBAC / 审计；F2 进一步将 JWT 改为 Cookie 承载并接入 PBKDF2 真实密码校验。QuickStart 模式不强制鉴权（FallbackPolicy 放行），但登录与密码校验逻辑已实现。
 >
 > **铁律**：平台会执行代码沙箱、调用外部模型，安全是第一优先级，不是"以后再补"。
 
@@ -530,7 +530,7 @@ public class CorrelationIdMiddleware
 
 | 层面 | 方案 | 说明 |
 | :--- | :--- | :--- |
-| 用户认证 | **ASP.NET Core Identity + JWT** | 用户登录颁发 JWT（Access Token 15min + Refresh Token 7d） |
+| 用户认证 | **自定义 User 聚合 + Cookie 承载 JWT + PBKDF2 密码哈希** | 登录颁发 JWT 写入 `ap_access_token` cookie（HttpOnly + SameSite=Lax + Secure=IsHttps + MaxAge=1h）；密码以 PBKDF2-SHA256（10 万迭代 + 16B 盐）哈希存储，固定时间比对。**无 ASP.NET Core Identity、无 Refresh Token**（cookie 过期即重新登录） |
 | 多租户隔离 | **TenantId 字段 + EF Global Query Filter** | 每个 SQL 查询自动追加 `WHERE TenantId = @CurrentTenant`，杜绝跨租户数据泄露。所有实体已实现 `ITenantScoped` 接口，`AppDbContext.OnModelCreating` 已通过 `ITenantProvider` 配置 `HasQueryFilter`。当前使用配置中的 `DefaultTenantId`（单租户模式），**阶段五安全加固改为 per-request 动态求值** |
 | API 权限 | **基于角色的访问控制（RBAC）** | Admin / Operator / Viewer 三级角色，Controller 用 `[Authorize(Roles = "Admin")]` 约束 |
 | 服务间认证 | **内部 API Key / mTLS（可选）** | C# 平台调用 Python vLLM 服务时，Header 传递内部共享密钥 |
@@ -576,7 +576,7 @@ AuditLog
 ```
 
 - 审计日志**只追加、不可修改、不可删除**（应用层不暴露 Delete 接口，数据库层可考虑追加-only 表）
-- **当前状态**：`AuditActionType` 枚举已定义（`Domain/Enums/AuditActionType.cs`），但 `AuditLog` 实体、Repository、写入逻辑均未实现，**待阶段五（安全加固）落地**
+- **当前状态**：`AuditLog` 聚合 + `IAuditLogRepository` 已在 Phase 5 实现并接入业务 handler（Agent / Workflow / ApiKey / Knowledge 等）与 Key 三点位（KeyUsed / KeyRotation / KeyRevoked），审计写入已生效
 - OpenTelemetry 中以 `log` 信号同步发出，便于 Grafana 实时告警
 
 ---
@@ -616,7 +616,7 @@ AuditLog
 > 4. **向量库** — SQLite 内存模式（代替 PGVector）
 > 5. **工作流引擎** — StubWorkflowEngine 空实现
 > 6. **代码沙箱** — 禁用（代替 Docker）
-> 7. **用户认证** — 跳过 JWT/Identity 校验
+> 7. **用户认证** — QuickStart 不强制鉴权（FallbackPolicy 放行），但登录 / 密码校验逻辑已实现
 > 8. **Tool 执行器** — NativeToolExecutor / SkillPackageExecutor 占位
 > 9. **向量嵌入** — 空返回（不调用真实 Embedding API）
 > 10. **通知/告警** — 空实现（不发送任何通知）

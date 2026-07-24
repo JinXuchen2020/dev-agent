@@ -15,7 +15,7 @@
 │  /api/tools           /api/conversations ...              │
 └────────────────────────┬─────────────────────────────────┘
                          │ REST API + WebSocket（流式）
-                         │ ← JWT 认证 →
+                         │ ← Cookie 鉴权（JWT 存于 httpOnly cookie）→
     ┌────────────────────┼────────────────────┐
     │                    │                    │
     ▼                    ▼                    ▼
@@ -271,7 +271,7 @@ my-platform/
 | REST API 接口 | 保持不变 | ❌ 零改动 |
 | 第三章目录脚手架 `AgentPlatform.Web` | React + TypeScript + Vite | ⚠️ 扩展为支持双形态（Web + Tauri） |
 | 第二章技术栈对照表「前端」 | React + Ant Design | ⚠️ 补充「桌面形态可选 Tauri 2.0」 |
-| 认证（JWT） | 保持不变 | ❌ Web 和桌面共用同一套 JWT |
+| 认证（Cookie 承载 JWT） | 保持不变 | ❌ Web 和桌面共用同一套 Cookie 鉴权（桌面端需自行处理 cookie 存储） |
 | WebSocket 流式 | 保持不变 | ❌ Web 和桌面共用同一套 WebSocket |
 
 > **一句话总结**：由于后端是 REST API，前端技术完全解耦。首推 **Tauri 2.0 + React**——一套 React 代码同时发布 Web 版和桌面版，包体积仅 10MB，还能获得系统托盘、全局快捷键、本地文件访问等 Web 做不到的原生能力。如果想要极致轻量且全 C#，**Photino.NET** 是 .NET 原生的隐藏宝藏（甚至能把后端内嵌进桌面进程，装个 exe 就能用）。**蓝图中的 `AgentPlatform.Web` 项目从「Web 专用」升级为「双形态共用」——React 代码不变，Tauri 配置按需启用。**
@@ -342,42 +342,42 @@ export const useWorkflowStore = create<WorkflowState>()(
 | `agentStore` | Agent 列表、Agent 配置表单状态 | 不需要（每次从 API 加载） |
 | `chatStore` | 对话会话、消息历史、流式接收状态 | 需要 |
 | `uiStore` | 侧栏展开/折叠、主题切换、面板尺寸 | 需要 |
-| `authStore` | 用户信息、Token、租户 ID | 需要（安全存储） |
+| `authStore`（`appStore`） | 用户信息（来自 `/auth/me`）、`isDemo`、`authBootstrapped` | 不需要 localStorage（token 在 httpOnly cookie，JS 不可读） |
 
 #### G.8.2 API 集成层（TanStack Query + axios）
 
 ```typescript
-// api/client.ts —— axios 实例 + 拦截器
-const apiClient = axios.create({ baseURL: import.meta.env.VITE_API_URL });
+// services/api.ts —— axios 实例（携带 cookie，无 Bearer / 无 localStorage）
+export const api = axios.create({ baseURL: import.meta.env.VITE_API_URL, withCredentials: true });
 
-apiClient.interceptors.request.use((config) => {
-  const token = useAuthStore.getState().token;
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-
-apiClient.interceptors.response.use(
+// 401 → 派发事件，由路由层用 <Navigate> 跳 /login（不整页刷新、不破坏 SPA）
+api.interceptors.response.use(
   (res) => res,
   (error) => {
     if (error.response?.status === 401) {
-      useAuthStore.getState().logout();
-      window.location.href = "/login";
+      window.dispatchEvent(new CustomEvent("auth:unauthorized"));
     }
     return Promise.reject(error);
   }
 );
 
-// api/workflow.ts —— 工作流 API 封装
-export const workflowApi = {
-  list: () => apiClient.get<Workflow[]>("/api/workflows"),
-  getById: (id: string) => apiClient.get<Workflow>(`/api/workflows/${id}`),
-  create: (data: CreateWorkflowRequest) =>
-    apiClient.post<Workflow>("/api/workflows", data),
-  execute: (id: string) =>
-    apiClient.post<ExecutionResult>(`/api/workflows/${id}/execute`),
-  stream: (id: string) =>
-    new EventSource(`${apiClient.defaults.baseURL}/api/workflows/${id}/stream`),
-};
+// 登录：后端校验密码后写 ap_access_token cookie，前端只拿用户信息
+export async function loginReal(email: string, password: string) {
+  const { data } = await api.post<{ data: { user: AuthUser } }>("/api/v1/auth/login", { email, password });
+  return data.data.user;
+}
+
+// SSE 流式：fetch 带 credentials，不再手动塞 Bearer
+export async function streamWorkflow(id: string, onChunk: (t: string) => void) {
+  const res = await fetch(`/api/v1/workflows/${id}/stream`, { method: "GET", credentials: "include" });
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    onChunk(decoder.decode(value, { stream: true }));
+  }
+}
 ```
 
 **数据获取策略（TanStack Query）**：

@@ -147,6 +147,18 @@ public class ToolDefinition                      // 聚合根
 }
 ```
 
+// Domain/Aggregates/Users/User.cs
+public class User : ITenantScoped, IAggregateRoot   // 用户聚合（F2 新增）
+{
+    public Guid Id { get; private init; }
+    public Guid TenantId { get; private init; }                // 租户 ID（多租户隔离）
+    public string Email { get; private set; }                  // 登录邮箱（租户内唯一）
+    public string PasswordHash { get; private set; }           // PBKDF2：$pbkdf2$<iter>$<saltB64>$<hashB64>
+    public string Role { get; private set; }                    // Admin / Operator / Viewer
+    public bool IsActive { get; private set; }
+    public DateTime CreatedAt { get; private init; }
+}
+
 ### A.3 实体（非聚合根）
 
 ```csharp
@@ -263,6 +275,14 @@ public interface IConversationRepository
     Task<Conversation?> GetByIdAsync(Guid id, CancellationToken ct = default);
     Task<Conversation?> GetByIdWithMessagesAsync(Guid id, CancellationToken ct = default);
     void Add(Conversation conversation);
+}
+
+// Domain/Repositories/IUserRepository.cs（F2 新增）
+public interface IUserRepository
+{
+    Task<User?> GetByEmailAsync(Guid tenantId, string email, CancellationToken ct = default);
+    Task<User?> GetByIdAsync(Guid id, CancellationToken ct = default);
+    void Add(User user);
 }
 ```
 
