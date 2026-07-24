@@ -44,12 +44,16 @@ Conversations 搜索/状态筛选、O12 列表服务端分页、O13 请求取消
 ## QA 结果与 e2e 说明
 
 - 前端四道闸门（typecheck / lint / build / unit）：**PASS**（qa.mjs OVERALL PASS）。
-- **e2e 闸门（Phase 4）本次会话未执行**：需要本地后端（`:5000`）+ Playwright Edge 浏览器，且
-  `Program.cs` 启动时会因 `Security:JwtSecretKey` 为 dev 默认而抛错、需环境变量覆盖。本会话未拉起
-  后端实时运行 e2e。已将 stale 的 e2e 规格修正为当前 cookie 鉴权，并新增 `page-polish.spec.ts`，
-  待后端可用时即可由 `node scripts/qa.mjs --e2e` 执行。此为环境限制，非 feature 缺陷。
+- **e2e 闸门（Phase 4）：PASS** —— 本地后端（`:5000`）+ Playwright Edge，`npx playwright test` **14 passed / 0 failed**
+  （smoke.unauth 8 + smoke.auth 1 + create-agent 1 + page-polish 4）。后端 `/conversations` 已补 `status`+`q`
+  服务端筛选；规格已切换为 F2 cookie 鉴权。
+- 后端单测闸门：**PASS** —— `dotnet test src/AgentPlatform.sln` **214 passed / 0 failed**（SpecFlow 41 +
+  Infrastructure 64 + Arch 6 + Application 82 + Api 16 + Integration 5）。
 
 ## 已知残留（非阻断）
 
-- e2e 实时闸门需后端环境（见上）；规格已就绪。
-- Conversations 搜索/筛选为客户端（后端 `/conversations` 返回全量数组、无分页/筛选参数），符合现状、不越界。
+- Conversations 搜索/筛选已转为服务端（见上），不再客户端全量过滤。
+- 顺带修复的预存路由 bug（不在 F3 范围，但阻塞 e2e 与页面可用性）：`AgentConfigurations` / `ExecutionLogs` /
+  `AgentRoles` 三个 controller 原用 `[Route("api/v1/[controller]")]`，ASP.NET 把类名展开为**无连字符**
+  (`agentconfigurations` / `executionlogs` / `agentroles`)，而前端一贯用连字符路径（`agent-configurations`
+  等），导致 404。已改为显式连字符路由，并同步修正 `EndpointContractTests` 断言路径。

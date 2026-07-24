@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Table, Typography, Tag, Spin, Button, Space, Modal, Input, Select, message } from 'antd';
+import { Table, Typography, Tag, Spin, Button, Space, Modal, Input, Select, App } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useNavigate } from 'react-router-dom';
 import type { Workflow } from '../types';
@@ -19,6 +19,7 @@ const WorkflowsPage: React.FC = () => {
   const [wfName, setWfName] = useState('');
   const [running, setRunning] = useState(false);
   const navigate = useNavigate();
+  const { message } = App.useApp();
 
   const fetch = useCallback((p: number, ps: number, status: number | undefined, signal?: AbortSignal) => {
     setLoading(true);

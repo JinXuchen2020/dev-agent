@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Table, Spin, Button, message, Tag, Input, Space, Select } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -6,7 +6,6 @@ import type { Conversation, KnowledgeBase } from '../types';
 import { getConversations, createConversation, getKnowledgeBases } from '../services/api';
 import {
   conversationStatusLabel,
-  conversationStatusNumber,
   CONVERSATION_STATUS_META,
 } from '../status';
 import PageHeader from '../components/PageHeader';
@@ -26,13 +25,14 @@ const ConversationsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState('');
+  const [appliedQ, setAppliedQ] = useState('');
   const [statusFilter, setStatusFilter] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     Promise.all([
-      getConversations(controller.signal),
+      getConversations({ status: statusFilter, q: appliedQ || undefined, signal: controller.signal }),
       getKnowledgeBases(controller.signal).catch(() => [] as KnowledgeBase[]),
     ])
       .then(([convos, kbs]) => {
@@ -44,21 +44,7 @@ const ConversationsPage: React.FC = () => {
       })
       .finally(() => setLoading(false));
     return () => controller.abort();
-  }, []);
-
-  const filtered = useMemo(() => {
-    const kw = search.trim().toLowerCase();
-    return conversations.filter((c) => {
-      const matchStatus = statusFilter === undefined || conversationStatusNumber(c.status, c.updatedAt) === statusFilter;
-      const matchKw =
-        !kw ||
-        (c.id ?? '').toLowerCase().includes(kw) ||
-        (c.agentName ?? '').toLowerCase().includes(kw) ||
-        (c.workflowId ?? '').toLowerCase().includes(kw) ||
-        (c.collectionName ?? '').toLowerCase().includes(kw);
-      return matchStatus && matchKw;
-    });
-  }, [conversations, search, statusFilter]);
+  }, [appliedQ, statusFilter]);
 
   const handleCreate = async () => {
     setCreating(true);
@@ -68,7 +54,7 @@ const ConversationsPage: React.FC = () => {
       if (conv?.id) navigate(`/conversations/${conv.id}`);
       else {
         const controller = new AbortController();
-        getConversations(controller.signal).then(setConversations).catch(() => undefined);
+        getConversations({ signal: controller.signal }).then(setConversations).catch(() => undefined);
       }
     } catch {
       message.error('创建失败，请确认已登录');
@@ -142,10 +128,15 @@ const ConversationsPage: React.FC = () => {
             placeholder="搜索 ID / Agent / 工作流 / 知识库"
             style={{ width: 320 }}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              if (!e.target.value) setAppliedQ('');
+            }}
+            onSearch={(v) => setAppliedQ(v)}
           />
           <Select<number>
             allowClear
+            aria-label="状态筛选"
             placeholder="状态筛选"
             style={{ width: 160 }}
             value={statusFilter}
@@ -158,7 +149,7 @@ const ConversationsPage: React.FC = () => {
         ) : (
           <Table
             columns={columns}
-            dataSource={filtered}
+            dataSource={conversations}
             rowKey="id"
             pagination={{ pageSize: 10 }}
             locale={{ emptyText: '暂无会话记录' }}

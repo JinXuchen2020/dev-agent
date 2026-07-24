@@ -1,6 +1,6 @@
 # F3 · 页面交互打磨（Page Interaction Polish）
 
-> 史诗 id：F3　|　优先级：P2　|　类型：纯前端（无后端契约变更）
+> 史诗 id：F3　|　优先级：P2　|　类型：前端为主；含一处经用户授权的后端契约扩展（`GET /conversations` 增 `status` + `q` 过滤）
 > 分支：`feat/f3-page-polish`
 > 来源：`features/backlog.md` F3 史诗（B9 / B10 / B11 / Conversations 搜索筛选 / O12 / O13）
 
@@ -10,7 +10,7 @@
 
 ## 2. 范围与边界（硬约束）
 
-- **仅前端改动**：后端 `agent-configurations` / `workflows` / `execution-logs` 三个列表端点**已支持** `skip` / `take` / `totalCount`；`Conversations` 端点返回全量数组（无分页/筛选参数）。本 feature **不新增、不修改任何后端接口或 DTO**。
+- **前端为主 + 一处后端扩展**：后端 `agent-configurations` / `workflows` / `execution-logs` 三个列表端点**已支持** `skip` / `take` / `totalCount`。`Conversations` 端点原返回全量数组（无筛选参数）；按用户明确授权，F3 已**扩展** `GET /api/v1/conversations` 支持 `?status`(整数枚举) + `?q`(自由文本) 过滤，并把 Conversations 页搜索/筛选切到**服务端**。这是本 feature 唯一一处后端契约变更（用户授权，不违反「先问人」红线）。
 - **枚举序列化事实（B10 根因）**：`Program.cs` 仅配置 `JsonNamingPolicy.CamelCase`，**未注册 `JsonStringEnumConverter`**，故所有枚举按**整数**序列化。实测枚举序：
   - `WorkflowState`：Pending=0 / Running=1 / Paused=2 / Completed=3 / Failed=4 / RolledBack=5
   - `ConversationStatus`：Active=0 / Closed=1 / Archived=2
@@ -24,7 +24,7 @@
 | `GET /api/v1/agent-configurations` | `?type&skip&take` | `{ items: AgentConfiguration[]; totalCount: number }`（`yamlContent` 已在 `items` 中返回） |
 | `GET /api/v1/workflows` | `?status&skip&take` | `{ items: Workflow[]; totalCount: number }`（`currentState` 为整数枚举） |
 | `GET /api/v1/execution-logs` | `?status&from&to&skip&take` | `{ items: ExecutionLog[]; totalCount: number }`（`status` 为整数枚举） |
-| `GET /api/v1/conversations` | 无（全量） | `Conversation[]`（`status` 为整数枚举） |
+| `GET /api/v1/conversations` | `?status`(整数枚举) + `?q`(自由文本，匹配 id/workflowId/knowledgeBaseId/collectionName/消息正文) | `Conversation[]`（`status` 为整数枚举） |
 
 `runWorkflow({ name, initialContext })` → `POST /api/v1/workflows`（创建并运行工作流）。
 
@@ -55,10 +55,11 @@
 - `handleRun`：空名 → `message.warning('请输入工作流名称')` 并保持弹窗打开，不静默返回。
 - `runWorkflow` 包 `try/catch`；成功 → 关弹窗 + 清空 + 刷新列表；失败 → `message.error(getErrorMessage(e))`，弹窗保持打开便于重试。
 
-### Conversations 搜索 / 状态筛选（客户端，对齐 Agents 页）
-- 顶部加 `Input.Search`（按 `id` / `agentName` / `workflowId` / `collectionName` 模糊匹配）+ 状态 `Select`（`CONVERSATION_STATUS_META`，含「全部」）。
+### Conversations 搜索 / 状态筛选（服务端，对齐 Agents 页）
+- 顶部加 `Input.Search`（回车触发）+ 状态 `Select`（`CONVERSATION_STATUS_META`，含「全部」），二者均作为查询参数传给 `GET /api/v1/conversations?status=&q=`，由后端在租户内过滤。
+- `getConversations({ status, q, signal })` 透传参数；`ConversationsPage` 的 `useEffect` 依赖 `[appliedQ, statusFilter]` 重新拉取，移除原客户端 `filtered` 内存过滤。
+- `q` 后端语义（handler 内 `StringComparison.OrdinalIgnoreCase`）：`Id` / `WorkflowId` / `KnowledgeBaseId` / `CollectionName` / `Messages[].Content` 任一包含关键字即命中。
 - 状态列改用 `CONVERSATION_STATUS_META` 映射中文标签传给 `StatusBadge`，修复数字显示。
-- 全部为已加载数组的客户端过滤（后端无分页/筛选参数，符合现状，不越界）。
 
 ### O12 · 列表服务端分页（ExecutionLogs / Workflows / AgentConfigurations）
 - 三页 antd `Table` 的 `pagination` 接 `total` + `current` + `pageSize`，`onChange` 计算 `skip=(current-1)*pageSize` / `take=pageSize` 后重新拉取 `items` + `totalCount`，消除「前端假分页与后端 totalCount 不一致」。
@@ -79,12 +80,12 @@
   - [ ] 卸载 `AbortController.abort()` 生效，无 setState-after-unmount 警告。
   - [ ] YAML 详情抽屉正确渲染 `yamlContent`，不溢出布局。
 - **P2（中）**
-  - [ ] Conversations 搜索/筛选为客户端且过滤逻辑正确。
+  - [ ] Conversations 搜索/筛选已切到服务端（`/conversations?status&q`），过滤逻辑正确。
   - [ ] 筛选/分页切换不触发整页刷新或重复副作用。
   - [ ] 复用既有设计令牌（`colors` / `Card` / `PageHeader` / `StatusBadge`），无新硬编码色值。
 - **P3（低）**
   - [ ] 无死代码、无未用导入；lint（eslint）净。
-  - [ ] 不改变后端任何文件。
+  - [ ] 后端仅 `GetConversations` 查询/处理器/控制器三处增量改动，无破坏性契约变更。
 
 ## 7. 风险与回归
 

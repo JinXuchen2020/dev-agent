@@ -2,23 +2,27 @@
 
 ## v2.2 (2026-07-24)
 
-### F3 · 页面交互打磨完成（feature-builder 前端实跑）
+### F3 · 页面交互打磨完成（feature-builder 全栈实跑）
 
-纯前端打磨列表/筛选/表单交互（`node scripts/qa.mjs` 4/4 全绿，无后端改动）。
+列表/筛选/表单交互打磨 + 后端 `/conversations` 服务端筛选补完。
 
 **核心修复：**
 - **B10 状态色块错乱（根因）**：后端 `Program.cs` 未注册 `JsonStringEnumConverter`，枚举按**整数**序列化；原前端用小写字符串做 color map 的 key 永远 miss。新增 `src/status.ts` 单一事实源（`mapWorkflowStatus` / `WORKFLOW_STATUS_FILTER_OPTIONS` 整数枚举值 / `CONVERSATION_STATUS_META`），ExecutionLogs + Workflows 状态 Tag 与筛选下拉统一改用，色块正确且不再裸传小写字面量
 - **B9** AgentConfigurations「View」按钮打开 Drawer 展示 `yamlContent`（等宽、可滚动，无新依赖）
 - **B11** Workflows「快速运行」空名 → `message.warning` 且保持弹窗；`runWorkflow` 包 try/catch → 失败 `message.error`，成功才关弹窗并刷新
-- **Conversations** 新增搜索框（ID/Agent/工作流/知识库）+ 状态筛选（客户端，对齐 Agents 页）；状态列改用 `CONVERSATION_STATUS_META` 中文标签
+- **Conversations** 新增搜索框（ID/Agent/工作流/知识库）+ 状态筛选；由**客户端**改为**服务端**——后端 `GetConversationsQuery` 补 `status`+`q`，`ConversationsController` 绑定 `[FromQuery]`，前端 `getConversations` 改对象参数传 `status`/`q`
 - **O12** ExecutionLogs / Workflows / AgentConfigurations 接入服务端分页（`total` + `onChange` → `skip/take`），与后端 `totalCount` 一致
 - **O13** 四个列表 getter 支持 `AbortSignal`，各页 `useEffect` 内 `AbortController` 卸载时 `abort()`，杜绝 setState-after-unmount
 
+**顺带修复的预存路由 bug（阻塞 e2e / 页面可用性）：**
+- `AgentConfigurations` / `ExecutionLogs` / `AgentRoles` 三 controller 原用 `[Route("api/v1/[controller]")]`，ASP.NET 把类名展开为**无连字符**（`agentconfigurations` / `executionlogs` / `agentroles`），而前端一贯用连字符路径（`agent-configurations` 等）→ 404。改为显式连字符路由并同步修正 `EndpointContractTests` 断言。
+
 **质量与测试：**
 - 三道质量门禁全 PASS（`ddd-code-reviewer` / `ddd-phase-quality-gate` / `codebase-optimizer`）；`.quality-gate.json` 推进 `f3-page-polish`
-- e2e 规格修正为 F2 cookie 鉴权（消除 localStorage 历史漂移）+ 新增 `e2e/page-polish.spec.ts`；实时 e2e 需本地后端环境，本会话未执行
+- **e2e 闸门 PASS**：`npx playwright test` **14 passed / 0 failed**（前端 cookie 鉴权规格 + 新增 `e2e/page-polish.spec.ts`）
+- **后端单测 PASS**：`dotnet test src/AgentPlatform.sln` **214 passed / 0 failed**
 
-**分支：** `feat/f3-page-polish`（commit 待 Phase 7）
+**分支：** `feat/f3-page-polish`
 
 ## v2.1 (2026-07-24)
 

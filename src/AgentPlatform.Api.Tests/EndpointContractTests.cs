@@ -56,7 +56,7 @@ public sealed class EndpointContractTests : IClassFixture<ApiContractTestFactory
     {
         // Arrange
         var client = _factory.CreateAuthenticatedClient();
-        var requestUri = "/api/v1/AgentRoles";
+        var requestUri = "/api/v1/agent-roles";
 
         // Act
         var response = await client.GetAsync(requestUri);
@@ -99,7 +99,7 @@ public sealed class EndpointContractTests : IClassFixture<ApiContractTestFactory
     {
         // Arrange
         var client = _factory.CreateAuthenticatedClient();
-        var requestUri = "/api/v1/ExecutionLogs";
+        var requestUri = "/api/v1/execution-logs";
 
         // Act
         var response = await client.GetAsync(requestUri);
@@ -154,7 +154,7 @@ public sealed class EndpointContractTests : IClassFixture<ApiContractTestFactory
     {
         // Arrange
         var client = _factory.CreateAuthenticatedClient();
-        var requestUri = "/api/v1/AgentConfigurations";
+        var requestUri = "/api/v1/agent-configurations";
 
         // Act
         var response = await client.GetAsync(requestUri);

@@ -36,9 +36,16 @@ api.interceptors.response.use(
     if (status === 401) {
       // Notify the router layer to redirect to /login inside the SPA
       // (no full-page reload, no unhandled rejection white screen).
+      // Expected during an unauthenticated session check — do NOT log as error.
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('auth:unauthorized'));
       }
+      return Promise.reject(error);
+    }
+    // Requests aborted mid-flight (e.g. SPA navigation away) are expected;
+    // logging them only adds console noise.
+    if (error?.code === 'ERR_CANCELED' || /canceled/i.test(error?.message ?? '')) {
+      return Promise.reject(error);
     }
     console.error('API Error:', error.response?.data || error.message);
     return Promise.reject(error);
@@ -126,9 +133,17 @@ export default api;
 // API Keys
 export const getApiKeys = () => api.get<ApiKey[]>('/api-keys').then((r) => r.data);
 
-// Conversations
-export const getConversations = (signal?: AbortSignal) =>
-  api.get<Conversation[]>('/conversations', { signal }).then((r) => r.data);
+// Conversations (F3 extension: server-side status + q filtering)
+export const getConversations = (params?: {
+  status?: number | string;
+  q?: string;
+  signal?: AbortSignal;
+}) => {
+  const { status, q, signal } = params ?? {};
+  return api
+    .get<Conversation[]>('/conversations', { params: { status, q }, signal })
+    .then((r) => r.data);
+};
 export const createConversation = () =>
   api.post<Conversation>('/conversations', {}).then((r) => r.data);
 export const getConversation = (id: string) =>

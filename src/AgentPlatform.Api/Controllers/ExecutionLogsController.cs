@@ -15,7 +15,7 @@ namespace AgentPlatform.Api.Controllers;
 [Authorize]
 [ApiController]
 [ApiVersion("1.0")]
-[Route("api/v1/[controller]")]
+[Route("api/v1/execution-logs")]
 public sealed class ExecutionLogsController : ControllerBase
 {
     private readonly IMediator _mediator;

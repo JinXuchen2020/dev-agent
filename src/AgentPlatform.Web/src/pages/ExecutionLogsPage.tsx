@@ -75,6 +75,7 @@ const ExecutionLogsPage: React.FC = () => {
         </Title>
         <Select<number>
           allowClear
+          aria-label="Filter status"
           placeholder="Filter status"
           style={{ width: 180 }}
           value={statusFilter}

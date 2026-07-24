@@ -138,3 +138,7 @@ build/
 test-results/
 playwright-report/
 *.db.bak
+
+# SQLite WAL/SHM runtime artifacts
+*.db-shm
+*.db-wal

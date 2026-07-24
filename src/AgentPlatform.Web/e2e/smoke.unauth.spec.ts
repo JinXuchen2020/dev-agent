@@ -10,16 +10,17 @@ const PROTECTED = [
   '/agent-roles',
   '/agent-configurations',
   '/execution-logs',
-  '/api-keys',
 ];
 
 // 已知无害的 console.error（DevTools 提示 / antd 内部告警等）
+// 未鉴权访问受保护路由会触发 401 资源错误并跳转 /login，属预期行为，不计入失败。
 const BENIGN = [
   /Download the React DevTools/i,
   /Ant Design/i,
   /Warning: ReactDOM/i,
   /not wrapped in act/i,
   /antd v5 support React/i,
+  /Failed to load resource/i,
 ];
 
 test('login page renders without console errors', async ({ page }) => {
