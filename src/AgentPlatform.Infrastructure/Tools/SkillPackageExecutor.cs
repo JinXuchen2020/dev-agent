@@ -24,6 +24,7 @@ internal sealed class SkillPackageExecutor : IToolExecutor
     public Task<ToolExecutionResult> ExecuteAsync(
         ToolDefinition tool, string parametersJson, CancellationToken ct)
     {
+        // TODO(Phase6): 真实化需 SK runtime 加载技能包并实际调用；当前仍返回伪造成功（A1 仅要求 NativeToolExecutor 真实执行）。
         return Task.FromResult(new ToolExecutionResult(true, "Executed via SK Plugin"));
     }
 }

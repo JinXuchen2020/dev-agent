@@ -6,6 +6,8 @@ import {
   AuditOutlined,
   CheckCircleOutlined,
   BookOutlined,
+  ToolOutlined,
+  CodeOutlined,
 } from '@ant-design/icons';
 import type { ReactNode } from 'react';
 import { StepType } from '../../types';
@@ -17,6 +19,8 @@ const PALETTE: { type: StepType; desc: string; icon: ReactNode }[] = [
   { type: StepType.Agent, desc: '分配给指定 Agent', icon: <RobotOutlined /> },
   { type: StepType.Critic, desc: '评审 / 收敛', icon: <AuditOutlined /> },
   { type: StepType.Knowledge, desc: '从知识库检索', icon: <BookOutlined /> },
+  { type: StepType.Tool, desc: '调用平台工具', icon: <ToolOutlined /> },
+  { type: StepType.Code, desc: '在沙箱跑代码', icon: <CodeOutlined /> },
   { type: StepType.End, desc: '汇总出口', icon: <CheckCircleOutlined /> },
 ];
 

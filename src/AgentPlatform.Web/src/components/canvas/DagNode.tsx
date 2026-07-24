@@ -6,6 +6,8 @@ import {
   RobotOutlined,
   AuditOutlined,
   BookOutlined,
+  ToolOutlined,
+  CodeOutlined,
 } from '@ant-design/icons';
 import type { ReactNode } from 'react';
 import { StepType } from '../../types';
@@ -18,6 +20,8 @@ const TYPE_ICON: Record<StepType, ReactNode> = {
   [StepType.Agent]: <RobotOutlined />,
   [StepType.Critic]: <AuditOutlined />,
   [StepType.Knowledge]: <BookOutlined />,
+  [StepType.Tool]: <ToolOutlined />,
+  [StepType.Code]: <CodeOutlined />,
 };
 
 const STATE_COLOR: Record<string, string> = {

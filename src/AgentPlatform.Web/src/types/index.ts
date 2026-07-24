@@ -78,6 +78,8 @@ export const StepType = {
   Agent: 3,
   Critic: 4,
   Knowledge: 5,
+  Tool: 6,
+  Code: 7,
 } as const;
 export type StepType = (typeof StepType)[keyof typeof StepType];
 
@@ -90,6 +92,12 @@ export interface NodeConfig {
   initialContext?: string;
   knowledgeBaseId?: string | null;
   query?: string;
+  // 工具调用节点 (StepType.Tool)
+  toolName?: string;
+  parameters?: string;
+  // 代码执行节点 (StepType.Code)
+  code?: string;
+  language?: string;
 }
 
 // Backend response: a single graph node.

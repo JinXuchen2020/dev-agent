@@ -1,5 +1,29 @@
 # 变更日志
 
+## v2.4 (2026-07-24)
+
+### F5 · 行动层落地（Agent 真正能做事）完成（feature-builder 全栈实跑，🔴高风险）
+
+把原先**空心**的执行层变成**真实副作用**：调工具、跑代码均产生真实外部效果，而非伪造成功。
+
+**核心改动：**
+- **A1 原生工具真实 HTTP**：`NativeToolExecutor` 从「返回假成功」改为对 `ToolDefinition.EndpointUrl` 发起真实 HTTP 调用；方法解析（默认 POST、无参走 GET、显式 `httpMethod` 覆盖）、2xx→成功回体、非 2xx→精准回打真实状态、超时→`工具调用超时`。符合 Phase 6 critic 范式（失败精准回打）
+- **A2 代码沙箱真实进程**：新增 `ProcessCodeSandbox`（`System.Diagnostics.Process` 拉起 python / node 真实运行），捕获真实 stdout / stderr / ExitCode / 超时杀进程，替代原伪造成功的 `DockerCodeSandbox`（后者改为显式抛异常，消除静默假成功）。Docker 在本沙箱不可用，用户确认进程沙箱为默认真实路径
+- **A3 Tool / Code 工作流节点**：新增 `ToolStepExecutor` / `CodeStepExecutor`，注册为 `StepType.Tool=6` / `Code=7` 节点执行器，经既有 `ResolveExecutor`（`HandlesType` 匹配）真实路由；前端 DAG 画布补 Tool / Code 节点（调色板 / 图标 / 配置面板 / node-type 映射）
+- **配置**：新增 `SandboxSettings`（`Application.Abstractions`）+ `appsettings.json` 的 `Sandbox` 节（`Provider` 默认 `Process`、`TimeoutSeconds`、`HttpTimeoutSeconds`、`AllowedLanguages` 白名单、`NetworkEnabled` 默认 `false`、`MaxOutputBytes`、`InterpreterPaths`）；`DI` 条件注册 `ICodeSandbox`（Docker / Process）+ `AddHttpClient()`
+
+**质量与测试：**
+- 三道质量门禁全 PASS（`ddd-code-reviewer` / `ddd-phase-quality-gate` / `codebase-optimizer`）；`.quality-gate.json` 推进 `f5-action-layer`
+- 已核对 A1 / A2 / A3 **真实副作用验收**：新增 13 例单测真实走 HTTP `SendAsync` + 真实 python/node 子进程（print→stdout、raise→stderr、sleep(30) 超时杀、ruby 白名单拒绝）
+- `dotnet test src/AgentPlatform.sln` **230 passed / 0 failed**（含 F5 新增 13 例）；`tsc --noEmit` **0 error**
+
+**已知残留（非阻断，waiver target Phase 6）：**
+- 真实 Docker 容器隔离（需 Docker.DotNet + 守护进程）；Skill / MCP 执行器占位（设计为 A1 仅要求 NativeToolExecutor 真实化）
+- 进程模式无法在 OS 层强制禁网，以 `NetworkEnabled=false` + 语言白名单 + 超时杀 + 输出截断缓解
+- 含 Tool/Code 节点的全链路 e2e 需后端 + Web 实例，本沙箱未跑（单元层已覆盖真实执行路径）
+
+**分支：** `feat/f5-action-layer`
+
 ## v2.3 (2026-07-24)
 
 ### F4 · 前端工程化完成（feature-builder 全栈实跑）

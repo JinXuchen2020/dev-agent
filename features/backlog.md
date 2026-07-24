@@ -62,13 +62,13 @@
   - **O14** 可访问性薄弱（导航 `<div onClick>`、静态搜索框、缺 `aria-label`）→ 改 `<a>`/`<button>` + `aria-label`。
   - **O7** 单元测试覆盖极低（<5%）→ 补关键页单测（数据获取/错误态/表单/SSE 解析）。
 
-### F5 · 行动层落地（Agent 真正能做事）  [P0]  open  🔴高风险（Phase 6 行动层）
-- 设计文档：`features/action-layer.md`（待建）
+### F5 · 行动层落地（Agent 真正能做事）  [P0]  done  ✅（2026-07-24，分支 feat/f5-action-layer，设计文档 features/action-layer.md，质量报告 docs/quality/f5-action-layer-gate.md；范围已确认 A1+A2(进程沙箱)+A3 一并纳入）  🔴高风险（Phase 6 行动层）
+- 设计文档：`features/action-layer.md`（已建）
 - 目标：让 Agent 真正在外部世界执行动作——调工具、跑代码、检索外部知识，而非伪造成功。这是「agent 编排平台」成立的核心。
 - 验收子项：
-  - **A1** 工具调用执行层全空心（三个 `IToolExecutor`：`NativeToolExecutor`/`SkillPackageExecutor`/`McpClient` 均直接返回伪造成功；`DI.cs:286-288`）→ 至少 `NativeToolExecutor` 接真实执行；验收须含「调用后结果反映真实副作用」。
-  - **A2** 代码沙箱为桩（`DockerCodeSandbox.cs:9-56`；`DI.cs:146`）→ 接 `Docker.DotNet` 真实容器执行（镜像/网络/资源限制/超时/输出回传）；验收须含「真实运行代码并回传 stdout/stderr」。
-  - **节点全家桶·Tool/Code/Knowledge Retrieval**（见 F7 节点项联动）→ 真实执行器接通，非装饰节点。
+  - **A1** 工具调用执行层全空心（三个 `IToolExecutor`：`NativeToolExecutor`/`SkillPackageExecutor`/`McpClient` 均直接返回伪造成功）→ ✅ done（`NativeToolExecutor` 接真实 HTTP 执行，单测走真实 `SendAsync` 路径覆盖成功/失败/超时/方法解析；Skill/MCP 执行器保留为 Phase 6 占位，设计文档明确 A1 仅要求 NativeToolExecutor 真实化）。
+  - **A2** 代码沙箱为桩（`DockerCodeSandbox.cs:9-56`）→ ✅ done（进程级真实执行：`ProcessCodeSandbox` 用 `System.Diagnostics.Process` 拉起 python/node 真实运行并回传 stdout/stderr/ExitCode/超时杀进程；原 `DockerCodeSandbox` 桩改为显式抛异常消除静默假成功；真实 Docker 容器执行因本沙箱无 Docker 守护进程 + 未引 Docker SDK，列入 Phase 6）。
+  - **节点全家桶·Tool/Code/Knowledge Retrieval** → ✅ done（新增 `ToolStepExecutor`/`CodeStepExecutor` 注册为 `StepType.Tool=6`/`Code=7`，经既有 `ResolveExecutor`(`HandlesType`) 真实路由；前端 DAG 画布补 Tool/Code 节点调色板/图标/配置面板；Knowledge Retrieval 已于 RAG 地基层完成）。
 
 ### F6 · Research Agent（联网多步调研）  [P1]  open  ⚠️高风险（Phase 6）
 - 设计文档：`features/research-agent.md`（待建）
