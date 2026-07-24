@@ -1,10 +1,10 @@
 {
-  "phase": "f3-page-polish",
-  "reviewer": "ddd-code-reviewer PASSED (F3 前端对抗式审查: 修复 1 P3 — ConversationsPage getKnowledgeBases 透传 AbortSignal 实现取消对称; P0/P1/P2=0; 前端 node scripts/qa.mjs 四道闸门全 PASS) + 后端扩展经 dotnet build + 214 单测 + 14 e2e 实测闭环",
-  "structureGate": "ddd-phase-quality-gate PASS (P0=0 P1=0 P2=0 P3=0; 12 类审计中 .NET DDD 专属 DI/EF/Swagger/XML/蓝图漂移 因前端无后端契约变更全空; 前端相关 硬编码值/并发(AbortController)/死代码/空值守卫 全扫 0 open; checklist 已嵌 features/page-polish.md §6)",
-  "codebaseOptimizer": "codebase-optimizer PASSED (Round F3-01, 0 open; 七维度扫描 F3 前端改动: 架构复用 Card/PageHeader/StatusBadge/mapWorkflowStatus、代码质量 0 any+strict、正确性 错误兜底+取消、测试 新增 e2e/page-polish.spec.ts、性能 服务端分页+AbortController、安全 无 XSS/无硬编码密钥、工程化 lint 净/无死代码) + 顺带修复预存路由 404（3 controller 改显式连字符路由）已纳入",
+  "phase": "f4-frontend-engineering",
+  "reviewer": "ddd-code-reviewer PASSED (F4 前端对抗式审查: 详查 lazy 上下文/useApiState 重跑/manualChunks 匹配 3 处最易错点均无缺陷; P0/P1/P2/P3=0; 前端 node scripts/qa.mjs 四道闸门全 PASS)",
+  "structureGate": "ddd-phase-quality-gate PASS (P0=0 P1=0 P2=0 P3=0; 12 类审计中 .NET DDD 专属 DI/EF/Swagger/XML/蓝图漂移 因纯前端改动全空; 前端相关 硬编码值(theme/tokens)/并发(zustand 不可变)/死代码(userRole 已清)/空值守卫(strict+?.) 全扫 0 open; checklist 已嵌 features/frontend-engineering.md §6)",
+  "codebaseOptimizer": "codebase-optimizer PASSED (Round F4-01, 0 open; 七维度扫描 F4 前端改动: 架构复用 Card/PageHeader/StatusBadge/AntApp、代码质量 0 any+strict(grep 0 any/@ts-ignore)、正确性 错误兜底经 App.useApp、测试 新增 4 单测、性能 路由级懒加载+供应商分包、安全 0 dangerouslySetInnerHTML/无硬编码密钥、工程化 lint 净/无死代码; console.* 命中均合法错误日志非桩)",
   "cleared": true,
-  "reportRef": "docs/quality/f3-page-polish-gate.md",
-  "notes": "实现 features/page-polish.md (F3): B9 AgentConfigurations YAML 详情抽屉 + O12 服务端分页 + O13 AbortController; B10 状态枚举前端映射(mapWorkflowStatus/WORKFLOW_STATUS_FILTER_OPTIONS 整数枚举, 修复因后端枚举按整数序列化导致的色块错乱); B11 Workflows 快速运行空名 warning+失败 error toast; Conversations 搜索/状态筛选客户端 + 状态映射. 经用户授权扩展后端 /conversations status+q 服务端筛选(GetConversationsQuery+Handler+ConversationsController). 顺带修复预存路由 bug: AgentConfigurations/ExecutionLogs/AgentRoles 三 controller 原 [Route(\"api/v1/[controller]\")] 展开无连字符路径与前端连字符路径不符→404, 改显式连字符路由并同步 EndpointContractTests 断言. 验证: tsc 0 error; dotnet test src/AgentPlatform.sln 214/0; npx playwright test 14/0.",
-  "verifiedAt": "2026-07-24T12:45:00+08:00"
+  "reportRef": "docs/quality/f4-frontend-engineering-gate.md",
+  "notes": "实现 features/frontend-engineering.md (F4): O6 路由级 React.lazy + manualChunks 函数式拆 react-vendor/antd/xyflow 三供应商分包(首屏主包由 1.38MB 降至 index 9KB + 并行供应商); O9 8 个页面静态 message 改 App.useApp()(grep 全仓 0 处静态 message.); O10 移除死字段 userRole(接口+5 处赋值, grep 0 残留读取); O14 3 处 aria-label(侧栏折叠/会话搜索/聊天输入); O7 新增 4 单测(appStore 鉴权态/useApiState 加载错误重试卸载安全/LoginPage/NotFoundPage). 纯前端无后端契约变更. 验证: tsc 0 error; node scripts/qa.mjs 四道闸门全 PASS(typecheck/lint/build/unit). e2e 因沙箱无后端未执行, 留待有后端环境补跑.",
+  "verifiedAt": "2026-07-24"
 }

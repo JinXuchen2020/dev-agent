@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Input, Button, message } from 'antd';
+import { Input, Button, App as AntApp } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { loginRequest } from '../services/api';
 import { useAppStore } from '../stores/appStore';
@@ -11,6 +11,7 @@ const LoginPage: React.FC = () => {
   const location = useLocation();
   const loginReal = useAppStore((s) => s.loginReal);
   const loginDemo = useAppStore((s) => s.loginDemo);
+  const { message } = AntApp.useApp();
   const from = (location.state as { from?: { pathname?: string } })?.from;
   const [email, setEmail] = useState('admin@acme.io');
   const [password, setPassword] = useState('');

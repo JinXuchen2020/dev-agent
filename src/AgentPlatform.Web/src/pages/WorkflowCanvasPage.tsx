@@ -15,7 +15,7 @@ import {
   Typography,
   Space,
   Input,
-  message,
+  App as AntApp,
   Spin,
   Tooltip,
 } from 'antd';
@@ -55,6 +55,7 @@ const nodeTypes: NodeTypes = {
 const CanvasInner: React.FC = () => {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
+  const { message } = AntApp.useApp();
   const { screenToFlowPosition } = useReactFlow();
 
   const nodes = useCanvasStore((s) => s.nodes);

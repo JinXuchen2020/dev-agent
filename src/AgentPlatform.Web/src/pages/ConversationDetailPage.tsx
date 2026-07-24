@@ -8,7 +8,7 @@ import {
   Tag,
   Alert,
   Space,
-  message,
+  App as AntApp,
   Empty,
 } from 'antd';
 import { SendOutlined } from '@ant-design/icons';
@@ -41,6 +41,7 @@ const ConversationDetailPage: React.FC = () => {
   const [savingKb, setSavingKb] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { message } = AntApp.useApp();
 
   const load = () => {
     setLoading(true);
@@ -192,6 +193,7 @@ const ConversationDetailPage: React.FC = () => {
           <Input.TextArea
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            aria-label="输入消息"
             placeholder="输入消息，回车发送（Shift+Enter 换行）"
             autoSize={{ minRows: 1, maxRows: 4 }}
             onPressEnter={(e) => {

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Table, Button, Spin, Space, Tag, Upload, Descriptions, message } from 'antd';
+import { Table, Button, Spin, Space, Tag, Upload, Descriptions, App as AntApp } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { ArrowLeftOutlined, UploadOutlined } from '@ant-design/icons';
 import type { KnowledgeDocument } from '../types';
@@ -16,6 +16,7 @@ const KnowledgeBaseDetailPage: React.FC = () => {
   const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const { message } = AntApp.useApp();
 
   const load = () => {
     setLoading(true);

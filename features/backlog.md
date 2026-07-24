@@ -52,8 +52,8 @@
   - **O12** 列表分页与后端 `totalCount` 不一致（`ExecutionLogsPage.tsx:70-77`）→ 接入服务端分页（传 `skip/take` + 用 `totalCount`）。
   - **O13** 无请求取消（AbortController）/ 卸载后 setState 风险 → effect cleanup + `AbortController`。
 
-### F4 · 前端工程化（性能/可维护性/可访问性）  [P2/P3]  open
-- 设计文档：`features/frontend-engineering.md`（待建）
+### F4 · 前端工程化（性能/可维护性/可访问性）  [P2/P3]  done  （2026-07-24，分支 feat/f4-frontend-engineering，设计文档 features/frontend-engineering.md；质量报告 docs/quality/f4-frontend-engineering-gate.md）
+- 设计文档：`features/frontend-engineering.md`（已建）
 - 目标：拆包、去告警、清死代码、补单测、a11y。
 - 验收子项：
   - **O6** 打包体积过大未拆包（单 chunk 1.38MB；`@xyflow/react`、antd 全进主包）→ 路由级 `React.lazy` + `manualChunks`。

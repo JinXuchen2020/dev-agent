@@ -11,7 +11,6 @@ interface AppState {
   // Demo mode = local session without a real backend user (no auth cookie).
   isDemo: boolean;
   userEmail: string | null;
-  userRole: string | null;
   // Probe the backend for the current identity (called once on app mount).
   bootstrapAuth: () => Promise<void>;
   // Real login: identity comes from the backend response.
@@ -28,7 +27,6 @@ export const useAppStore = create<AppState>((set) => ({
   authBootstrapped: false,
   isDemo: false,
   userEmail: null,
-  userRole: null,
   bootstrapAuth: async () => {
     try {
       const user = await getAuthMe();
@@ -36,7 +34,6 @@ export const useAppStore = create<AppState>((set) => ({
         isAuthenticated: true,
         isDemo: false,
         userEmail: user.email,
-        userRole: user.role,
         authBootstrapped: true,
       });
     } catch {
@@ -44,7 +41,6 @@ export const useAppStore = create<AppState>((set) => ({
         isAuthenticated: false,
         isDemo: false,
         userEmail: null,
-        userRole: null,
         authBootstrapped: true,
       });
     }
@@ -54,7 +50,6 @@ export const useAppStore = create<AppState>((set) => ({
       isAuthenticated: true,
       isDemo: false,
       userEmail: user.email,
-      userRole: user.role,
       authBootstrapped: true,
     }),
   loginDemo: (email) =>
@@ -62,12 +57,11 @@ export const useAppStore = create<AppState>((set) => ({
       isAuthenticated: true,
       isDemo: true,
       userEmail: email,
-      userRole: null,
       authBootstrapped: true,
     }),
   logout: () => {
     // Best-effort cookie clear; ignore network errors.
     void logoutRequest().catch(() => undefined);
-    set({ isAuthenticated: false, isDemo: false, userEmail: null, userRole: null });
+    set({ isAuthenticated: false, isDemo: false, userEmail: null });
   },
 }));
