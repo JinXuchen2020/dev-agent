@@ -62,13 +62,14 @@
   - **O14** 可访问性薄弱（导航 `<div onClick>`、静态搜索框、缺 `aria-label`）→ 改 `<a>`/`<button>` + `aria-label`。
   - **O7** 单元测试覆盖极低（<5%）→ 补关键页单测（数据获取/错误态/表单/SSE 解析）。
 
-### F5 · 行动层落地（Agent 真正能做事）  [P0]  open  🔴高风险（Phase 6 行动层）
-- 设计文档：`features/action-layer.md`（待建）
+### F5 · 行动层落地（Agent 真正能做事）  [P0]  done  ✅（2026-07-24，分支 feat/f5-action-layer，设计文档 features/action-layer.md，质量报告 docs/quality/f5-action-layer-gate.md；范围已确认 A1+A2(进程沙箱)+A3 一并纳入）  🔴高风险（Phase 6 行动层）
+- 设计文档：`features/action-layer.md`（已建）
 - 目标：让 Agent 真正在外部世界执行动作——调工具、跑代码、检索外部知识，而非伪造成功。这是「agent 编排平台」成立的核心。
 - 验收子项：
-  - **A1** 工具调用执行层全空心（三个 `IToolExecutor`：`NativeToolExecutor`/`SkillPackageExecutor`/`McpClient` 均直接返回伪造成功；`DI.cs:286-288`）→ 至少 `NativeToolExecutor` 接真实执行；验收须含「调用后结果反映真实副作用」。
-  - **A2** 代码沙箱为桩（`DockerCodeSandbox.cs:9-56`；`DI.cs:146`）→ 接 `Docker.DotNet` 真实容器执行（镜像/网络/资源限制/超时/输出回传）；验收须含「真实运行代码并回传 stdout/stderr」。
-  - **节点全家桶·Tool/Code/Knowledge Retrieval**（见 F7 节点项联动）→ 真实执行器接通，非装饰节点。
+  - **A1** 工具调用执行层全空心（三个 `IToolExecutor`：`NativeToolExecutor`/`SkillPackageExecutor`/`McpClient` 均直接返回伪造成功）→ ✅ done（`NativeToolExecutor` 接真实 HTTP 执行，单测走真实 `SendAsync` 路径覆盖成功/失败/超时/方法解析；Skill/MCP 执行器保留为 Phase 6 占位，设计文档明确 A1 仅要求 NativeToolExecutor 真实化）。
+  - **A2** 代码沙箱为桩（`DockerCodeSandbox.cs:9-56`）→ ✅ done（进程级真实执行：`ProcessCodeSandbox` 用 `System.Diagnostics.Process` 拉起 python/node 真实运行并回传 stdout/stderr/ExitCode/超时杀进程；原 `DockerCodeSandbox` 桩改为显式抛异常消除静默假成功；真实 Docker 容器执行因本沙箱无 Docker 守护进程 + 未引 Docker SDK，列入 Phase 6）。
+  - **节点全家桶·Tool/Code/Knowledge Retrieval** → ✅ done（新增 `ToolStepExecutor`/`CodeStepExecutor` 注册为 `StepType.Tool=6`/`Code=7`，经既有 `ResolveExecutor`(`HandlesType`) 真实路由；前端 DAG 画布补 Tool/Code 节点调色板/图标/配置面板；Knowledge Retrieval 已于 RAG 地基层完成）。
+  - **已知残留（非阻断，已拆为独立 feature F9–F12）**：① 真实 Docker 容器隔离；② Skill/MCP 执行器占位（设计文档明确 A1 仅要求 NativeToolExecutor 真实化）；③ 进程模式 OS 层禁网不可强求（以 `NetworkEnabled=false`+语言白名单+超时杀+输出截断缓解）；④ 含 Tool/Code 节点的全链路 e2e 需后端+Web 实例，本沙箱未跑（单元层已覆盖真实执行路径）。
 
 ### F6 · Research Agent（联网多步调研）  [P1]  open  ⚠️高风险（Phase 6）
 - 设计文档：`features/research-agent.md`（待建）
@@ -92,6 +93,46 @@
 - 设计文档：`features/negotiation-productization.md`（待建）
 - 目标：后端已具备 Negotiation 协商式多智能体 + Critic 收敛原语，待产品化画布「Agent-Team / Negotiation」专属模式（多 Agent 节点 + Critic + 收敛终止条件）。
 - 说明：**保留，勿稀释**——Dify/n8n 无此原生原语，是本平台差异化壁垒。
+
+### F9 · 代码沙箱容器隔离（DockerCodeSandbox 真实化）  [P2]  open  ⚠️中风险（Phase 6 行动层 / 新增 Docker SDK 依赖）
+- 设计文档：`features/sandbox-docker.md`（待建）
+- 来源：F5 残留 ①（A2 进程沙箱已真实化；`src/AgentPlatform.Infrastructure/Sandbox/DockerCodeSandbox.cs` 现为显式抛异常占位，需补真实容器执行）。
+- 目标：在有 Docker 守护进程的环境，用 `Docker.DotNet` 真实拉起隔离容器执行用户代码，提供比进程沙箱更强的文件系统 / 网络 / 资源边界。
+- 验收子项：
+  - 引入 `Docker.DotNet` 依赖；`DockerCodeSandbox` 由抛异常改为真实 `RunCodeAsync`/`RunCommandAsync`：镜像拉取/创建、挂载代码文件、容器内运行、捕获 stdout/stderr/ExitCode、资源限制（cpu/mem）、超时 kill、输出截断至 `SandboxSettings.MaxOutputBytes`。
+  - `Sandbox:Provider=Docker` 时经 DI 条件注册切到真实 `DockerCodeSandbox`（F5 已留条件注册位 `DependencyInjection.cs`）。
+  - 真实副作用单测：需在提供 Docker 守护进程的 runner 上跑（本开发沙箱无 Docker，该 feature 门禁须在含 Docker 的 CI 跑，或提供可跳过集成测试标记）。
+  - 默认 `Provider=Process` 不变，保证无 Docker 环境仍可运行。
+
+### F10 · A1 残余执行器真实化（Skill + MCP）  [P2]  open  ⚠️中风险（Phase 6 行动层）
+- 设计文档：`features/executor-realization.md`（待建）
+- 来源：F5 残留 ②（F5 仅真实化 `NativeToolExecutor`；`src/AgentPlatform.Infrastructure/Tools/SkillPackageExecutor.cs` 与 `McpClient.cs` 保留 `// TODO(Phase6)` 占位，仍伪造成功）。
+- 目标：让 SK 技能包与 MCP 工具真正执行，补全 Agent 三类动作源（Native / Skill / MCP）的真实副作用。
+- 验收子项：
+  - **Skill**：`SkillPackageExecutor` 接 SK runtime（Semantic Kernel plugin 加载 / 技能包运行器），按 `ToolDefinition.SkillPluginName` 真实调用插件函数，回真实结果与失败；契约不变（`IToolExecutor`/`ToolExecutionResult`）。
+  - **MCP**：`McpClient` 接 MCP client（SSE / stdio transport），连接外部 MCP server，按 `ToolDefinition` 列出/调用工具，回真实结果；含连接失败/超时精准回打。
+  - 单测：各自真实执行路径（SK 用内存插件或 mock runtime；MCP 用本地 mock MCP server / test transport）覆盖成功/失败。
+  - 两者可独立排期（F7「发布为 MCP Server」复用此能力）。
+
+### F11 · 沙箱 OS 级隔离增强（进程沙箱禁网/资源限额）  [P2]  open  ⚠️高风险（OS 级隔离，跨平台）
+- 设计文档：`features/sandbox-os-isolation.md`（待建）
+- 来源：F5 残留 ③（`SandboxSettings.NetworkEnabled=false` 在进程沙箱仅为声明，未在 OS 层强制；语言白名单 + 超时杀 + 输出截断为缓解项）。
+- 目标：让 `Process` 沙箱在不引入 Docker 的前提下获得 OS 级网络隔离与资源约束，使 `NetworkEnabled=false` 真正生效。
+- 验收子项：
+  - Linux：`unshare`/`clone` 网络命名空间（或 `NetworkEnabled=false` 时禁网）+ cgroups v2 资源限额（cpu/mem/pids）+ 可选 seccomp 系统调用过滤。
+  - macOS：`sandbox-exec` 配置（禁网 / 限文件访问）。
+  - Windows：`AppContainer` / 作业对象（Job Object）资源限额。
+  - 与 `SandboxSettings`（NetworkEnabled / TimeoutSeconds / AllowedLanguages / MaxOutputBytes）联动；跨平台抽象，失败安全（不支持平台回退现有缓解项并告警）。
+  - 单测：在 CI 对应平台断言禁网生效（e.g. 代码尝试 socket 连接 → 失败）。
+
+### F12 · Tool/Code 节点全链路 e2e  [P3]  open  🟢低风险（测试基础设施）
+- 设计文档：`features/tool-code-e2e.md`（待建）
+- 来源：F5 残留 ④（单元层已覆盖真实执行路径；含 Tool/Code 节点的端到端需后端+Web 实例，本开发沙箱未跑）。
+- 目标：起真实后端 + Web 实例，跑一条含 Tool 节点（真实 HTTP）与 Code 节点（真实 python/node 子进程）的工作流，断言端到端 stdout/响应回填与节点状态。
+- 验收子项：
+  - 新建/扩展集成测试：用 `WebApplicationFactory` 起后端 + 本地 Mock HTTP 端点，构造含 `StepType.Tool`/`StepType.Code` 的 `WorkflowNode`，经 `WorkflowOrchestrator` 跑全流程，断言 `StepExecutionResult.Outcome` 与 `Output`。
+  - 前端联动（可选）：用 Playwright/Cypress 在 Web 实例上拖出 Tool/Code 节点、配置、运行、断言画布节点状态与输出面板。
+  - 纳入 CI e2e 阶段；本沙箱无 Docker 仍可跑（python/node 子进程 + 本地 HTTP 端点均可用）。
 
 ---
 

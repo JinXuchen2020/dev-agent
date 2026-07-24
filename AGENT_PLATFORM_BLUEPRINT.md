@@ -87,7 +87,7 @@
 | 向量数据库 | Chroma | PGVector (PostgreSQL 扩展) | 100%（真实 embedding + 余弦检索，Phase 4 落地） |
 | 后端接口 | FastAPI | ASP.NET Core Web API | 100% |
 | 前端 | Streamlit | **React** (TypeScript + Vite) + Ant Design；桌面形态可选 **Tauri 2.0**（详见附录 G） | 100% |
-| 代码沙箱 | Docker SDK | Docker.DotNet | 100% |
+| 代码沙箱 | 进程级真实执行 + Docker 桩(未接入) | ProcessCodeSandbox(真实) / DockerCodeSandbox(显式抛异常) | 进程 100% / Docker 0% |
 | 缓存 / 短期记忆 | Redis | StackExchange.Redis 最新稳定版（兼容 .NET 9，目标 net10.0） | 100% |
 | BDD 验收 | behave | **SpecFlow 3.9** + xUnit (Gherkin 语法) | 100% |
 | CQRS / 领域事件 | — | **MediatR 12.4**（v12+ 内置 DI 注册 `AddMediatR`，无需独立包） | 100% |
@@ -179,9 +179,9 @@ src/
 │   ├── Cache/
 │   │   └── InMemoryShortTermMemory.cs     # ConcurrentDictionary 内存缓存（原名 RedisShortTermMemory）
 │   ├── Sandbox/
-│   │   └── DockerCodeSandbox.cs           # Docker.DotNet（Stub）
-│   ├── Tools/                             # 附录 F：三层能力执行器（全部 Stub）
-│   │   ├── NativeToolExecutor.cs          # 原生 C# 函数（IToolExecutor 实现）
+│   │   └── DockerCodeSandbox.cs           # Docker.DotNet（未接入真实容器，显式抛异常；默认走 ProcessCodeSandbox）
+│   ├── Tools/                             # 附录 F：三层能力执行器（NativeToolExecutor 已真实化 / Skill·MCP 为 Phase 6 占位）
+│   │   ├── NativeToolExecutor.cs          # 原生工具真实 HTTP 执行（IToolExecutor 实现）
 │   │   ├── SkillPackageExecutor.cs        # SK Plugin 调用（IToolExecutor 实现）
 │   │   ├── McpClient.cs                   # MCP 协议调用（IToolExecutor 实现）
 │   │   └── InMemoryToolRegistry.cs        # 内存工具注册表
@@ -595,8 +595,8 @@ AuditLog
 
 > **当前 Stub 组件**（Phase 1 占位，Phase 2 替换为真实实现）：
 > - `PgVectorStore`（总是返回模拟向量搜索结果）
-> - `DockerCodeSandbox`（总是返回成功，不执行实际 Docker 操作）
-> - `NativeToolExecutor`、`SkillPackageExecutor`、`McpClient`（均返回常数字符串）
+> - `DockerCodeSandbox`（未接入真实 Docker 容器，显式抛异常；真实代码执行走 `ProcessCodeSandbox`）
+> - `NativeToolExecutor`（已真实化：对 `ToolDefinition.EndpointUrl` 发起真实 HTTP 调用；`SkillPackageExecutor`、`McpClient` 仍为 Phase 6 占位）
 > - `StubWorkflowEngine`（空实现）
 > - `AutoGenAgentOrchestrator`（`Task.Delay(200)` + 返回字符串，未使用 AutoGen.NET）
 > - `RoutingPolicyDomainService.EstimateCost`（总是返回 `Money.Zero`）
@@ -617,7 +617,7 @@ AuditLog
 > 5. **工作流引擎** — StubWorkflowEngine 空实现
 > 6. **代码沙箱** — 禁用（代替 Docker）
 > 7. **用户认证** — QuickStart 不强制鉴权（FallbackPolicy 放行），但登录 / 密码校验逻辑已实现
-> 8. **Tool 执行器** — NativeToolExecutor / SkillPackageExecutor 占位
+> 8. **Tool 执行器** — NativeToolExecutor 已真实化（真实 HTTP）/ SkillPackageExecutor 占位
 > 9. **向量嵌入** — 空返回（不调用真实 Embedding API）
 > 10. **通知/告警** — 空实现（不发送任何通知）
 

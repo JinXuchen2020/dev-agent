@@ -50,6 +50,8 @@ const nodeTypes: NodeTypes = {
   agent: DagNode,
   critic: DagNode,
   knowledge: DagNode,
+  tool: DagNode,
+  code: DagNode,
 };
 
 const CanvasInner: React.FC = () => {

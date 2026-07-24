@@ -30,12 +30,9 @@ internal sealed class DockerCodeSandbox : ICodeSandbox
     public Task<SandboxResult> RunCodeAsync(string code, string language,
         int timeoutSeconds = 30, CancellationToken ct = default)
     {
-        _logger.LogInformation(
-            "Running {Lang} code in sandbox (timeout: {Timeout}s)",
-            language, timeoutSeconds);
-
-        return Task.FromResult(new SandboxResult(true,
-            $"Executed {language} code successfully", string.Empty, 0, 100));
+        throw new InvalidOperationException(
+            "DockerCodeSandbox 尚未接入真实 Docker 运行时（本构建未引用 Docker SDK 且运行环境无 Docker 守护进程）。" +
+            "请使用 Sandbox:Provider=Process（默认，进程级真实执行）以获得真实副作用。如需 Docker 隔离，请在 Phase 6 接入 Docker.DotNet 并实现真实容器执行。");
     }
 
     /// <summary>
@@ -48,10 +45,8 @@ internal sealed class DockerCodeSandbox : ICodeSandbox
     public Task<SandboxResult> RunCommandAsync(string command,
         int timeoutSeconds = 30, CancellationToken ct = default)
     {
-        _logger.LogInformation(
-            "Running command in sandbox: {Command}", command);
-
-        return Task.FromResult(new SandboxResult(true,
-            $"Command executed: {command}", string.Empty, 0, 50));
+        throw new InvalidOperationException(
+            "DockerCodeSandbox 尚未接入真实 Docker 运行时（本构建未引用 Docker SDK 且运行环境无 Docker 守护进程）。" +
+            "请使用 Sandbox:Provider=Process（默认，进程级真实执行）以获得真实副作用。如需 Docker 隔离，请在 Phase 6 接入 Docker.DotNet 并实现真实容器执行。");
     }
 }

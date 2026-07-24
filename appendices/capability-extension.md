@@ -142,7 +142,9 @@ public interface IToolRegistry
 
 ### F.5 三个执行器实现（基础设施层）
 
-#### NativeToolExecutor —— 原生 C# 函数
+> 注：以下为早期进程内 handler 设计示意。F5（2026-07-24）已将 `NativeToolExecutor` 实现为对 `ToolDefinition.EndpointUrl` 的**真实 HTTP 调用**（`IHttpClientFactory` + 方法解析 + 真实成功/失败/超时回打）；`SkillPackageExecutor` / `McpClient` 仍为 Phase 6 占位。详见 `src/AgentPlatform.Infrastructure/Tools/NativeToolExecutor.cs` 与 `features/action-layer.md`。
+
+#### NativeToolExecutor —— 原生 C# 函数（早期示意）
 
 ```csharp
 // Infrastructure/Tools/NativeToolExecutor.cs

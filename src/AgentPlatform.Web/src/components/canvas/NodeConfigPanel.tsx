@@ -144,6 +144,63 @@ export default function NodeConfigPanel() {
           </>
         )}
 
+        {type === StepType.Tool && (
+          <>
+            <Form.Item
+              label="工具名称"
+              tooltip="平台已注册工具的定义名称（见 ToolRegistry）"
+            >
+              <Input
+                value={config?.toolName ?? ''}
+                onFocus={snapshot}
+                onChange={(e) => patchConfig({ toolName: e.target.value })}
+                placeholder="例如：web_search"
+              />
+            </Form.Item>
+            <Form.Item
+              label="参数 (JSON)"
+              tooltip="将作为 tools[].function.arguments 透传给工具执行器"
+            >
+              <Input.TextArea
+                rows={5}
+                value={config?.parameters ?? ''}
+                onFocus={snapshot}
+                onChange={(e) => patchConfig({ parameters: e.target.value })}
+                placeholder={'{\n  "query": "{{artifacts}}"\n}'}
+              />
+            </Form.Item>
+          </>
+        )}
+
+        {type === StepType.Code && (
+          <>
+            <Form.Item label="语言">
+              <Select
+                value={config?.language ?? 'python'}
+                onFocus={snapshot}
+                onChange={(value) => patchConfig({ language: value })}
+                options={[
+                  { value: 'python', label: 'Python' },
+                  { value: 'javascript', label: 'JavaScript' },
+                  { value: 'csscript', label: 'C# Script' },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item
+              label="代码"
+              tooltip="在进程沙箱中执行，NetworkEnabled=false 时禁用网络"
+            >
+              <Input.TextArea
+                rows={8}
+                value={config?.code ?? ''}
+                onFocus={snapshot}
+                onChange={(e) => patchConfig({ code: e.target.value })}
+                placeholder={'print("hello from sandbox")'}
+              />
+            </Form.Item>
+          </>
+        )}
+
         {type === StepType.End && (
           <Form.Item label="汇总方式" tooltip="默认拼接所有前驱 artifacts">
             <Input

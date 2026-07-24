@@ -130,6 +130,9 @@ public static class DependencyInjection
         // RAG 配置与文档切分器
         services.Configure<AgentPlatform.Application.Abstractions.RagSettings>(
             configuration.GetSection("Rag"));
+        services.Configure<AgentPlatform.Application.Abstractions.SandboxSettings>(
+            configuration.GetSection("Sandbox"));
+        services.AddHttpClient();
         services.AddScoped<AgentPlatform.Application.Abstractions.IDocumentChunker,
             AgentPlatform.Infrastructure.Services.WordWindowChunker>();
 
@@ -143,7 +146,12 @@ public static class DependencyInjection
             AgentPlatform.Infrastructure.Services.PlainTextExtractor>();
         services.AddScoped<AgentPlatform.Domain.Repositories.IKnowledgeBaseRepository,
             AgentPlatform.Infrastructure.Persistence.Repositories.KnowledgeBaseRepository>();
-        services.AddScoped<ICodeSandbox, DockerCodeSandbox>();
+        // 代码沙箱：默认 Process（进程级，真实可验证、不依赖 Docker）；显式配置 Sandbox:Provider=Docker 才走容器（需 Docker 运行环境）。
+        var sandboxProvider = configuration.GetSection("Sandbox:Provider").Value;
+        if (string.Equals(sandboxProvider, "Docker", StringComparison.Ordinal))
+            services.AddScoped<ICodeSandbox, DockerCodeSandbox>();
+        else
+            services.AddScoped<ICodeSandbox, ProcessCodeSandbox>();
 
         var cacheProvider = configuration.GetSection("Cache:Provider").Value;
         if (string.Equals(cacheProvider, "Redis", StringComparison.Ordinal))
@@ -235,6 +243,8 @@ public static class DependencyInjection
         services.AddScoped<IStepExecutor, AgentCallStepExecutor>();
         services.AddScoped<IStepExecutor, CriticStepExecutor>();
         services.AddScoped<IStepExecutor, KnowledgeRetrievalStepExecutor>();
+        services.AddScoped<IStepExecutor, ToolStepExecutor>();
+        services.AddScoped<IStepExecutor, CodeStepExecutor>();
 
         // Single-node runner for DAG debugging (POST /{id}/nodes/{nodeId}/run)
         services.AddScoped<IWorkflowNodeRunner, WorkflowNodeRunner>();

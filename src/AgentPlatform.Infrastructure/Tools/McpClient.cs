@@ -24,6 +24,7 @@ internal sealed class McpClient : IToolExecutor
     public Task<ToolExecutionResult> ExecuteAsync(
         ToolDefinition tool, string parametersJson, CancellationToken ct)
     {
+        // TODO(Phase6): 真实化需接入外部 MCP server 并调用工具；当前仍返回伪造成功（A1 仅要求 NativeToolExecutor 真实执行）。
         return Task.FromResult(new ToolExecutionResult(true, "Executed via MCP"));
     }
 }

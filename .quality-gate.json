@@ -1,11 +1,11 @@
 {
-  "phase": "f4-frontend-engineering",
-  "reviewer": "ddd-code-reviewer PASSED (F4 前端对抗式审查: 详查 lazy 上下文/useApiState 重跑/manualChunks 匹配 3 处最易错点均无缺陷; P0/P1/P2/P3=0; 前端 node scripts/qa.mjs 四道闸门全 PASS)",
-  "structureGate": "ddd-phase-quality-gate PASS (P0=0 P1=0 P2=0 P3=0; 12 类审计中 .NET DDD 专属 DI/EF/Swagger/XML/蓝图漂移 因纯前端改动全空; 前端相关 硬编码值(theme/tokens)/并发(zustand 不可变)/死代码(userRole 已清)/空值守卫(strict+?.) 全扫 0 open; checklist 已嵌 features/frontend-engineering.md §6)",
-  "codebaseOptimizer": "codebase-optimizer PASSED (Round F4-01, 0 open; 七维度扫描 F4 前端改动: 架构复用 Card/PageHeader/StatusBadge/AntApp、代码质量 0 any+strict(grep 0 any/@ts-ignore)、正确性 错误兜底经 App.useApp、测试 新增 4 单测、性能 路由级懒加载+供应商分包、安全 0 dangerouslySetInnerHTML/无硬编码密钥、工程化 lint 净/无死代码; console.* 命中均合法错误日志非桩)",
+  "phase": "f5-action-layer",
+  "reviewer": "ddd-code-reviewer PASSED (F5 对抗式审查: 详查 DI 生命周期(dispatcher/executor 全 scoped 无 captive dependency)、ToolStepExecutor 参数透传(GetRawText 保留原始 JSON)、ProcessCodeSandbox 超时杀进程+using 释放、前端 StepType int 与后端枚举一致性 — 均无缺陷, P0/P1/P2/P3=0; 新增 13 例真实副作用单测全绿)",
+  "structureGate": "ddd-phase-quality-gate PASS (P0=0 P1=0 P2=0 P3=0; 12 类审计: DI 注册完整/DDD 分层正确/EF 无需变更(StepType 为 int 枚举)/无硬编码密钥/前端 strict 不可变空值守卫 0 open; 修复 1 处 P1 空心类 DockerCodeSandbox 伪造成功→显式抛异常; checklist 已嵌 features/action-layer.md §6)",
+  "codebaseOptimizer": "codebase-optimizer PASSED (Round F5-01, 0 open; 七维度扫描 F5: 架构 执行层按 Tools/Sandbox/Workflows 分目录、代码质量 0 any+strict+internal sealed 带 XML、正确性 真实 HTTP+真实子进程由单测覆盖、测试 新增 13 例、性能 HttpClient 走 IHttpClientFactory 池化+临时文件 finally 清理+Process using、安全 NetworkEnabled=false 默认+语言白名单+超时杀进程+输出截断、工程化 dotnet build 0 警告 0 错误/tsc 0 错误/无死代码; 按 feature-builder 约束在 feat/f5-action-layer 分支分析+修复, 未新建分支或推送)",
   "cleared": true,
-  "reportRef": "docs/quality/f4-frontend-engineering-gate.md",
+  "reportRef": "docs/quality/f5-action-layer-gate.md",
   "qaReport": "src/AgentPlatform.Web/qa-report.json",
-  "notes": "实现 features/frontend-engineering.md (F4): O6 路由级 React.lazy + manualChunks 函数式拆 react-vendor/antd/xyflow 三供应商分包(首屏主包由 1.38MB 降至 index 9KB + 并行供应商); O9 8 个页面静态 message 改 App.useApp()(grep 全仓 0 处静态 message.); O10 移除死字段 userRole(接口+5 处赋值, grep 0 残留读取); O14 3 处 aria-label(侧栏折叠/会话搜索/聊天输入); O7 新增 4 单测(appStore 鉴权态/useApiState 加载错误重试卸载安全/LoginPage/NotFoundPage). 纯前端无后端契约变更. 验证: tsc 0 error; node scripts/qa.mjs 四道闸门全 PASS(typecheck/lint/build/unit). e2e 因沙箱无后端未执行, 留待有后端环境补跑.",
+  "notes": "实现 features/action-layer.md (F5 行动层, 🔴高风险已按护栏先出设计文档+选项并经用户确认范围 A1+A2+A3): A1 NativeToolExecutor 真实 HTTP(方法解析 POST默认/GET无参/GET显式 + 2xx成功回体/非2xx精准回打状态/超时回打'工具调用超时'); A2 ProcessCodeSandbox 真实进程沙箱(System.Diagnostics.Process 拉起 python/node, 真实捕获 stdout/stderr/ExitCode + 超时杀进程, 替代原伪造 DockerCodeSandbox); A3 ToolStepExecutor/CodeStepExecutor 注册为 StepType.Tool=6/Code=7 经 ResolveExecutor(HandlesType) 真实路由 + 前端 DAG 补 Tool/Code 节点(调色板/图标/配置面板/node-type 映射). 已核对 A1/A2/A3 真实副作用验收: 13 例单测真实走 HTTP SendAsync + 真实 python/node 子进程(print/stdout、raise/stderr、sleep(30)超时杀、ruby 白名单拒绝). DI 生命周期 scoped 无 captive dependency. 全链路 dotnet test 230 例全绿. 已知残留: Docker 真实隔离/Skill+MCP 执行器占位 均划入 Phase 6(waiver target Phase 6); 进程模式 OS 层禁网不可强求, 以 NetworkEnabled=false+语言白名单+超时杀+输出截断缓解; 全链路 e2e 需后端+Web 实例本沙箱未跑(单元层已覆盖真实路径).",
   "verifiedAt": "2026-07-24"
 }
