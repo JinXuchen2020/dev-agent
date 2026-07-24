@@ -22,6 +22,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="AgentPlatform.Application.Tests" />
     <InternalsVisibleTo Include="AgentPlatform.SpecFlowTests" />
+    <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
   </ItemGroup>
 
 </Project>

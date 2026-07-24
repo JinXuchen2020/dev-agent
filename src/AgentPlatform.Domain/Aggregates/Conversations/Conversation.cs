@@ -44,6 +44,18 @@ public sealed class Conversation : ITenantScoped, IAggregateRoot
     public Guid TenantId { get; private init; }
 
     /// <summary>
+    /// Gets the optional identifier of the knowledge base linked to this conversation.
+    /// When set, outgoing messages are grounded in that knowledge base's vector collection.
+    /// </summary>
+    public Guid? KnowledgeBaseId { get; private set; }
+
+    /// <summary>
+    /// Gets the vector collection name of the linked knowledge base. Denormalized from
+    /// the knowledge base so message retrieval does not require a cross-aggregate lookup.
+    /// </summary>
+    public string? CollectionName { get; private set; }
+
+    /// <summary>
     /// Gets the UTC timestamp when the conversation was created.
     /// </summary>
     public DateTime CreatedAt { get; private init; }
@@ -116,6 +128,33 @@ public sealed class Conversation : ITenantScoped, IAggregateRoot
     public void Archive()
     {
         Status = ConversationStatus.Archived;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Links the conversation to a knowledge base so outgoing messages are grounded in its vector collection.
+    /// </summary>
+    /// <param name="knowledgeBaseId">The unique identifier of the knowledge base to link.</param>
+    /// <param name="collectionName">The vector collection name of the knowledge base (denormalized for retrieval).</param>
+    public void AttachKnowledgeBase(Guid knowledgeBaseId, string collectionName)
+    {
+        if (knowledgeBaseId == Guid.Empty)
+            throw new ArgumentException("knowledgeBaseId must not be empty", nameof(knowledgeBaseId));
+        if (string.IsNullOrWhiteSpace(collectionName))
+            throw new ArgumentException("collectionName must not be empty", nameof(collectionName));
+
+        KnowledgeBaseId = knowledgeBaseId;
+        CollectionName = collectionName.Trim();
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Unlinks the conversation from any previously attached knowledge base.
+    /// </summary>
+    public void DetachKnowledgeBase()
+    {
+        KnowledgeBaseId = null;
+        CollectionName = null;
         UpdatedAt = DateTime.UtcNow;
     }
 }

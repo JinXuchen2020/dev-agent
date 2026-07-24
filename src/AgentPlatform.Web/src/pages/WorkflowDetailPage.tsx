@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Typography, Spin, Descriptions, Tag, Steps, Button, Card, Space } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
-import { getWorkflow } from '../services/api';
+import { getWorkflow, getAuthToken } from '../services/api';
 import type { WorkflowDetail } from '../types';
 
 const { Title } = Typography;
@@ -29,7 +29,7 @@ const WorkflowDetailPage: React.FC = () => {
   const [wf, setWf] = useState<WorkflowDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [liveSteps, setLiveSteps] = useState<WorkflowDetail['steps'] | null>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   // Load workflow data
   useEffect(() => {
@@ -40,50 +40,88 @@ const WorkflowDetailPage: React.FC = () => {
     }).finally(() => setLoading(false));
   }, [id]);
 
-  // Subscribe to SSE progress events for real-time updates
+  // Subscribe to SSE progress events via fetch (carries JWT; native EventSource cannot).
   useEffect(() => {
     if (!id) return;
+    const token = getAuthToken();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
 
-    const es = new EventSource(`/api/v1/workflows/${id}/progress`);
-    eventSourceRef.current = es;
+    const processEvent = (evt: SseProgressEvent) => {
+      setLiveSteps((prev) => {
+        if (!prev) return prev;
+        if (evt.stepName && evt.stepOrder !== null) {
+          return prev.map((s) =>
+            s.stepName === evt.stepName || s.order === evt.stepOrder
+              ? {
+                  ...s,
+                  state:
+                    evt.status === 'running'
+                      ? 'running'
+                      : evt.status === 'completed'
+                        ? 'completed'
+                        : evt.status === 'failed'
+                          ? 'failed'
+                          : s.state,
+                  result: evt.result ?? s.result,
+                  errorDetail: evt.errorDetail ?? s.errorDetail,
+                }
+              : s,
+          );
+        }
+        if (evt.type === 'workflow_started') {
+          getWorkflow(id).then(setWf);
+        }
+        if (evt.type === 'workflow_completed' || evt.type === 'workflow_rolledback') {
+          // Reload final state after terminal event (small delay for DB persistence)
+          setTimeout(() => getWorkflow(id).then(setWf), 500);
+        }
+        return prev;
+      });
+    };
 
-    es.onmessage = (event) => {
+    const connect = async () => {
       try {
-        const evt: SseProgressEvent = JSON.parse(event.data);
-        // Update live step states based on incoming progress events
-        setLiveSteps((prev) => {
-          if (!prev) return prev;
-          if (evt.stepName && evt.stepOrder !== null) {
-            return prev.map((s) =>
-              s.stepName === evt.stepName || s.order === evt.stepOrder
-                ? { ...s, state: evt.status === 'running' ? 'running' : evt.status === 'completed' ? 'completed' : evt.status === 'failed' ? 'failed' : s.state, result: evt.result ?? s.result, errorDetail: evt.errorDetail ?? s.errorDetail }
-                : s,
-            );
-          }
-          if (evt.type === 'workflow_started') {
-            // Reload to get the execution log ID associated
-            getWorkflow(id).then(setWf);
-          }
-          if (evt.type === 'workflow_completed' || evt.type === 'workflow_rolledback') {
-            // Reload final state after terminal event (small delay for DB persistence)
-            setTimeout(() => getWorkflow(id).then(setWf), 500);
-            es.close();
-          }
-          return prev;
+        const res = await fetch(`/api/v1/workflows/${id}/progress`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          signal: ctrl.signal,
         });
-      } catch {
-        // Ignore parse errors from keep-alive or non-JSON events
+        if (!res.ok || !res.body) {
+          // Non-2xx (e.g. 401) — do NOT loop forever like EventSource would.
+          console.warn('SSE progress stream unavailable:', res.status);
+          return;
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let idx;
+          while ((idx = buffer.indexOf('\n\n')) !== -1) {
+            const frame = buffer.slice(0, idx);
+            buffer = buffer.slice(idx + 2);
+            const dataLine = frame.split('\n').find((l) => l.startsWith('data:'));
+            if (!dataLine) continue;
+            const payload = dataLine.slice(5).trim();
+            if (!payload) continue;
+            try {
+              processEvent(JSON.parse(payload) as SseProgressEvent);
+            } catch {
+              // ignore keep-alive / non-JSON frames
+            }
+          }
+        }
+      } catch (err) {
+        if (ctrl.signal.aborted) return;
+        console.warn('SSE progress connection error', err);
       }
     };
 
-    es.onerror = () => {
-      // EventSource auto-reconnects by default; log only on first error
-      console.warn('SSE connection error for workflow', id);
-    };
+    connect();
 
-    return () => {
-      es.close();
-    };
+    return () => ctrl.abort();
   }, [id]);
 
   if (loading) return <Spin style={{ display: 'block', margin: '100px auto' }} />;
@@ -121,7 +159,13 @@ const WorkflowDetailPage: React.FC = () => {
 
       <Card title="Shared Context" style={{ marginTop: 16 }}>
         <pre style={{ maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
-          {JSON.stringify(JSON.parse(wf.context), null, 2)}
+          {(() => {
+            try {
+              return JSON.stringify(JSON.parse(wf.context), null, 2);
+            } catch {
+              return wf.context || '{}';
+            }
+          })()}
         </pre>
       </Card>
     </div>

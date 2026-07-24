@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Domain.Abstractions;
 using AgentPlatform.Domain.Aggregates.Workflows;
 using AgentPlatform.Domain.Enums;
 using AgentPlatform.Infrastructure.Shared;
@@ -9,8 +10,8 @@ using Microsoft.Extensions.Options;
 namespace AgentPlatform.Infrastructure.Workflows;
 
 /// <summary>
-/// Executes a critic/review step within the negotiation preset (Blueprint C.6).
-/// Reviews the previous step's artifact via IModelClient and returns a structured
+/// Executes a critic/review node within the negotiation preset (Blueprint C.6).
+/// Reviews the previous node's artifact via IModelClient and returns a structured
 /// diff with either approval or rework instructions.
 ///
 /// This enables range-specific rework (targeted fixes) instead of full pipeline restart.
@@ -22,7 +23,11 @@ internal sealed class CriticStepExecutor : IStepExecutor
     private readonly IModelClient _modelClient;
     private readonly StateMachineSettings _settings;
 
+    /// <summary>Legacy glob fallback — matches critic step names.</summary>
     public string StepType => "*critic*";
+
+    /// <summary>Handles Critic-type nodes explicitly.</summary>
+    public StepType? HandlesType => AgentPlatform.Domain.Enums.StepType.Critic;
 
     public CriticStepExecutor(
         ILogger<CriticStepExecutor> logger,
@@ -34,28 +39,26 @@ internal sealed class CriticStepExecutor : IStepExecutor
         _settings = settings.Value;
     }
 
-    public async Task<StepExecutionResult> ExecuteAsync(WorkflowStep step, WorkflowContext ctx, CancellationToken ct)
+    public async Task<StepExecutionResult> ExecuteAsync(IWorkflowExecutable step, WorkflowContext ctx, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(step);
         ArgumentNullException.ThrowIfNull(ctx);
 
         _logger.LogInformation("Critic reviewing step {StepName} for workflow {WorkflowId}",
-            step.StepName, ctx.WorkflowId);
+            step.Name, ctx.WorkflowId);
 
         try
         {
-            // Find the most recent completed artifact to review
             var lastArtifact = ctx.Artifacts.Values
                 .OrderByDescending(a => a.ProducedAt)
                 .FirstOrDefault();
 
             if (lastArtifact == null)
             {
-                _logger.LogWarning("No artifacts to review for critic step {StepName}", step.StepName);
+                _logger.LogWarning("No artifacts to review for critic step {StepName}", step.Name);
                 return StepExecutionResult.Success("No artifacts to review");
             }
 
-            // Build a review prompt for the critic model
             var systemPrompt = "You are a quality reviewer on a software development team. " +
                 "Analyze the following artifact produced by a team member and determine if it meets quality standards. " +
                 "Respond with a JSON object containing:\n" +
@@ -85,10 +88,9 @@ internal sealed class CriticStepExecutor : IStepExecutor
             {
                 if (_settings.AllowCriticOverride)
                 {
-                    // AllowOverride=true → silently approve (legacy behavior)
                     _logger.LogWarning(ex,
                         "Critic model unavailable for step {StepName}, AllowCriticOverride=true — approving",
-                        step.StepName);
+                        step.Name);
                     reviewResult = new CriticReviewResult
                     {
                         Approved = true,
@@ -100,11 +102,9 @@ internal sealed class CriticStepExecutor : IStepExecutor
                 }
                 else
                 {
-                    // AllowOverride=false (default) → fail-loud: produce a rejection so the
-                    // CriticConvergenceTermination keeps the negotiation loop running
                     _logger.LogError(ex,
                         "Critic model threw for step {StepName}, AllowCriticOverride=false — rejecting (fail-loud)",
-                        step.StepName);
+                        step.Name);
                     reviewResult = new CriticReviewResult
                     {
                         Approved = false,
@@ -121,8 +121,6 @@ internal sealed class CriticStepExecutor : IStepExecutor
             _logger.LogInformation("Critic review for {TargetStep}: {Verdict}",
                 lastArtifact.StepName, reviewResult.Approved ? "APPROVED" : "REWORK_REQUIRED");
 
-            // Return artifact JSON as both output AND artifact so CriticConvergenceTermination
-            // can scan artifacts for approval signal (Blackboard is per-request, not persisted)
             return StepExecutionResult.Success(artifactJson, artifactJson);
         }
         catch (OperationCanceledException)
@@ -131,7 +129,7 @@ internal sealed class CriticStepExecutor : IStepExecutor
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Critic step {StepName} failed", step.StepName);
+            _logger.LogError(ex, "Critic step {StepName} failed", step.Name);
             return StepExecutionResult.RetryableFailure(ex.Message);
         }
     }
@@ -143,7 +141,6 @@ internal sealed class CriticStepExecutor : IStepExecutor
             var result = JsonSerializer.Deserialize<CriticReviewResult>(content);
             if (result != null)
             {
-                // Accept valid JSON; use fallback StepName when the response did not include one.
                 if (string.IsNullOrEmpty(result.StepName))
                     result = result with { StepName = fallbackStepName };
                 return result;
@@ -151,12 +148,10 @@ internal sealed class CriticStepExecutor : IStepExecutor
         }
         catch (JsonException)
         {
-            // Not valid JSON — fall through to default handling
         }
 
         if (allowOverride)
         {
-            // AllowOverride=true → silently approve on unparseable response (legacy behavior)
             return new CriticReviewResult
             {
                 Approved = true,
@@ -167,7 +162,6 @@ internal sealed class CriticStepExecutor : IStepExecutor
             };
         }
 
-        // AllowOverride=false (default) → reject: unparseable critic response counts as rejection
         return new CriticReviewResult
         {
             Approved = false,
@@ -188,21 +182,9 @@ internal sealed class CriticStepExecutor : IStepExecutor
 /// </summary>
 internal sealed record CriticReviewResult
 {
-    /// <summary>Whether the reviewed artifact is approved.</summary>
     public bool Approved { get; init; }
-
-    /// <summary>The name of the step that was reviewed.</summary>
     public string StepName { get; init; } = "";
-
-    /// <summary>Human-readable feedback.</summary>
     public string Feedback { get; init; } = "";
-
-    /// <summary>
-    /// If not approved, the step that should be reworked (range-specific).
-    /// Null means the most recent non-critic step.
-    /// </summary>
     public string? ReworkTarget { get; init; }
-
-    /// <summary>Structured diff or specific issues found.</summary>
     public string? Diff { get; init; }
 }

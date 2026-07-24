@@ -1,10 +1,11 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Typography, Spin, Descriptions, Tag, Table, Card, Button, Space, Progress } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { ArrowLeftOutlined } from '@ant-design/icons';
-import { getExecutionLogDetail } from '../services/api';
+import { getExecutionLogDetail, getErrorMessage } from '../services/api';
 import type { ExecutionLogDetail, ExecutionLogStepEntry } from '../types';
+import ErrorState from '../components/ErrorState';
 
 const { Title, Text } = Typography;
 
@@ -26,15 +27,22 @@ const ExecutionLogDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const [log, setLog] = useState<ExecutionLogDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!id) return;
-    getExecutionLogDetail(id).then((d) => {
-      setLog(d);
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    setLoading(true);
+    setError(null);
+    getExecutionLogDetail(id)
+      .then((d) => setLog(d))
+      .catch((e: unknown) => setError(getErrorMessage(e)))
+      .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   // SSE subscription for real-time updates
   useEffect(() => {
@@ -57,6 +65,7 @@ const ExecutionLogDetailPage: React.FC = () => {
   }, [log?.workflowId, id]);
 
   if (loading) return <Spin style={{ display: 'block', margin: '100px auto' }} />;
+  if (error) return <ErrorState message="加载执行日志失败" description={error} onRetry={load} />;
   if (!log) return <Typography.Text type="danger">Execution log not found</Typography.Text>;
 
   const pct = log.totalSteps > 0 ? Math.round((log.entries.length / log.totalSteps) * 100) : 0;

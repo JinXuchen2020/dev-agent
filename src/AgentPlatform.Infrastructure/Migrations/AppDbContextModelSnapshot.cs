@@ -236,7 +236,14 @@ namespace AgentPlatform.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("CollectionName")
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("KnowledgeBaseId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Status")
@@ -297,6 +304,43 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.HasIndex("TenantId", "Status");
 
                     b.ToTable("ExecutionLogs", (string)null);
+                });
+
+            modelBuilder.Entity("AgentPlatform.Domain.Aggregates.KnowledgeBases.KnowledgeBase", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CollectionName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EmbeddingModel")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("KnowledgeBases", (string)null);
                 });
 
             modelBuilder.Entity("AgentPlatform.Domain.Aggregates.ToolDefinitions.ToolDefinition", b =>
@@ -643,8 +687,142 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.Navigation("Entries");
                 });
 
+            modelBuilder.Entity("AgentPlatform.Domain.Aggregates.KnowledgeBases.KnowledgeBase", b =>
+                {
+                    b.OwnsMany("AgentPlatform.Domain.Aggregates.KnowledgeBases.KnowledgeDocument", "Documents", b1 =>
+                        {
+                            b1.Property<Guid>("Id")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int>("ChunkCount")
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<string>("ContentType")
+                                .IsRequired()
+                                .HasMaxLength(200)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<DateTime>("CreatedAt")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid>("DocumentId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("FileName")
+                                .IsRequired()
+                                .HasMaxLength(500)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid>("KnowledgeBaseId")
+                                .HasColumnType("TEXT");
+
+                            b1.HasKey("Id");
+
+                            b1.HasIndex("KnowledgeBaseId");
+
+                            b1.ToTable("KnowledgeDocument");
+
+                            b1.WithOwner()
+                                .HasForeignKey("KnowledgeBaseId");
+                        });
+
+                    b.Navigation("Documents");
+                });
+
             modelBuilder.Entity("AgentPlatform.Domain.Aggregates.Workflows.Workflow", b =>
                 {
+                    b.OwnsMany("AgentPlatform.Domain.Aggregates.Workflows.WorkflowEdge", "Edges", b1 =>
+                        {
+                            b1.Property<Guid>("Id")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Label")
+                                .HasMaxLength(200)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid>("SourceNodeId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid>("TargetNodeId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid>("WorkflowId")
+                                .HasColumnType("TEXT");
+
+                            b1.HasKey("Id");
+
+                            b1.HasIndex("WorkflowId");
+
+                            b1.ToTable("WorkflowEdge");
+
+                            b1.WithOwner()
+                                .HasForeignKey("WorkflowId");
+                        });
+
+                    b.OwnsMany("AgentPlatform.Domain.Aggregates.Workflows.WorkflowNode", "Nodes", b1 =>
+                        {
+                            b1.Property<Guid>("Id")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid?>("AssignedAgentId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("ConfigJson")
+                                .IsRequired()
+                                .HasMaxLength(16000)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("ErrorDetail")
+                                .HasMaxLength(8000)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Name")
+                                .IsRequired()
+                                .HasMaxLength(200)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int>("Order")
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<double>("PositionX")
+                                .HasColumnType("REAL");
+
+                            b1.Property<double>("PositionY")
+                                .HasColumnType("REAL");
+
+                            b1.Property<string>("Result")
+                                .HasMaxLength(16000)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("State")
+                                .IsRequired()
+                                .HasMaxLength(50)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Type")
+                                .IsRequired()
+                                .HasMaxLength(50)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<DateTime>("UpdatedAt")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid>("WorkflowId")
+                                .HasColumnType("TEXT");
+
+                            b1.HasKey("Id");
+
+                            b1.HasIndex("WorkflowId");
+
+                            b1.ToTable("WorkflowNode");
+
+                            b1.WithOwner()
+                                .HasForeignKey("WorkflowId");
+                        });
+
                     b.OwnsMany("AgentPlatform.Domain.Aggregates.Workflows.WorkflowStep", "Steps", b1 =>
                         {
                             b1.Property<Guid>("Id")
@@ -690,6 +868,10 @@ namespace AgentPlatform.Infrastructure.Migrations
                             b1.WithOwner()
                                 .HasForeignKey("WorkflowId");
                         });
+
+                    b.Navigation("Edges");
+
+                    b.Navigation("Nodes");
 
                     b.Navigation("Steps");
                 });

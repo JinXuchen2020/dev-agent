@@ -10,6 +10,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="AgentPlatform.IntegrationTests" />
     <InternalsVisibleTo Include="AgentPlatform.ArchitectureTests" />
+    <InternalsVisibleTo Include="AgentPlatform.Api.Tests" />
   </ItemGroup>
 
   <ItemGroup>

@@ -6,6 +6,7 @@ using AgentPlatform.Domain.Aggregates.Agents;
 using AgentPlatform.Domain.Aggregates.AuditLogs;
 using AgentPlatform.Domain.Aggregates.Conversations;
 using AgentPlatform.Domain.Aggregates.ApiKeys;
+using AgentPlatform.Domain.Aggregates.KnowledgeBases;
 using AgentPlatform.Domain.Aggregates.ToolDefinitions;
 using AgentPlatform.Domain.Aggregates.Workflows;
 using Microsoft.EntityFrameworkCore;
@@ -80,6 +81,11 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
     /// Gets the <see cref="DbSet{TEntity}"/> providing access to persisted API keys.
     /// </summary>
     public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
+
+    /// <summary>
+    /// Gets the <see cref="DbSet{TEntity}"/> providing access to persisted knowledge bases (tenant-scoped).
+    /// </summary>
+    public DbSet<KnowledgeBase> KnowledgeBases => Set<KnowledgeBase>();
 
     /// <summary>
     /// Returns all aggregate roots currently tracked by the change tracker, used for dispatching domain events on save.

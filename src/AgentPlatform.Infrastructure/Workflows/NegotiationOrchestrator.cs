@@ -1,5 +1,7 @@
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Application.Diagnostics;
+using AgentPlatform.Application.Routing;
+using AgentPlatform.Domain.Abstractions;
 using AgentPlatform.Domain.Aggregates.Workflows;
 using AgentPlatform.Domain.Aggregates.Workflows.Events;
 using AgentPlatform.Domain.Enums;
@@ -7,6 +9,7 @@ using AgentPlatform.Domain.Repositories;
 using AgentPlatform.Infrastructure.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace AgentPlatform.Infrastructure.Workflows;
 
@@ -51,9 +54,11 @@ internal sealed class NegotiationOrchestrator
         var selectionStrategy = scope.ServiceProvider.GetRequiredService<ISelectionStrategy>();
         var terminationCondition = scope.ServiceProvider.GetRequiredService<ITerminationCondition>();
 
+        var steps = workflow.Steps.Cast<IWorkflowExecutable>().ToList();
+
         while (!ct.IsCancellationRequested)
         {
-            var ctx = await BuildWorkflowContext(workflow, null, workflow.Steps.ToList(), ct);
+            var ctx = await BuildWorkflowContext(workflow, null, steps, ct);
 
             if (await terminationCondition.ShouldTerminateAsync(ctx, ct))
             {
@@ -80,7 +85,7 @@ internal sealed class NegotiationOrchestrator
                 return;
             }
 
-            var stepCtx = await BuildWorkflowContext(workflow, nextStep, workflow.Steps.ToList(), ct);
+            var stepCtx = await BuildWorkflowContext(workflow, nextStep, steps, ct);
             var result = await ExecuteStepWithRetryAsync(workflow, nextStep, stepCtx, ct);
 
             switch (result.Outcome)
@@ -122,7 +127,7 @@ internal sealed class NegotiationOrchestrator
     }
 
     public async Task<StepExecutionResult> ExecuteStepWithRetryAsync(
-        Workflow workflow, WorkflowStep step, WorkflowContext ctx, CancellationToken ct)
+        Workflow workflow, IWorkflowExecutable step, WorkflowContext ctx, CancellationToken ct)
     {
         var maxAttempts = Math.Max(1, _settings.MaxRetryAttempts);
         StepExecutionResult? lastResult = null;
@@ -133,16 +138,16 @@ internal sealed class NegotiationOrchestrator
 
             step.SetState(WorkflowState.Running);
             _logger.LogInformation("Executing step {StepName} (attempt {Attempt}/{MaxAttempts})",
-                step.StepName, attempt, maxAttempts);
+                step.Name, attempt, maxAttempts);
 
             WorkflowMetrics.ActiveStepsHistogram.Record(1,
-                new KeyValuePair<string, object?>("step_name", step.StepName),
+                new KeyValuePair<string, object?>("step_name", step.Name),
                 new KeyValuePair<string, object?>("workflow_id", workflow.Id));
 
             var executor = ResolveExecutor(step);
             if (executor == null)
             {
-                step.SetError("No executor found for step: " + step.StepName);
+                step.SetError("No executor found for step: " + step.Name);
                 return StepExecutionResult.FatalFailure(step.ErrorDetail ?? "No executor found");
             }
 
@@ -160,15 +165,13 @@ internal sealed class NegotiationOrchestrator
                 lastResult = lastResult with { Duration = duration };
 
                 WorkflowMetrics.ActiveStepsHistogram.Record(0,
-                    new KeyValuePair<string, object?>("step_name", step.StepName),
+                    new KeyValuePair<string, object?>("step_name", step.Name),
                     new KeyValuePair<string, object?>("workflow_id", workflow.Id));
 
                 if (lastResult.Outcome == StepOutcome.Success)
                     return lastResult;
-
                 if (lastResult.Outcome == StepOutcome.NeedsIntervention)
                     return lastResult;
-
                 if (lastResult.Outcome == StepOutcome.FailedRollback)
                 {
                     step.SetError(lastResult.ErrorMessage ?? "Unrecoverable error");
@@ -185,14 +188,14 @@ internal sealed class NegotiationOrchestrator
             {
                 var duration = DateTime.UtcNow - startTime;
                 _logger.LogWarning(ex, "Step {StepName} failed on attempt {Attempt}",
-                    step.StepName, attempt);
+                    step.Name, attempt);
                 lastResult = StepExecutionResult.RetryableFailure(ex.Message, duration);
             }
 
             if (attempt < maxAttempts)
             {
                 _logger.LogInformation("Retrying step {StepName} in {Delay}ms (attempt {NextAttempt}/{MaxAttempts})",
-                    step.StepName, _settings.RetryDelayMs, attempt + 1, maxAttempts);
+                    step.Name, _settings.RetryDelayMs, attempt + 1, maxAttempts);
                 await Task.Delay(_settings.RetryDelayMs, ct);
             }
         }
@@ -202,14 +205,19 @@ internal sealed class NegotiationOrchestrator
         return lastResult ?? StepExecutionResult.FatalFailure("All retry attempts exhausted");
     }
 
-    private IStepExecutor? ResolveExecutor(WorkflowStep step)
+    private IStepExecutor? ResolveExecutor(IWorkflowExecutable step)
     {
         var executors = _serviceProvider.GetServices<IStepExecutor>().ToList();
-        var exact = executors.FirstOrDefault(e => e.StepType == step.StepName);
+        if (step.Type.HasValue)
+        {
+            var byType = executors.FirstOrDefault(e => e.HandlesType == step.Type.Value);
+            if (byType != null) return byType;
+        }
+        var exact = executors.FirstOrDefault(e => e.StepType == step.Name);
         if (exact != null) return exact;
         var wildcard = executors.FirstOrDefault(e =>
             e.StepType.Length > 1 && e.StepType.Contains('*') &&
-            IsGlobMatch(e.StepType, step.StepName));
+            IsGlobMatch(e.StepType, step.Name));
         if (wildcard != null) return wildcard;
         return executors.FirstOrDefault(e => e.StepType == "*")
             ?? executors.FirstOrDefault();
@@ -247,19 +255,21 @@ internal sealed class NegotiationOrchestrator
     }
 
     private async Task<WorkflowContext> BuildWorkflowContext(
-        Workflow workflow, WorkflowStep? currentStep, IReadOnlyList<WorkflowStep> allSteps, CancellationToken ct)
+        Workflow workflow, IWorkflowExecutable? currentStep, IReadOnlyList<IWorkflowExecutable> allSteps, CancellationToken ct)
     {
         var artifacts = new Dictionary<string, StepArtifact>();
         var blackboard = Blackboard.Empty;
 
         foreach (var step in allSteps.Where(s => s.State == WorkflowState.Completed && !string.IsNullOrEmpty(s.Result)))
         {
-            artifacts[step.StepName] = new StepArtifact
+            if (step.Type == StepType.Start)
+                continue;
+            artifacts[step.Name] = new StepArtifact
             {
-                StepName = step.StepName,
+                StepName = step.Name,
                 StepOrder = step.Order,
                 Content = step.Result!,
-                ContentType = DetectContentType(step.StepName)
+                ContentType = DetectContentType(step.Name)
             };
         }
 
@@ -268,8 +278,11 @@ internal sealed class NegotiationOrchestrator
         {
             try
             {
+                var tenantProvider = _serviceProvider.GetRequiredService<ITenantProvider>();
+                var ragSettings = _serviceProvider.GetRequiredService<IOptions<RagSettings>>().Value;
                 var searchResults = await _vectorStore.SearchAsync(
-                    "workflow-context", currentStep.StepName, topK: 3, ct);
+                    RoutingConstants.WorkflowContextVectorCollection, currentStep.Name,
+                    tenantProvider.GetTenantId(), topK: 3, minScore: ragSettings.DefaultMinScore, ct);
                 if (searchResults.Count > 0)
                 {
                     retrieval = new RetrievalContext
@@ -282,7 +295,7 @@ internal sealed class NegotiationOrchestrator
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Vector store retrieval failed for step {StepName}; using empty context",
-                    currentStep.StepName);
+                    currentStep.Name);
             }
         }
 
@@ -291,7 +304,9 @@ internal sealed class NegotiationOrchestrator
         var estimatedTokens = 0;
         foreach (var step in allSteps.Where(s => s.State == WorkflowState.Completed && !string.IsNullOrEmpty(s.Result)))
         {
-            var summary = $"[{step.Order}] {step.StepName}: {StringHelpers.Truncate(step.Result!, 200)}";
+            if (step.Type == StepType.Start)
+                continue;
+            var summary = $"[{step.Order}] {step.Name}: {StringHelpers.Truncate(step.Result!, 200)}";
             var estimatedStepTokens = _tokenCounter.CountTokens(summary);
             if (estimatedTokens + estimatedStepTokens > maxSummaryTokens)
                 break;

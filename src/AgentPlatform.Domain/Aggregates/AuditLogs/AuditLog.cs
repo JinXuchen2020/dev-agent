@@ -64,6 +64,7 @@ public enum AuditActionType
     RollbackWorkflow,
     SendMessage,
     CreateConversation,
+    UpdateConversation,
     DeleteConversation,
     UpdateConfiguration,
     DeleteConfiguration,

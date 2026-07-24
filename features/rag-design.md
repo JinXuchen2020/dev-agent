@@ -1,6 +1,6 @@
 # RAG 设计文档（rag-design）
 
-> 状态：设计阶段（待实现，尚未进入 `backlog` 的 `done`）
+> 状态：**已实现（地基层 R1–R4 已落地并过质量门，2026-07-23；报告 `docs/quality/rag-foundation-gate.md`）**
 > 优先级：P2/P3（在「P1 缺陷修复 → 竞品 P0(PUT 端点) → 竞品 P1(DAG 画布)」之后）
 > 关联：`features/backlog.md`（缺陷 B1–B6 / O1–O14）、`features/competitive-roadmap.md`（竞品矩阵 RAG 列 🟡）
 > 关键结论：**当前 RAG 代码骨架真实可跑，但作为「可用功能」不成立——需先补地基（入库通道 + 租户隔离 + 部署适配 + 相关性阈值），再做「自主配置」UI。**
@@ -116,11 +116,11 @@ DELETE /api/v1/knowledge-bases/{id}             # 删库（级联删 document_em
 
 ### 3.1 用户侧能力（对标 Dify/Coze「知识库检索」）
 - **知识库 CRUD**：名称、描述、embedding 模型选择。
-- **文档管理**：上传（PDF/Markdown/TXT/HTML）、自动切分、查看切片、删除、重新嵌入。
+- **文档管理**：上传（PDF/Markdown/TXT/HTML）、自动切分、查看切片、删除、重新嵌入。**已实现**：`KnowledgeBasesController.UploadDocument` 按 `contentType`/扩展名分发 `IDocumentTextExtractor`（PDF 零依赖 ZLibStream 抽取、HTML 标签剥离、文本兜底），`KnowledgeBaseDetailPage` 上传 `accept` 含 `.pdf/.htm`（2026-07-23，`features/rag-self-config-closure.md` 质量门 PASS）。
 - **检索参数可配**：topK、相关性阈值 minScore、集合（知识库）选择。
 - **接入点**：
-  - 对话：用户可在会话/助手配置里挂知识库（前端传 `SearchQuery` + `collectionName`，修复 B5 的死胡同）。
-  - 工作流：新增 **「知识检索」节点类型**（属 DAG 节点家族，见 competitive-roadmap P1），节点配置 topK/minScore/知识库。
+  - 对话：用户可在会话/助手配置里挂知识库（前端传 `SearchQuery` + `collectionName`，修复 B5 的死胡同）。**已实现**：`features/conversation-kb-linkage.md`（2026-07-23，会话详情页 + 知识库选择器挂载/解除持久化，检索走 KB 集合 + default 并集，质量门 PASS）；发消息 RBAC 同期放开为「所有已认证租户用户可发消息」。
+  - 工作流：新增 **「知识检索」节点类型**（属 DAG 节点家族，见 competitive-roadmap P1），节点配置 topK/minScore/知识库。**已实现**：`StepType.Knowledge=5` + `KnowledgeRetrievalStepExecutor`（按 `HandlesType` 分发、跨租户校验、结果作下游 artifact），前端画布节点/调色板/配置面板全联动（2026-07-23，`features/rag-self-config-closure.md`）。
 
 ### 3.2 前端页面草案
 ```
@@ -164,12 +164,12 @@ src/AgentPlatform.Web/src/pages/KnowledgeBaseDetailPage.tsx   # 文档管理 + �
 ## 5. 质量门验收清单（避免重蹈 Phase 4 覆辙）
 
 实现后 `.quality-gate.json` 验收**必须包含**：
-- [ ] `IngestDocumentAsync` 有**运行时调用路径**（controller/handler），且端点可 curl 触发；
-- [ ] 入库后 `SearchAsync` 能返回 >0 条（集成测试覆盖）；
-- [ ] **跨租户回归**：租户 A 入库，租户 B 检索返回 0；
-- [ ] SQLite 默认部署下，RAG 触发**不 500**（走 InMemory 回退或显式禁用）；
-- [ ] 低分噪声被 `minScore` 过滤（断言低分文档不进 prompt 上下文）；
-- [ ] `dotnet build` + `dotnet test` 全绿（含上述新增集成测试）。
+- [x] `IngestDocumentAsync` 有**运行时调用路径**（`KnowledgeBasesController.POST {id}/documents` → `UploadDocumentCommandHandler` 调用），端点可触发；
+- [x] 入库后 `SearchAsync` 能返回 >0 条（`InMemoryVectorStoreTests` 覆盖；`VectorStoreFactoryTests` 回退路径 `SearchAsync` 不抛）；
+- [x] **跨租户回归**：租户 A 入库，租户 B 检索返回 0（`InMemoryVectorStoreTests.CrossTenantIsolation` + `PgVectorStore`/`IVectorStore` 加 `tenantId`）；
+- [x] SQLite 默认部署下，RAG 触发**不 500**（`IVectorStoreFactory` 回退 `InMemoryVectorStore` + `SendMessageCommandHandler` 检索 `try/catch` 降级）；
+- [x] 低分噪声被 `minScore` 过滤（断言低分文档不进结果；`InMemoryVectorStoreTests.MinScoreFilter`）；
+- [x] `dotnet build` + `dotnet test` 全绿（`build 0/0`；`test 182 passed / 0 failed`，含上述新增 23 例 RAG 单测）。
 
 ---
 

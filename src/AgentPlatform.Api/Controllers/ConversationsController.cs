@@ -1,7 +1,10 @@
 using AgentPlatform.Api.Models;
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Application.Conversations.Commands.CreateConversation;
+using AgentPlatform.Application.Conversations.Commands.RemoveConversationKnowledgeBase;
 using AgentPlatform.Application.Conversations.Commands.SendMessage;
+using AgentPlatform.Application.Conversations.Commands.SetConversationKnowledgeBase;
+using AgentPlatform.Application.Conversations.Queries.GetConversationById;
 using AgentPlatform.Application.Conversations.Queries.GetConversations;
 using AgentPlatform.Application.Routing.Queries.GetCostReport;
 using MediatR;
@@ -62,13 +65,61 @@ public sealed class ConversationsController : ControllerBase
     }
 
     /// <summary>
+    /// Retrieves a single conversation (including its messages) by identifier.
+    /// </summary>
+    /// <param name="id">The unique identifier of the conversation.</param>
+    /// <param name="ct">A token to observe for cancellation of the request.</param>
+    /// <returns>An <see cref="IActionResult"/> containing the conversation aggregate with messages.</returns>
+    [HttpGet("{id:guid}")]
+    public async Task<IActionResult> GetConversation(Guid id, CancellationToken ct)
+    {
+        var conversation = await _mediator.Send(new GetConversationByIdQuery(id), ct);
+        if (conversation == null)
+            return NotFound();
+        return Ok(conversation);
+    }
+
+    /// <summary>
+    /// Links a conversation to a tenant-owned knowledge base so its messages are grounded in that KB's vector collection.
+    /// </summary>
+    /// <param name="id">The unique identifier of the conversation.</param>
+    /// <param name="request">The request payload containing the knowledge base identifier.</param>
+    /// <param name="ct">A token to observe for cancellation of the request.</param>
+    /// <returns>An <see cref="IActionResult"/> indicating success.</returns>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpPut("{id:guid}/knowledge-base")]
+    public async Task<IActionResult> SetKnowledgeBase(
+        Guid id,
+        [FromBody] SetConversationKnowledgeBaseRequest request,
+        CancellationToken ct)
+    {
+        await _mediator.Send(
+            new SetConversationKnowledgeBaseCommand(id, request.KnowledgeBaseId, _tenant.GetTenantId()), ct);
+        return Ok(new { id });
+    }
+
+    /// <summary>
+    /// Unlinks a conversation from any previously attached knowledge base.
+    /// </summary>
+    /// <param name="id">The unique identifier of the conversation.</param>
+    /// <param name="ct">A token to observe for cancellation of the request.</param>
+    /// <returns>An <see cref="IActionResult"/> indicating success.</returns>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpDelete("{id:guid}/knowledge-base")]
+    public async Task<IActionResult> RemoveKnowledgeBase(Guid id, CancellationToken ct)
+    {
+        await _mediator.Send(
+            new RemoveConversationKnowledgeBaseCommand(id, _tenant.GetTenantId()), ct);
+        return Ok(new { id });
+    }
+
+    /// <summary>
     /// Sends a message to an existing conversation and returns the agent's reply along with model and usage metadata.
     /// </summary>
     /// <param name="conversationId">The unique identifier of the conversation to send the message to.</param>
     /// <param name="request">The request payload containing the message content and optional overrides.</param>
     /// <param name="ct">A token to observe for cancellation of the request.</param>
     /// <returns>An <see cref="IActionResult"/> containing the reply, the model identifier, and token usage.</returns>
-    [Authorize(Roles = "Admin,Operator")]
     [HttpPost("{conversationId}/messages")]
     public async Task<IActionResult> SendMessage(
         Guid conversationId,

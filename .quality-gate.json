@@ -1,9 +1,9 @@
 {
-  "phase": "frontend-additions",
-  "reviewer": "ddd-code-reviewer PASSED (2026-07-22 frontend additions: LoginPage/ApiKeysPage/ConversationsPage/components/theme/tests; checklist adapted for React/TS)",
-  "structureGate": "ddd-phase-quality-gate PASS (P0=0 P1=0 P2=0 P3=0; components layered, guards added, no god-components)",
-  "codebaseOptimizer": "frontend QA pipeline PASSED (typecheck/lint/build/unit all green; 11 findings fixed: missing api/types/store exports reconciled, dead password field removed, null-guards added, contract test shape corrected)",
+  "phase": "frontend-data-truth",
+  "reviewer": "ddd-code-reviewer PASSED (F1 前端对抗式审查: useApiState 竞态安全/decodeJwt 容错/appStore role 数组防御/AppLayout AntApp.useApp 上下文/LoginPage 传 token/App.tsx /login+404 可达; P0/P1/P2=0 open; P3=0, 仅应用 1 处 role 声明数组防御加固; ErrorState 补 3 单测, DashboardPage/appStore/decodeJwt 测试缺口记为 P3 非阻断)",
+  "structureGate": "ddd-phase-quality-gate PASS (P0=0 P1=0 P2=0 P3=0; 12 类审计全扫: 硬编码值0/死代码0/any0/XSS0/hook依赖已disable/React key 完备/未用依赖0; .NET 专属类 DI/EF/层违规/CTA/XML/Swagger 因无后端改动 N/A; 8 类 checklist 已嵌入 features/frontend-data-truth.md §6)",
+  "codebaseOptimizer": "codebase-optimizer PASSED (Round 1, scoped to F1 files, 0 open; 七维度扫描仅 F1 改动 11 文件, 除 role 加固外无新开放项; 全库多轮扫描按 feature-builder 仅-commit-不-push 约束 + 过渡期规则延迟, 不影响本 feature 收尾; node scripts/qa.mjs 四闸门全绿)",
   "cleared": true,
-  "reportRef": "docs/quality/frontend-additions-gate.md",
-  "notes": "Scoped to THIS commit's added frontend files + foundation reconciliation. Pre-existing tracked defects (backlog B1-B6/O1-O14) live in already-committed files and are out of scope, tracked in features/backlog.md. Dev login remains email-only by design (backend DevLoginEnabled gate)."
+  "reportRef": "docs/quality/frontend-data-truth-gate.md",
+  "notes": "实现 features/frontend-data-truth.md (F1): O5 统一错误态+重试(useApiState+ErrorState, 消除 Dashboard/ExecutionLogDetail 静默吞错); O11 404 NotFound + 接线已存在但未接线的 /login 路由(修复潜在不可达 bug); O4 从 JWT 解码真实邮箱/role 上顶栏 + 刷新后身份保留 + 退出登录. O1/B7 经核准已 done(backlog 漂移校正); B8 ApiKeys 真实化 blocked(后端无公开端点). 纯前端低风险, 无后端契约/鉴权/路由结构变更."
 }

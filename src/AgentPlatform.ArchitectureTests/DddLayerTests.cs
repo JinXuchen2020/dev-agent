@@ -105,11 +105,19 @@ public sealed class DddLayerTests
         if (!domainDir.Exists || !configDir.Exists)
             return;
 
-        // Discover aggregate root classes (classes inside Aggregates/ subdirectories)
+        // Discover aggregate root classes (classes that actually implement IAggregateRoot).
+        // Owned child entities (Message / ExecutionLogEntry / WorkflowEdge / KnowledgeDocument)
+        // are configured via OwnsMany/OwnsOne on the parent's IEntityTypeConfiguration and must
+        // NOT be treated as standalone aggregate roots needing their own *Configuration.cs.
         var aggregateRoots = domainDir.GetDirectories()
             .SelectMany(d => d.GetFiles("*.cs", SearchOption.TopDirectoryOnly))
+            .Where(f =>
+            {
+                var content = File.ReadAllText(f.FullName);
+                return content.Contains("IAggregateRoot")
+                    && !content.Contains("interface IEntityTypeConfiguration");
+            })
             .Select(f => Path.GetFileNameWithoutExtension(f.Name))
-            .Where(name => !name.Contains("Event") && name != "IEntityTypeConfiguration")
             .ToList();
 
         // Discover configuration classes
@@ -148,12 +156,19 @@ public sealed class DddLayerTests
         if (!abstractionsDir.Exists || !diFile.Exists)
             return;
 
-        // Extract interface names from Abstractions (excluding marker interfaces like ICommand)
+        // Extract interface names from Abstractions (excluding marker interfaces like ICommand
+        // and intentionally-[Obsolete] interfaces that are documented tech debt / not DI-registered).
         var interfaceNames = abstractionsDir.GetFiles("*.cs")
+            .Where(f =>
+            {
+                var content = File.ReadAllText(f.FullName);
+                var name = Path.GetFileNameWithoutExtension(f.Name);
+                return name.StartsWith("I", StringComparison.Ordinal)
+                    && name != "ICommand"
+                    && name != "IAggregateRoot"
+                    && !content.Contains("[Obsolete", StringComparison.OrdinalIgnoreCase);
+            })
             .Select(f => Path.GetFileNameWithoutExtension(f.Name))
-            .Where(name => name.StartsWith("I", StringComparison.Ordinal)
-                          && name != "ICommand"
-                          && name != "IAggregateRoot")
             .ToList();
 
         var diContent = File.ReadAllText(diFile.FullName);
@@ -186,18 +201,28 @@ public sealed class DddLayerTests
         var files = controllersDir.GetFiles("*Controller.cs");
         foreach (var file in files)
         {
-            var content = File.ReadAllText(file.FullName);
+            // Strip XML doc-comment lines and string literals so the heuristic doesn't match
+            // prose such as "Initializes a new instance..." (/// summaries) or "Invalid workflow ID."
+            // (string literals) as if they were IInterface injections.
+            var codeContent = string.Join("\n",
+                File.ReadAllLines(file.FullName)
+                    .Where(l => !l.TrimStart().StartsWith("///")));
+            codeContent = System.Text.RegularExpressions.Regex.Replace(codeContent, @"""[^""]*""", "");
 
-            // Check for IOptions (allowed) and IMediator (expected) injection only
+            // Allowed injected abstractions: cross-cutting infra + IMediator (CQRS dispatch).
+            var allowed = new System.Collections.Generic.HashSet<string>(System.StringComparer.Ordinal)
+            {
+                "IOptions", "IMediator", "IServiceProvider", "IEnumerable",
+                "ILogger", "IResult", "ITenantProvider", "IExecutionProgressBroadcaster",
+            };
+
             var injections = new System.Text.RegularExpressions.Regex(
                 @"\b(I\w+)\s+\w+\s", // matches "IInterface parameter"
                 System.Text.RegularExpressions.RegexOptions.Compiled);
 
-            var matches = injections.Matches(content)
+            var matches = injections.Matches(codeContent)
                 .Select(m => m.Groups[1].Value)
-                .Where(name => name is not "IOptions" and not "IMediator" and not "IServiceProvider"
-                              and not "IEnumerable" and not "ILogger" and not "IResult"
-                              and not "ITenantProvider" and not "IExecutionProgressBroadcaster")
+                .Where(name => !string.IsNullOrEmpty(name) && !allowed.Contains(name))
                 .ToList();
 
             if (matches.Count > 0)

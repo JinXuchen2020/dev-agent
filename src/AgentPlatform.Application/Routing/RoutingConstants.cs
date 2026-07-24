@@ -11,6 +11,11 @@ public static class RoutingConstants
     public const string DefaultVectorCollection = "default";
 
     /// <summary>
+    /// 工作流步骤间上下文复用的向量集合名（内部复用，不对外暴露为知识库检索）。
+    /// </summary>
+    public const string WorkflowContextVectorCollection = "workflow-context";
+
+    /// <summary>
     /// The divisor used to convert per-million-token pricing to a per-token cost.
     /// </summary>
     public const int CostPerMillionDivisor = 1_000_000;

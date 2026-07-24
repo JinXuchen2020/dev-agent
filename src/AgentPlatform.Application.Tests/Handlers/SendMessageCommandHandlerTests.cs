@@ -6,6 +6,7 @@ using AgentPlatform.Domain.Aggregates.Conversations;
 using AgentPlatform.Domain.Enums;
 using AgentPlatform.Domain.Repositories;
 using AgentPlatform.Domain.ValueObjects;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using NSubstitute.ReturnsExtensions;
@@ -24,6 +25,8 @@ public class SendMessageCommandHandlerTests
     });
     private readonly ITenantProvider _tenant = Substitute.For<ITenantProvider>();
     private readonly IAuditLogRepository _auditLogRepository = Substitute.For<IAuditLogRepository>();
+    private readonly IOptions<RagSettings> _ragOptions = Options.Create(new RagSettings());
+    private readonly ILogger<SendMessageCommandHandler> _logger = Substitute.For<ILogger<SendMessageCommandHandler>>();
     private readonly Guid _tenantId = Guid.NewGuid();
     private readonly SendMessageCommandHandler _handler;
 
@@ -31,7 +34,8 @@ public class SendMessageCommandHandlerTests
     {
         _tenant.GetTenantId().Returns(_tenantId);
         _handler = new SendMessageCommandHandler(
-            _conversationRepository, _router, _vectorStore, _defaults, _tenant, _auditLogRepository);
+            _conversationRepository, _router, _vectorStore, _defaults, _tenant,
+            _auditLogRepository, _ragOptions, _logger);
     }
 
     [Fact]
@@ -114,7 +118,9 @@ public class SendMessageCommandHandlerTests
         _vectorStore.SearchAsync(
                 RoutingConstants.DefaultVectorCollection,
                 "search term",
-                topK: 5,
+                _tenantId,
+                Arg.Any<int>(),
+                Arg.Any<double?>(),
                 Arg.Any<CancellationToken>())
             .Returns(new List<VectorSearchResult>
             {
@@ -142,7 +148,8 @@ public class SendMessageCommandHandlerTests
         _conversationRepository.GetByIdWithMessagesAsync(conversationId, Arg.Any<CancellationToken>())
             .Returns(conversation);
         _vectorStore.SearchAsync(
-                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<Guid>(),
+                Arg.Any<int>(), Arg.Any<double?>(), Arg.Any<CancellationToken>())
             .Returns(new List<VectorSearchResult>());
         _router.RouteAsync(Arg.Any<RoutingRequest>(), Arg.Any<CancellationToken>())
             .Returns(new ModelResponse("Answer", null, "model-1", "stop"));
@@ -171,6 +178,71 @@ public class SendMessageCommandHandlerTests
 
         await _router.Received(1).RouteAsync(
             Arg.Is<RoutingRequest>(r => r.PreferredModel == "claude-3"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_Should_Ground_In_Linked_KnowledgeBase_With_Content_As_Query()
+    {
+        var conversationId = Guid.NewGuid();
+        var conversation = new Conversation(conversationId, _tenantId);
+        conversation.AttachKnowledgeBase(Guid.NewGuid(), "kb-collection-abc");
+        _conversationRepository.GetByIdWithMessagesAsync(conversationId, Arg.Any<CancellationToken>())
+            .Returns(conversation);
+
+        // default 集合返回空；KB 集合返回命中（按调用顺序：先通用兜底，后具体命中）。
+        _vectorStore.SearchAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<Guid>(),
+                Arg.Any<int>(), Arg.Any<double?>(), Arg.Any<CancellationToken>())
+            .Returns(new List<VectorSearchResult>());
+        _vectorStore.SearchAsync(
+                "kb-collection-abc",
+                "my question",
+                _tenantId,
+                Arg.Any<int>(), Arg.Any<double?>(), Arg.Any<CancellationToken>())
+            .Returns(new List<VectorSearchResult>
+            {
+                new("doc-1", "KB grounded document", 0.95)
+            });
+        _router.RouteAsync(Arg.Any<RoutingRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new ModelResponse("Answer", null, "model-1", "stop"));
+
+        var command = new SendMessageCommand(conversationId, "my question");
+        await _handler.Handle(command, CancellationToken.None);
+
+        // KB 命中内容被注入为 system 上下文。
+        await _router.Received(1).RouteAsync(
+            Arg.Is<RoutingRequest>(r =>
+                r.Messages.Any(m =>
+                    m.Role == MessageRole.System && m.Content.Contains("KB grounded document"))),
+            Arg.Any<CancellationToken>());
+        // 检索同时覆盖 default 与挂载的 KB 集合（并集语义），均以消息正文作 query。
+        await _vectorStore.Received(1).SearchAsync(
+            "kb-collection-abc", "my question", _tenantId, Arg.Any<int>(), Arg.Any<double?>(), Arg.Any<CancellationToken>());
+        await _vectorStore.Received(1).SearchAsync(
+            RoutingConstants.DefaultVectorCollection, "my question", _tenantId, Arg.Any<int>(), Arg.Any<double?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_Should_Not_Search_When_No_Kb_And_No_SearchQuery()
+    {
+        var conversationId = Guid.NewGuid();
+        var conversation = new Conversation(conversationId, _tenantId);
+        _conversationRepository.GetByIdWithMessagesAsync(conversationId, Arg.Any<CancellationToken>())
+            .Returns(conversation);
+        _router.RouteAsync(Arg.Any<RoutingRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new ModelResponse("Answer", null, "model-1", "stop"));
+
+        var command = new SendMessageCommand(conversationId, "just chatting");
+        await _handler.Handle(command, CancellationToken.None);
+
+        // 无挂载且无 SearchQuery → 不应触发任何向量检索（向后兼容）。
+        await _vectorStore.DidNotReceive().SearchAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<Guid>(),
+            Arg.Any<int>(), Arg.Any<double?>(), Arg.Any<CancellationToken>());
+        // 仅基础 system + user 两条消息，无注入的上下文 system。
+        await _router.Received(1).RouteAsync(
+            Arg.Is<RoutingRequest>(r => r.Messages.Count(m => m.Role == MessageRole.System) == 1),
             Arg.Any<CancellationToken>());
     }
 }
