@@ -8,6 +8,15 @@ export interface Agent {
   createdAt: string;
 }
 
+export interface CreateAgentRequest {
+  name: string;
+  roleCode?: string | null;
+  modelProvider?: string | null;
+  modelName?: string | null;
+  modelApiUrl?: string | null;
+  systemPrompt?: string | null;
+}
+
 export interface ApiKey {
   id: string;
   name: string;

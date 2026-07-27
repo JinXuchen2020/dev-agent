@@ -11,6 +11,9 @@ interface AppState {
   // Demo mode = local session without a real backend user (no auth cookie).
   isDemo: boolean;
   userEmail: string | null;
+  // Current user's role (from GET /auth/me). Used for RBAC gating in the UI
+  // (e.g. only Admins may create agents). Backend remains the source of truth.
+  userRole: string | null;
   // Probe the backend for the current identity (called once on app mount).
   bootstrapAuth: () => Promise<void>;
   // Real login: identity comes from the backend response.
@@ -27,6 +30,7 @@ export const useAppStore = create<AppState>((set) => ({
   authBootstrapped: false,
   isDemo: false,
   userEmail: null,
+  userRole: null,
   bootstrapAuth: async () => {
     try {
       const user = await getAuthMe();
@@ -34,6 +38,7 @@ export const useAppStore = create<AppState>((set) => ({
         isAuthenticated: true,
         isDemo: false,
         userEmail: user.email,
+        userRole: user.role,
         authBootstrapped: true,
       });
     } catch {
@@ -41,6 +46,7 @@ export const useAppStore = create<AppState>((set) => ({
         isAuthenticated: false,
         isDemo: false,
         userEmail: null,
+        userRole: null,
         authBootstrapped: true,
       });
     }
@@ -50,6 +56,7 @@ export const useAppStore = create<AppState>((set) => ({
       isAuthenticated: true,
       isDemo: false,
       userEmail: user.email,
+      userRole: user.role,
       authBootstrapped: true,
     }),
   loginDemo: (email) =>
@@ -57,6 +64,7 @@ export const useAppStore = create<AppState>((set) => ({
       isAuthenticated: true,
       isDemo: true,
       userEmail: email,
+      userRole: 'admin',
       authBootstrapped: true,
     }),
   logout: () => {

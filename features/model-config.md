@@ -79,7 +79,7 @@
   - `PUT` → `UpdateTenantCredentialRequest`（`CredentialCategory`[Required]、`Provider`[Required]、`string? ApiKey`(明文，仅入站，服务端加密后丢弃)、`string? BaseUrl`、`string? ModelName`、`bool IsEnabled`）；成功后使该 `tenantId+category` 缓存失效。
   - 缺省返回 204/空（租户尚未配置 → 前端提示去填或选平台内置）。
 - `TenantCredentialDto` / `UpdateTenantCredentialRequest`（`Api.Models`）。
-- 前端（S4 锁定：并入 Agent 配置页，不新增独立页面）：在现有 **Agent 配置页**内嵌 `Tabs: 模型 + 搜索` 两个凭据配置区，结构同构：`Form` + `Input.Password` 掩码 + provider `Select`（模型=OpenAI/DeepSeek/VLLM/Custom；搜索=SerpApi）+ BaseUrl/ModelName 输入 + 保存；Agent/会话创建处模型下拉接 `GET /api/v1/models`（含平台模型 + 若租户自配则并列）；侧栏 `menuItems` **不**新增项。
+- 前端（S4 锁定：并入 Agent 配置页，不新增独立页面）：在现有 **Agent 配置页**内嵌 `Tabs: 模型 + 搜索` 两个凭据配置区，结构同构：`Form` + `Input.Password` 掩码 + provider `Select`（模型=OpenAI/DeepSeek/VLLM/Custom；搜索=SerpApi）+ BaseUrl/ModelName 输入 + 保存；Agent/会话创建处模型下拉接 `GET /api/v1/models`（含平台模型 + 若租户自配则并列）；侧栏 `menuItems` **不**新增项。**（S4 最后一项已完成：Agent 创建页「+ 新建 Agent」Modal 与会话详情页顶栏「选择模型」下拉均已接 `GET /api/v1/models`——平台模型 / 我的模型 分组并列；会话选中模型经 `sendMessage(model=modelId)` 透传为 `PreferredModel` 路由。）**
 
 ## §4 数据模型
 - **新增聚合 `TenantCredentialSetting` + 表 `TenantCredentialSetting` + EF 迁移**（必须 `dotnet ef migrations add AddTenantCredentialSetting`）。

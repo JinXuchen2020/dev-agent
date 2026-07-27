@@ -2,6 +2,7 @@ import axios from 'axios';
 import type {
   Agent,
   AgentRole,
+  CreateAgentRequest,
   AgentConfiguration,
   Workflow,
   WorkflowDetail,
@@ -61,6 +62,8 @@ api.interceptors.response.use(
 // Agents
 export const getAgents = () => api.get<Agent[]>('/agents').then((r) => r.data);
 export const getAgent = (id: string) => api.get<Agent>(`/agents/${id}`).then((r) => r.data);
+export const createAgent = (data: CreateAgentRequest) =>
+  api.post<Agent>('/agents', data).then((r) => r.data);
 
 // Agent Roles
 export const getAgentRoles = () => api.get<AgentRole[]>('/agent-roles').then((r) => r.data);
