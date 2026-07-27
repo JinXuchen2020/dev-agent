@@ -17,15 +17,34 @@ internal sealed class AesGcmEncryptor : IAesEncryptor
     public AesGcmEncryptor(IOptions<SecuritySettings> settings, ILogger<AesGcmEncryptor> logger)
     {
         _logger = logger;
-        var keyHex = settings.Value.AesEncryptionKey;
-        if (string.IsNullOrEmpty(keyHex))
-            throw new InvalidOperationException("Security:AesEncryptionKey must be configured (64 hex chars).");
+        var raw = settings.Value.AesEncryptionKey;
+        if (string.IsNullOrWhiteSpace(raw))
+            throw new InvalidOperationException("Security:AesEncryptionKey must be configured (32-byte key, hex or base64).");
 
-        var keyBytes = Convert.FromHexString(keyHex);
+        var trimmed = raw.Trim();
+        byte[] keyBytes;
+        // Accept either hex (64 chars) or base64 (44 chars) encoding of a 32-byte key.
+        if (trimmed.Length == 64 && IsAllHex(trimmed))
+            keyBytes = Convert.FromHexString(trimmed);
+        else
+            keyBytes = Convert.FromBase64String(trimmed);
+
         if (keyBytes.Length != 32)
-            throw new InvalidOperationException("AesEncryptionKey must be exactly 32 bytes (64 hex characters).");
+            throw new InvalidOperationException("AesEncryptionKey must decode to exactly 32 bytes (64 hex or 44 base64 chars).");
 
         _key = keyBytes;
+    }
+
+    private static bool IsAllHex(string value)
+    {
+        foreach (var c in value)
+        {
+            var isHex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+            if (!isHex)
+                return false;
+        }
+
+        return true;
     }
 
     /// <summary>
