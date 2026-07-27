@@ -96,6 +96,44 @@ internal sealed class SemanticKernelModelClient : IModelClient
         _logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<SemanticKernelModelClient>.Instance;
     }
 
+    /// <summary>
+    /// Builds a <see cref="SemanticKernelModelClient"/> from explicit tenant credentials, enabling per-tenant
+    /// model isolation. Shared with the global configuration path so both register identical service keys.
+    /// </summary>
+    /// <param name="apiKey">The decrypted API key for the tenant's provider.</param>
+    /// <param name="baseUrl">Optional OpenAI-compatible base URL (DeepSeek / VLLM / Custom); null uses the default endpoint.</param>
+    /// <param name="modelName">The model name to register (also registered as <c>provider:modelName</c>).</param>
+    /// <param name="provider">The normalized provider key used in the registered service id.</param>
+    public static SemanticKernelModelClient CreateForTenant(
+        string apiKey,
+        string? baseUrl,
+        string modelName,
+        string provider)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(apiKey);
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(provider);
+
+        var services = new Dictionary<string, IChatCompletionService>();
+        var builder = Kernel.CreateBuilder();
+        if (!string.IsNullOrEmpty(baseUrl))
+        {
+#pragma warning disable SKEXP0010
+            builder.AddOpenAIChatCompletion(modelName, new Uri(baseUrl), apiKey);
+#pragma warning restore SKEXP0010
+        }
+        else
+        {
+            builder.AddOpenAIChatCompletion(modelName, apiKey);
+        }
+
+        var service = builder.Build().GetRequiredService<IChatCompletionService>();
+        services[modelName] = service;
+        services[$"{provider}:{modelName}"] = service;
+
+        return new SemanticKernelModelClient(services);
+    }
+
     private static ChatHistory ToChatHistory(IReadOnlyList<ChatMessage> messages)
     {
         var chatHistory = new ChatHistory();

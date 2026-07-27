@@ -25,6 +25,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Embeddings;
 using StackExchange.Redis;
@@ -173,6 +174,20 @@ public static class DependencyInjection
         else
             throw new InvalidOperationException($"不支持的搜索提供方：{searchProviderName}");
 
+        // ── F13 多租户凭据配置（模型 + 搜索 BYO-Key / 平台内置）──
+        // 凭据设置仓储（EF Core，租户隔离由 AppDbContext.HasQueryFilter 强制）。
+        services.AddScoped<AgentPlatform.Domain.Repositories.ITenantCredentialSettingRepository,
+            AgentPlatform.Infrastructure.Persistence.Repositories.TenantCredentialSettingRepository>();
+        // 租户凭据解析（含短期内存缓存，仅缓存密文实体）。
+        services.AddScoped<AgentPlatform.Application.Abstractions.ITenantCredentialResolver,
+            AgentPlatform.Infrastructure.Credentials.TenantCredentialResolver>();
+        // 租户 BYO 模型客户端解析（解密后构建 SemanticKernelModelClient，核心隔离点）。
+        services.AddScoped<AgentPlatform.Application.Abstractions.ITenantModelClientResolver,
+            AgentPlatform.Infrastructure.Models.TenantModelClientResolver>();
+        // 平台模型目录（运营方配置的 RouterSettings.Candidates）。
+        services.AddScoped<AgentPlatform.Application.Abstractions.IPlatformModelProvider,
+            AgentPlatform.Infrastructure.Credentials.PlatformModelsProvider>();
+
         var cacheProvider = configuration.GetSection("Cache:Provider").Value;
         if (string.Equals(cacheProvider, "Redis", StringComparison.Ordinal))
         {
@@ -232,6 +247,8 @@ public static class DependencyInjection
         }
 
         services.AddHttpContextAccessor();
+        // 进程内缓存：用于租户凭据解析的短期缓存（仅缓存密文实体）；BYO 更新时显式失效。
+        services.AddMemoryCache();
         services.AddScoped<ITenantProvider, TenantProvider>();
         services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddScoped<IUserRepository, UserRepository>();

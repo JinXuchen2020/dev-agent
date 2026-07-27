@@ -19,6 +19,10 @@ import type {
   LoginResponse,
   ResearchRequest,
   ResearchProgressEvent,
+  CredentialCategory,
+  TenantCredentialDto,
+  UpdateTenantCredentialRequest,
+  PlatformModelDto,
 } from '../types';
 
 const api = axios.create({
@@ -204,6 +208,20 @@ export const getAuthMe = () =>
 
 export const logoutRequest = () =>
   api.post<void>('/auth/logout').then(() => undefined);
+
+// F13 多租户凭据（模型 + 搜索，BYO-Key + 平台内置）。
+// 204 = 租户尚未配置该类凭据；返回 null 由前端提示去填写或选用平台内置。
+export const getTenantCredential = (category: CredentialCategory) =>
+  api
+    .get<TenantCredentialDto>('/tenant/credentials', { params: { category } })
+    .then((r): TenantCredentialDto | null => (r.status === 204 ? null : r.data));
+
+export const updateTenantCredential = (req: UpdateTenantCredentialRequest) =>
+  api.put<TenantCredentialDto>('/tenant/credentials', req).then((r) => r.data);
+
+// 平台模型目录（platform-* + 当前租户 BYO 模型并列），不含密钥。
+export const getPlatformModels = () =>
+  api.get<PlatformModelDto[]>('/models').then((r) => r.data);
 
 // Normalize an unknown thrown value into a human-readable message.
 // Preserves axios-style `response.data.title` / `response.data.message` when present,

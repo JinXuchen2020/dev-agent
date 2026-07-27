@@ -283,3 +283,37 @@ export interface ResearchRequest {
   modelId?: string | null;
   focusInstructions?: string | null;
 }
+
+// ── F13 多租户凭据配置（模型 + 搜索，BYO-Key + 平台内置）──
+// 与 AgentPlatform.Domain.Enums.CredentialCategory 对齐（序列化为 int）。
+export const CredentialCategory = {
+  Model: 0,
+  Search: 1,
+} as const;
+export type CredentialCategory =
+  (typeof CredentialCategory)[keyof typeof CredentialCategory];
+
+export interface TenantCredentialDto {
+  category: CredentialCategory;
+  provider: string;
+  apiKeyMask: string;
+  baseUrl: string | null;
+  modelName: string | null;
+  isEnabled: boolean;
+}
+
+export interface UpdateTenantCredentialRequest {
+  category: CredentialCategory;
+  provider: string;
+  apiKey?: string | null;
+  baseUrl?: string | null;
+  modelName?: string | null;
+  isEnabled?: boolean;
+}
+
+export interface PlatformModelDto {
+  modelId: string;
+  provider: string;
+  displayName: string;
+  isTenantOwned: boolean;
+}

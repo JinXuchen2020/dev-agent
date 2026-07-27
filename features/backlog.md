@@ -80,7 +80,7 @@
 
 > **🔝 当前最高优先级史诗 = F13（多租户凭据配置：模型 + 搜索 BYO-Key + 平台内置 [P0]）**，建议优先于 F7–F12 排期。设计文档 `./model-config.md` 已建且 §7 决策 **S1–S6 已锁定（2026-07-27）**：S1 仅 OpenAI 兼容 / S2 B 启用+默认配额（模型 $1/天、搜索 100 次/天）/ S3 每租户每类单条 upsert / S4 并入 Agent 配置页（不新增独立页）/ S5 搜索纳入 / S6 搜索仅 SerpApi。可进实现。
 
-### F13 · 多租户凭据配置（模型 + 搜索，BYO-Key + 平台内置）  [P0 最高优先级]  open  🔴高风险（破坏性后端 + 密钥安全 + 多租户隔离）
+### F13 · 多租户凭据配置（模型 + 搜索，BYO-Key + 平台内置）  [P0 最高优先级]  done  🔴高风险（破坏性后端 + 密钥安全 + 多租户隔离）
 - 设计文档：`features/model-config.md`（已升级为「通用租户凭据」，Model + Search 两 `Category`）
 - 目标：补齐多租户化最后一环——外部 API 凭据层租户隔离（**模型 LLM key + Research 用 SerpApi 搜索 key 同构处理**）。双轨：A 用户自配凭据（模型 provider/API Key/BaseUrl/模型名，或搜索 SerpApi Key，按租户隔离）；B 平台内置凭据（运营方 `appsettings` 已配密钥暴露为可选，替代哑 stub / 全局 `SearchSettings` 硬编码，作上手/试用层）。
 - 核心改造：把 `SemanticKernelModelClient`（现全局启动时构建）与 `SerpApiSearchProvider`（现构造时固化 `SearchSettings.SerpApiKey`，见 `SerpApiSearchProvider.cs:26,32,44`）都改为 per-tenant 解析；抽 `ITenantCredentialResolver`（category=Model/Search）+ `TenantProvider`；`ModelRouter`/`SerpApiSearchProvider` 运行时按租户取 key，无则回退平台默认。新增 `TenantCredentialSetting` 聚合（落库加密复用 `IApiKeyEncryptionService` AES-256-GCM，掩码 `••••`+prefix）；端点 `GET/PUT /api/v1/tenant/credentials?category=Model|Search`（RBAC Admin/Operator）+ `GET /api/v1/models`（平台模型清单）；前端 `CredentialSettingsPage`（`Tabs: 模型 + 搜索`）+ 模型下拉接平台模型。配额经扩展 `ICostController` 为租户键控（`PerTenantDailyBudget` 模型 / `PerTenantDailySearchQuota` 搜索，防 B 滥用）。
@@ -93,6 +93,7 @@
   - **配额**：平台模型超 `PerTenantDailyBudget` / 平台搜索超 `PerTenantDailySearchQuota` → 拒绝并提示配 BYO-Key；BYO-Key 不受限。
   - **QA**：build 0/0、`dotnet test` 全绿（含新增租户隔离/加密/路由合并/搜索租户化单测）、前端 `tsc`+`qa.mjs` 全绿、既有 238 测试不回归。
 - 决策状态（见 `./model-config.md` §7，2026-07-27 全部锁定）：S1 仅 OpenAI 兼容 / S2 B 启用+默认配额（模型 `PerTenantDailyBudget=1.00` USD/天、搜索 `PerTenantDailySearchQuota=100` 次/天）/ S3 每租户每类单条 upsert / S4 并入 Agent 配置页（不新增独立 `CredentialSettingsPage`）/ S5 搜索纳入（SerpApi key 前台可配）/ S6 搜索仅 SerpApi。
+- **完成记录（2026-07-27）**：feature-builder 全栈实跑落地。后端 Domain(`TenantCredentialSetting`+`CredentialCategory`+仓储)/Application(`ITenantCredentialResolver`/`ITenantModelClientResolver`/`IPlatformModelProvider`+租户键控 `ICostController`+`ModelRouter` 新 ctor)/Infrastructure(`SemanticKernelModelClient.CreateForTenant` 工厂/`TenantCredentialResolver`+缓存失效/`TenantModelClientResolver`/`PlatformModelsProvider`/`SerpApiSearchProvider` 运行时按租户解析 key/`CostController` 租户键控/EF 迁移 `AddTenantCredentialSetting`)/Api(`TenantCredentialsController`+`PlatformModelsController`+DTOs)。前端 Agent 配置页内嵌 `Tabs: 模型+搜索` 凭据配置（`Input.Password` 掩码 + provider Select + 保存），`types/index.ts`+`api.ts` 补齐；`tsc --noEmit` 0 error。三道质量门 PASS（`.quality-gate.json` 推进 `f13-multi-tenant-credentials`）；`dotnet test src/AgentPlatform.sln` 全绿（含 F13 新增 EF 集成测试验证落库+租户隔离+upsert 不重复行）。**审查修复 P0**：`TenantCredentialsController.Put` 原直接写仓储但未提交 `IUnitOfWork.SaveChangesAsync`（本控制器不走 MediatR 命令、无 `UnitOfWorkBehavior` 自动提交），导致凭据永不落库——已注入 `IUnitOfWork` 显式提交，与命令处理器行为一致。
 
 ### F7 · 工作流平台化（program，可拆子史诗）  [P2/P3]  open  ⚠️高风险
 - 设计文档：`features/workflow-platformization.md`（待建，含子史诗拆分；来源 `./competitive-roadmap.md` 对标 Dify/n8n/LangGraph/Coze/Flowise）

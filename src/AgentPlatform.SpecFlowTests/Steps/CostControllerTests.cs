@@ -11,13 +11,17 @@ namespace AgentPlatform.SpecFlowTests.Steps;
 
 public class CostControllerTests
 {
+    private static readonly Guid TestTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+
     private static CostController CreateCostController(decimal budget = 50m)
     {
         var pricingOptions = Substitute.For<IOptions<PricingSettings>>();
         pricingOptions.Value.Returns(new PricingSettings());
         var routerOptions = Substitute.For<IOptions<RouterSettings>>();
-        routerOptions.Value.Returns(new RouterSettings { DailyBudget = budget });
-        return new CostController(pricingOptions, routerOptions, Substitute.For<ILogger<CostController>>());
+        routerOptions.Value.Returns(new RouterSettings { PerTenantDailyBudget = budget });
+        var searchOptions = Substitute.For<IOptions<SearchSettings>>();
+        searchOptions.Value.Returns(new SearchSettings());
+        return new CostController(pricingOptions, routerOptions, searchOptions, Substitute.For<ILogger<CostController>>());
     }
 
     [Fact]
@@ -28,7 +32,7 @@ public class CostControllerTests
         var candidate = new ModelCandidate("gpt-4o", "openai", 100);
 
         // Act
-        var result = controller.TryReserve(candidate, 1000);
+        var result = controller.TryReserve(candidate, 1000, TestTenantId);
 
         // Assert
         Assert.False(result);
@@ -40,7 +44,7 @@ public class CostControllerTests
         var controller = CreateCostController(budget: 50m);
         var candidate = new ModelCandidate("gpt-4o", "openai", 100);
 
-        var result = controller.TryReserve(candidate, 1000);
+        var result = controller.TryReserve(candidate, 1000, TestTenantId);
 
         Assert.True(result);
     }
@@ -51,12 +55,12 @@ public class CostControllerTests
         var controller = CreateCostController(budget: 50m);
         var candidate = new ModelCandidate("gpt-4o", "openai", 100);
 
-        controller.TryReserve(candidate, 1000);
-        var spentBefore = controller.GetTodaySpent();
+        controller.TryReserve(candidate, 1000, TestTenantId);
+        var spentBefore = controller.GetTodaySpent(TestTenantId);
 
-        controller.SettleUsage(candidate, null, 1000);
+        controller.SettleUsage(candidate, null, 1000, TestTenantId);
 
-        var spentAfter = controller.GetTodaySpent();
+        var spentAfter = controller.GetTodaySpent(TestTenantId);
         Assert.Equal(spentBefore.Amount, spentAfter.Amount);
     }
 
@@ -66,10 +70,10 @@ public class CostControllerTests
         var controller = CreateCostController(budget: 50m);
         var candidate = new ModelCandidate("gpt-4o", "openai", 100);
 
-        controller.TryReserve(candidate, 1000); // reserves 1000 tokens worth
-        controller.SettleUsage(candidate, new TokenUsage(100, 200), 1000); // actual 300 tokens
+        controller.TryReserve(candidate, 1000, TestTenantId); // reserves 1000 tokens worth
+        controller.SettleUsage(candidate, new TokenUsage(100, 200), 1000, TestTenantId); // actual 300 tokens
 
-        var spent = controller.GetTodaySpent();
+        var spent = controller.GetTodaySpent(TestTenantId);
         // openai cost: 2.50/million, so 300 tokens = 300 * 2.50/1000000 = 0.00075
         Assert.True(spent.Amount > 0);
         Assert.True(spent.Amount < 0.01m); // much less than 1000 tokens worth
@@ -81,12 +85,12 @@ public class CostControllerTests
         var controller = CreateCostController(budget: 50m);
         var candidate = new ModelCandidate("gpt-4o", "openai", 100);
 
-        controller.TryReserve(candidate, 1000);
-        var spentAfterReserve = controller.GetTodaySpent();
+        controller.TryReserve(candidate, 1000, TestTenantId);
+        var spentAfterReserve = controller.GetTodaySpent(TestTenantId);
         Assert.True(spentAfterReserve.Amount > 0);
 
-        controller.ReleaseReservation(candidate, 1000);
-        var spentAfterRelease = controller.GetTodaySpent();
+        controller.ReleaseReservation(candidate, 1000, TestTenantId);
+        var spentAfterRelease = controller.GetTodaySpent(TestTenantId);
         Assert.Equal(0m, spentAfterRelease.Amount);
     }
 
@@ -97,8 +101,8 @@ public class CostControllerTests
         var candidate = new ModelCandidate("gpt-4o", "openai", 100);
 
         // Release without prior reserve - should clamp to zero, not go negative
-        controller.ReleaseReservation(candidate, 1000);
-        var spent = controller.GetTodaySpent();
+        controller.ReleaseReservation(candidate, 1000, TestTenantId);
+        var spent = controller.GetTodaySpent(TestTenantId);
         Assert.Equal(0m, spent.Amount);
     }
 
@@ -107,9 +111,11 @@ public class CostControllerTests
     {
         var controller = CreateCostController(budget: 50m);
         var candidate = new ModelCandidate("gpt-4o", "openai", 100);
-        controller.TryReserve(candidate, 1000);
+        controller.TryReserve(candidate, 1000, TestTenantId);
 
-        var handler = new GetCostReportQueryHandler(controller);
+        var tenantProvider = Substitute.For<ITenantProvider>();
+        tenantProvider.GetTenantId().Returns(TestTenantId);
+        var handler = new GetCostReportQueryHandler(controller, tenantProvider);
         var result = await handler.Handle(new GetCostReportQuery(), CancellationToken.None);
 
         Assert.True(result.TodaySpent > 0);
@@ -120,20 +126,20 @@ public class CostControllerTests
     public void TryReserve_ThrowsOnNullCandidate()
     {
         var controller = CreateCostController();
-        Assert.Throws<ArgumentNullException>(() => controller.TryReserve(null!, 1000));
+        Assert.Throws<ArgumentNullException>(() => controller.TryReserve(null!, 1000, TestTenantId));
     }
 
     [Fact]
     public void SettleUsage_ThrowsOnNullCandidate()
     {
         var controller = CreateCostController();
-        Assert.Throws<ArgumentNullException>(() => controller.SettleUsage(null!, new TokenUsage(1, 1), 1000));
+        Assert.Throws<ArgumentNullException>(() => controller.SettleUsage(null!, new TokenUsage(1, 1), 1000, TestTenantId));
     }
 
     [Fact]
     public void ReleaseReservation_ThrowsOnNullCandidate()
     {
         var controller = CreateCostController();
-        Assert.Throws<ArgumentNullException>(() => controller.ReleaseReservation(null!, 1000));
+        Assert.Throws<ArgumentNullException>(() => controller.ReleaseReservation(null!, 1000, TestTenantId));
     }
 }

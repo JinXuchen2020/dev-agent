@@ -1,5 +1,29 @@
 # 变更日志
 
+## v2.6 (2026-07-27)
+
+### F13 · 多租户凭据配置（模型 + 搜索，BYO-Key + 平台内置）完成（feature-builder 全栈实跑，🔴高风险）
+
+补齐平台多租户化的最后一环——外部 API 凭据层租户隔离（模型 LLM key + Research 用 SerpApi 搜索 key 同构处理）。
+
+**核心改动：**
+- **聚合与落库加密**：新增 `TenantCredentialSetting` 聚合（`ITenantScoped` → `HasQueryFilter` 租户隔离；`Id` 显式 `ValueGeneratedNever`）+ `CredentialCategory` 枚举（Model/Search）+ `ITenantCredentialSettingRepository` + EF 迁移 `AddTenantCredentialSetting`。密钥复用 `IApiKeyEncryptionService`（AES-256-GCM），落库仅存密文 `EncryptedApiKey` + `ApiKeyPrefix`，明文不入 DB/不出 API/不进日志。
+- **per-tenant 解析链路**：新增 `ITenantCredentialResolver`（按 `tenantId+category` 解析 + `IMemoryCache` 缓存密文实体 + `PUT` 即时失效）、`ITenantModelClientResolver`（解密后 `SemanticKernelModelClient.CreateForTenant` 构建租户模型客户端）、`IPlatformModelProvider`（运营方 `RouterSettings.Candidates` 平台模型）。`ModelRouter` 改造为合并平台 ∪ 租户候选；`SerpApiSearchProvider` 改为运行时按租户解析 key（BYO key 绕过平台配额，无则回退平台默认，均无则明确提示配 key）。
+- **配额（B 防滥用）**：`ICostController` 扩展为租户键控（`PerTenantDailyBudget` 模型 / `PerTenantDailySearchQuota` 搜索）；BYO-Key 不受限。
+- **端点与前端**：`TenantCredentialsController`（`GET/PUT /api/v1/tenant/credentials?category=Model|Search`，RBAC `Admin,Operator`，GET 返回掩码 `••••`+prefix，未配置 204）+ `PlatformModelsController`（`GET /api/v1/models`，平台 ∪ 租户 BYO，仅暴露标识不含密钥）。前端 Agent 配置页内嵌 `Tabs: 模型 + 搜索` 凭据配置（`Input.Password` 掩码 + provider Select + 保存）；`types/index.ts`+`api.ts` 补齐。
+
+**质量与测试：**
+- 三道质量门禁全 PASS（`ddd-code-reviewer` / `ddd-phase-quality-gate` / `codebase-optimizer`）；`.quality-gate.json` 推进 `f13-multi-tenant-credentials`
+- 审查修复 P0：`TenantCredentialsController.Put` 原直接写仓储但未提交 `IUnitOfWork.SaveChangesAsync`（本控制器不走 MediatR 命令、无 `UnitOfWorkBehavior` 自动提交），导致凭据永不落库——已注入 `IUnitOfWork` 显式提交，行为与命令处理器一致；新增 EF 集成测试锁定落库 + 租户隔离 + upsert 不重复行
+- `dotnet test src/AgentPlatform.sln` **244 passed / 0 failed**（含 F13 新增 EF 集成测试、resolver/search BYO 单测）；前端 `tsc --noEmit` **0 error**
+- 模型一致性：后端 camelCase 序列化、枚举 int，前端 `CredentialCategory` 常量对象一一对应
+
+**已知残留（非阻断）：**
+- S4 模型下拉接 `GET /api/v1/models` 后端已就绪（返回 platform ∪ BYO），Agent/会话创建页模型下拉接线为后续小步
+- `appsettings.json` 因严格 JSON 不容注释，配额语义改在 `features/model-config.md` §3.6 文档化
+
+**分支：** `feat/f13-multi-tenant-credentials`
+
 ## v2.5 (2026-07-24)
 
 ### F6 · Research Agent 联网多步调研完成（feature-builder 全栈实跑，🔴高风险）
