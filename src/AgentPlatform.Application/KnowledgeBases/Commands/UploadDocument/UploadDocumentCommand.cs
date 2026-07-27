@@ -52,7 +52,11 @@ internal sealed class UploadDocumentCommandHandler
         }
 
         var doc = kb.AddDocument(documentId, request.FileName, request.ContentType, chunks.Count);
-        repository.Update(kb); // 受跟踪聚合，由 UnitOfWorkBehavior 提交
+        // 注意：kb 已由 GetByIdAsync 跟踪（tracked），新增的文档子实体处于 Added 状态。
+        // 切勿在此调用 repository.Update(kb) —— EF 的 Update 会递归把整个对象图
+        // （含刚新增的子文档）标记为 Modified，导致新文档被误判为 UPDATE 而非 INSERT，
+        // 进而在 SQLite 下命中 0 行抛 DbUpdateConcurrencyException。
+        // UnitOfWorkBehavior 的 SaveChangesAsync 会自动提交 tracked 变更。
 
         return KnowledgeBaseResponses.ToResponse(doc);
     }

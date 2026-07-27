@@ -206,14 +206,23 @@ export const logoutRequest = () =>
   api.post<void>('/auth/logout').then(() => undefined);
 
 // Normalize an unknown thrown value into a human-readable message.
-// Preserves axios-style `response.data.title` / `response.data.message` when present.
+// Preserves axios-style `response.data.title` / `response.data.message` when present,
+// and also handles a plain-string response body (e.g. backend 400 with a raw message).
 export function getErrorMessage(e: unknown): string {
   if (e && typeof e === 'object') {
     const err = e as {
-      response?: { data?: { title?: string; message?: string } };
+      response?: { data?: { title?: string; message?: string } | string };
       message?: string;
     };
-    return err.response?.data?.title ?? err.response?.data?.message ?? err.message ?? '未知错误';
+    const data = err.response?.data;
+    if (typeof data === 'string' && data.trim()) {
+      return data;
+    }
+    if (data && typeof data === 'object') {
+      const d = data as { title?: string; message?: string };
+      return d.title ?? d.message ?? err.message ?? '未知错误';
+    }
+    return err.message ?? '未知错误';
   }
   return String(e);
 }

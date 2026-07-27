@@ -24,4 +24,8 @@
     <ProjectReference Include="..\AgentPlatform.Application\AgentPlatform.Application.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

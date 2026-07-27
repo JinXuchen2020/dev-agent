@@ -1,4 +1,4 @@
-using System.IO.Compression;
+using System.IO;
 using System.Text;
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Infrastructure.Services;
@@ -38,21 +38,28 @@ public class DocumentTextExtractorTests
     }
 
     [Fact]
-    public void PdfText_Extracts_From_Uncompressed_Stream()
+    public void PdfText_Extracts_Chinese_Text_From_Real_Pdf()
     {
-        var pdf = BuildUncompressedPdf("Hello PDF World");
-        var text = PdfTextExtractor.ExtractText(pdf);
+        // 真实中文 PDF（reportlab + STSong-Light CID 字体，文本以十六进制串存储）
+        // 复现用户“无法从文件中提取文本”的根因：自研提取器不识别 <...> 十六进制串。
+        var path = Path.Combine(AppContext.BaseDirectory, "Assets", "sample-chinese.pdf");
+        Assert.True(File.Exists(path), $"测试 PDF 资源缺失: {path}");
+
+        var ex = new PdfTextExtractor();
+        using var ms = new MemoryStream(File.ReadAllBytes(path));
+        var text = ex.Extract(ms, "sample-chinese.pdf", "application/pdf");
+
+        Assert.Contains("中文 PDF 文本提取", text);
         Assert.Contains("Hello PDF World", text);
     }
 
     [Fact]
-    public void PdfText_Extracts_From_FlateDecode_Stream()
+    public void PdfText_Returns_Empty_For_NonPdfBytes_Without_Throwing()
     {
-        var inner = "BT /F1 12 Tf 50 50 Td (Compressed PDF Text) Tj ET";
-        var compressed = Compress(inner);
-        var pdf = BuildFlatePdf(compressed);
-        var text = PdfTextExtractor.ExtractText(pdf);
-        Assert.Contains("Compressed PDF Text", text);
+        var ex = new PdfTextExtractor();
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes("this is definitely not a pdf file"));
+        var text = ex.Extract(ms, "bad.pdf", "application/pdf");
+        Assert.Equal(string.Empty, text);
     }
 
     [Fact]
@@ -66,48 +73,5 @@ public class DocumentTextExtractorTests
         Assert.IsType<HtmlTextExtractor>(extractors.First(e => e.Supports("a.html", "text/html")));
         Assert.IsType<PdfTextExtractor>(extractors.First(e => e.Supports("a.pdf", "application/pdf")));
         Assert.IsType<PlainTextExtractor>(extractors.First(e => e.Supports("a.txt", "text/plain")));
-    }
-
-    private static byte[] BuildUncompressedPdf(string text)
-    {
-        var content = $"BT /F1 12 Tf 50 50 Td ({text}) Tj ET";
-        var sb = new StringBuilder();
-        sb.Append("%PDF-1.4\n");
-        sb.Append("1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n");
-        sb.Append("2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n");
-        sb.Append("3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\n");
-        sb.Append($"4 0 obj<</Length {content.Length}>>stream\n");
-        sb.Append(content).Append('\n');
-        sb.Append("endstream endobj\n");
-        sb.Append("trailer<</Root 1 0 R>>\n%%EOF\n");
-        return Encoding.ASCII.GetBytes(sb.ToString());
-    }
-
-    private static byte[] BuildFlatePdf(byte[] compressed)
-    {
-        var header = "%PDF-1.4\n" +
-                     "1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n" +
-                     "2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n" +
-                     "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\n" +
-                     $"4 0 obj<</Filter /FlateDecode/Length {compressed.Length}>>stream\r\n";
-        var headerBytes = Encoding.ASCII.GetBytes(header);
-        var footerBytes = Encoding.ASCII.GetBytes("\nendstream endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n");
-
-        var result = new byte[headerBytes.Length + compressed.Length + footerBytes.Length];
-        Buffer.BlockCopy(headerBytes, 0, result, 0, headerBytes.Length);
-        Buffer.BlockCopy(compressed, 0, result, headerBytes.Length, compressed.Length);
-        Buffer.BlockCopy(footerBytes, 0, result, headerBytes.Length + compressed.Length, footerBytes.Length);
-        return result;
-    }
-
-    private static byte[] Compress(string s)
-    {
-        using var ms = new MemoryStream();
-        using (var zlib = new ZLibStream(ms, CompressionLevel.Optimal))
-        {
-            var bytes = Encoding.ASCII.GetBytes(s);
-            zlib.Write(bytes, 0, bytes.Length);
-        }
-        return ms.ToArray();
     }
 }

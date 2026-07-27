@@ -4,7 +4,7 @@ import { Table, Button, Spin, Space, Tag, Upload, Descriptions, App as AntApp } 
 import type { ColumnsType } from 'antd/es/table';
 import { ArrowLeftOutlined, UploadOutlined } from '@ant-design/icons';
 import type { KnowledgeDocument } from '../types';
-import { getKnowledgeBase, uploadDocument } from '../services/api';
+import { getKnowledgeBase, uploadDocument, getErrorMessage } from '../services/api';
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
 import { colors } from '../theme/tokens';
@@ -37,8 +37,8 @@ const KnowledgeBaseDetailPage: React.FC = () => {
       await uploadDocument(id, file);
       message.success(`文档「${file.name}」已切分入库`);
       load();
-    } catch {
-      message.error('上传失败');
+    } catch (err) {
+      message.error(getErrorMessage(err));
     } finally {
       setUploading(false);
     }

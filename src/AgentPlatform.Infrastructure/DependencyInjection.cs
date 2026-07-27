@@ -72,7 +72,15 @@ public static class DependencyInjection
         });
 
         var modelProvider = configuration.GetSection("ModelClient:Provider").Value;
-        if (string.Equals(modelProvider, "Stub", StringComparison.Ordinal))
+        // 是否配置了真实 LLM 端点：OpenAI / DeepSeek / VLLM 任一有值即视为已接入。
+        var llmConfigured = !string.IsNullOrEmpty(configuration["OpenAI:Key"])
+            || !string.IsNullOrEmpty(configuration["DeepSeek:Key"])
+            || !string.IsNullOrEmpty(configuration["VLLM:Url"]);
+
+        // 显式选择 Stub，或未配置任何真实 LLM 端点时，回退到 StubModelClient，
+        // 保证无密钥的本地/开发/演示环境「发送消息」不会因模型未注册而 500。
+        // 一旦配置任一真实端点，自动切换回 SemanticKernelModelClient，无需改 Provider。
+        if (string.Equals(modelProvider, "Stub", StringComparison.Ordinal) || !llmConfigured)
         {
             var stubResponse = configuration.GetSection("ModelClient:StubResponse").Value
                 ?? "这是模拟回复，平台已正常运行。";

@@ -22,16 +22,15 @@ internal sealed class KnowledgeBaseConfiguration : IEntityTypeConfiguration<Know
         builder.Property(k => k.CollectionName).IsRequired().HasMaxLength(200);
         builder.Property(k => k.EmbeddingModel).HasMaxLength(200);
 
-        builder.OwnsMany(k => k.Documents, db =>
-        {
-            db.WithOwner().HasForeignKey("KnowledgeBaseId");
-            db.Property<Guid>("Id").ValueGeneratedOnAdd();
-            db.HasKey("Id");
-            db.Property(d => d.DocumentId).IsRequired();
-            db.Property(d => d.FileName).IsRequired().HasMaxLength(500);
-            db.Property(d => d.ContentType).HasMaxLength(200);
-            db.Property(d => d.ChunkCount).IsRequired();
-        });
+        // KnowledgeDocument 拥有独立标识（自有 Id，且被向量存储按 DocumentId 外部引用），
+        // 语义上是“被引用的实体”而非“值对象”，因此用常规一对多（HasMany）而非 OwnsMany。
+        // 关键修复：OwnsMany + 预置独立 Id 会导致 EF 把“新增子实体”误判为 Modified，
+        // 生成 UPDATE 命中 0 行抛 DbUpdateConcurrencyException；改为 HasMany 后，
+        // 新增文档会被正确标记为 Added → INSERT。
+        builder.HasMany(k => k.Documents)
+            .WithOne()
+            .HasForeignKey("KnowledgeBaseId")
+            .OnDelete(DeleteBehavior.Cascade);
 
         builder.Navigation(k => k.Documents)
             .UsePropertyAccessMode(PropertyAccessMode.Field);

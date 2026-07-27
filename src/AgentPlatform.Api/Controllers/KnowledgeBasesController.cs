@@ -4,6 +4,7 @@ using AgentPlatform.Application.KnowledgeBases.Commands.DeleteKnowledgeBase;
 using AgentPlatform.Application.KnowledgeBases.Commands.UploadDocument;
 using AgentPlatform.Application.KnowledgeBases.Queries.GetKnowledgeBase;
 using AgentPlatform.Application.KnowledgeBases.Queries.ListKnowledgeBases;
+using System.IO;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -80,7 +81,13 @@ public sealed class KnowledgeBasesController : ControllerBase
             content = extractor.Extract(ms, file.FileName, file.ContentType);
 
         if (string.IsNullOrWhiteSpace(content))
-            return BadRequest("无法从文件中提取文本，请检查文件内容");
+        {
+            bool isPdf = file.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(Path.GetExtension(file.FileName), ".pdf", StringComparison.OrdinalIgnoreCase);
+            return isPdf
+                ? BadRequest("PDF 未提取到文本：常见原因为文件已加密，或属于扫描件/图片型 PDF（页面为图片、无可选中文字）。请先移除密码，或上传包含可选中文本的可编辑版本。")
+                : BadRequest("无法从文件中提取文本，请检查文件内容");
+        }
 
         var command = new UploadDocumentCommand(
             _tenant.GetTenantId(), id, file.FileName, file.ContentType, content);
