@@ -9,9 +9,11 @@ const { Title } = Typography;
 
 const DashboardPage: React.FC = () => {
   const agents = useApiState(() => getAgents(), []);
-  const workflows = useApiState(() => getWorkflows({ take: 0 }), []);
-  const success = useApiState(() => getExecutionLogs({ status: 'completed', take: 0 }), []);
-  const failed = useApiState(() => getExecutionLogs({ status: 'failed', take: 0 }), []);
+  // 注：take 故意传 1 而非 0。后端列表端点控制器层 `take<1→400` 早于 handler 的 Math.Clamp，
+  // 传 0 会被拒（Dashboard 只为取 totalCount，与 take 无关）。见 docs/learning/08-decision-log.md §8.13。
+  const workflows = useApiState(() => getWorkflows({ take: 1 }), []);
+  const success = useApiState(() => getExecutionLogs({ status: 'completed', take: 1 }), []);
+  const failed = useApiState(() => getExecutionLogs({ status: 'failed', take: 1 }), []);
 
   const loading = agents.loading || workflows.loading || success.loading || failed.loading;
   const error = agents.error || workflows.error || success.error || failed.error;
