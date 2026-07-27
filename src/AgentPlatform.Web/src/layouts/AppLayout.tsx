@@ -14,6 +14,7 @@ import {
   MessageOutlined,
   UserOutlined,
   LogoutOutlined,
+  GlobalOutlined,
 } from '@ant-design/icons';
 import { useAppStore } from '../stores/appStore';
 
@@ -29,6 +30,7 @@ const menuItems = [
   { key: '/execution-logs', icon: <FileTextOutlined />, label: 'Execution Logs' },
   { key: '/knowledge-bases', icon: <BookOutlined />, label: '知识库' },
   { key: '/conversations', icon: <MessageOutlined />, label: '会话' },
+  { key: '/research', icon: <GlobalOutlined />, label: 'Research' },
 ];
 
 const AppLayout: React.FC = () => {

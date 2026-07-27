@@ -71,11 +71,12 @@
   - **节点全家桶·Tool/Code/Knowledge Retrieval** → ✅ done（新增 `ToolStepExecutor`/`CodeStepExecutor` 注册为 `StepType.Tool=6`/`Code=7`，经既有 `ResolveExecutor`(`HandlesType`) 真实路由；前端 DAG 画布补 Tool/Code 节点调色板/图标/配置面板；Knowledge Retrieval 已于 RAG 地基层完成）。
   - **已知残留（非阻断，已拆为独立 feature F9–F12）**：① 真实 Docker 容器隔离；② Skill/MCP 执行器占位（设计文档明确 A1 仅要求 NativeToolExecutor 真实化）；③ 进程模式 OS 层禁网不可强求（以 `NetworkEnabled=false`+语言白名单+超时杀+输出截断缓解）；④ 含 Tool/Code 节点的全链路 e2e 需后端+Web 实例，本沙箱未跑（单元层已覆盖真实执行路径）。
 
-### F6 · Research Agent（联网多步调研）  [P1]  open  ⚠️高风险（Phase 6）
-- 设计文档：`features/research-agent.md`（待建）
+### F6 · Research Agent（联网多步调研）  [P1]  done  （2026-07-24，分支 feat/f6-research-agent，设计文档 features/research-agent.md；范围已确认：SerpApi + ResearchPage + SSE 流式 + 全认证用户）  ✅高风险已收口
+- 设计文档：`features/research-agent.md`（已建）
 - 目标：SK 集成 SerpAPI（或等价搜索 API），实现「开放问题 → 多步搜索 → 结构化报告」的调研 Agent；多步链真实串联、外部 API 真实调用（非伪造结果）。
-- 风险：外部 API 密钥与限流；多步链上下文膨胀须走统一 `WorkflowContext` + 逐步摘要压缩（对齐蓝图附录 C）。
-- 验收：多步搜索 → 结构化报告且外部 API 真实调用。
+- 风险：外部 API 密钥与限流；多步链上下文膨胀须走统一预算压缩（复用 `ITokenCounter`/`StringHelpers.Truncate`，对齐蓝图附录 C）。
+- 验收：多步搜索 → 结构化报告且外部搜索 API 真实 HTTP 调用（mock transport 覆盖真实请求路径）。
+- 关键设计：独立 `ResearchCommandHandler`（非工作流 step 循环）；`ISearchProvider`+`SerpApiSearchProvider`（真实 HttpClient，密钥走 `SearchSettings`/环境变量，**不落库**）；复用 `IModelClient`（测试可 StubModelClient）。
 
 ### F7 · 工作流平台化（program，可拆子史诗）  [P2/P3]  open  ⚠️高风险
 - 设计文档：`features/workflow-platformization.md`（待建，含子史诗拆分；来源 `./competitive-roadmap.md` 对标 Dify/n8n/LangGraph/Coze/Flowise）

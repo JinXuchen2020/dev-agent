@@ -23,6 +23,7 @@ const KnowledgeBasesPage = lazy(() => import('./pages/KnowledgeBasesPage'));
 const KnowledgeBaseDetailPage = lazy(() => import('./pages/KnowledgeBaseDetailPage'));
 const ConversationsPage = lazy(() => import('./pages/ConversationsPage'));
 const ConversationDetailPage = lazy(() => import('./pages/ConversationDetailPage'));
+const ResearchPage = lazy(() => import('./pages/ResearchPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 const App: React.FC = () => {
@@ -88,6 +89,7 @@ const App: React.FC = () => {
                   <Route path="/knowledge-bases/:id" element={<KnowledgeBaseDetailPage />} />
                   <Route path="/conversations" element={<ConversationsPage />} />
                   <Route path="/conversations/:id" element={<ConversationDetailPage />} />
+                  <Route path="/research" element={<ResearchPage />} />
                   <Route path="*" element={<NotFoundPage />} />
                 </Route>
               </Route>

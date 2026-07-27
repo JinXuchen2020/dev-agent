@@ -173,7 +173,39 @@ event: done
 data: {"type": "done", "executionId": "guid"}
 ```
 
-### I.7 监控 API
+### I.7 调研 API（SSE 流式）
+
+> Research Agent：开放问题 → 多步联网检索（真实 SerpAPI HTTP）→ 结构化报告。详见 `features/research-agent.md`。
+
+| 方法 | 路径 | 说明 | 权限 |
+| :--- | :--- | :--- | :--- |
+| POST | `/api/v1/research` | 提交调研问题，SSE 流式返回多步进度与最终报告 | authenticated |
+
+```typescript
+// 请求
+{ "question": "2025 年大模型推理成本下降趋势及主要驱动因素", "maxSteps": 3, "focusInstructions": null, "modelId": null }
+
+// 响应（text/event-stream，每个 data 帧为一个 ResearchProgressEvent）
+// type 为整型枚举：0=Plan 1=SearchStart 2=SearchDone 3=Synthesize 4=Report 5=Error
+event: data
+data: {"type":0,"queries":["趋势概览","驱动因素"],"message":"已规划 2 个检索查询"}
+
+event: data
+data: {"type":1,"query":"趋势概览","message":"检索中：趋势概览"}
+
+event: data
+data: {"type":2,"query":"趋势概览","snippetCount":5,"message":"检索完成：趋势概览（5 条）"}
+
+event: data
+data: {"type":4,"report":{"question":"...","searchQueries":["..."],"sources":[{"title":"...","url":"...","snippet":"..."}],"answer":"...","sections":[{"heading":"结论","body":"..."}],"stepsUsed":2,"tokenUsage":{"promptTokens":1200,"completionTokens":800},"generatedAt":"2026-07-24T..."}}
+
+event: done
+data: {}
+```
+
+> 说明：前端以 `fetch` + `credentials:'include'` 消费（EventSource 仅支持 GET）；终端帧为 `event: done` 空 `data: {}`。搜索密钥经 `Search:SerpApiKey` 配置 / 环境变量 `Search__SerpApiKey`，**不落库**；缺 key / 非 2xx / 超时 → 对应查询 `SearchDone` 事件回打精准错误，报告仍基于已规划内容生成。
+
+### I.8 监控 API
 
 | 方法 | 路径 | 说明 | 权限 |
 | :--- | :--- | :--- | :--- |
@@ -181,4 +213,4 @@ data: {"type": "done", "executionId": "guid"}
 | GET | `/api/v1/monitoring/logs` | 日志搜索 | admin |
 | GET | `/api/v1/monitoring/alerts` | 告警历史 | admin |
 
-> **一句话总结**：前端通过统一前缀 `/api/v1/` 的 REST API 与后端通信，7 个资源域（认证 / 工作流 / Agent / 模型 / 对话 / 管理 / 监控），对话流走 SSE 流式输出，权限按 RBAC 粒度控制。Agent 角色类型 API（`/agents/types`）支持动态加载自定义角色。完整 Swagger 文档在开发环境 `{host}/swagger` 实时生成。
+> **一句话总结**：前端通过统一前缀 `/api/v1/` 的 REST API 与后端通信，8 个资源域（认证 / 工作流 / Agent / 模型 / 对话 / 调研 / 管理 / 监控），对话与调研流均走 SSE 流式输出，权限按 RBAC 粒度控制。Agent 角色类型 API（`/agents/types`）支持动态加载自定义角色。完整 Swagger 文档在开发环境 `{host}/swagger` 实时生成。
