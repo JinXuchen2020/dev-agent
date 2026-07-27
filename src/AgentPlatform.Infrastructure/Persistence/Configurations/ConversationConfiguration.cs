@@ -35,7 +35,10 @@ internal sealed class ConversationConfiguration : IEntityTypeConfiguration<Conve
         builder.OwnsMany(c => c.Messages, msg =>
         {
             msg.WithOwner().HasForeignKey("ConversationId");
-            msg.Property<Guid>("Id").ValueGeneratedOnAdd();
+            // 关键：Message 的主键 Id 由代码显式赋 Guid.NewGuid()，必须 ValueGeneratedNever，
+            // 否则 EF 误判为"已存在实体"而生成 UPDATE 而非 INSERT，导致 DbUpdateConcurrencyException
+            // （expected 1 row, affected 0）。与 KnowledgeDocument 的修复同因。
+            msg.Property<Guid>("Id").ValueGeneratedNever();
             msg.HasKey("Id");
             msg.Property(m => m.Role)
                 .HasConversion<string>()

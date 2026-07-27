@@ -31,7 +31,10 @@ internal sealed class WorkflowConfiguration : IEntityTypeConfiguration<Workflow>
         builder.OwnsMany(w => w.Steps, sb =>
         {
             sb.WithOwner().HasForeignKey("WorkflowId");
-            sb.Property<Guid>("Id").ValueGeneratedOnAdd();
+            // 关键：子实体主键由代码显式赋 Guid.NewGuid()，必须 ValueGeneratedNever，
+            // 否则 EF 误判为"已存在实体"生成 UPDATE 而非 INSERT，导致 DbUpdateConcurrencyException。
+            // 与 Message / KnowledgeDocument 的修复同因。
+            sb.Property<Guid>("Id").ValueGeneratedNever();
             sb.HasKey("Id");
             sb.Property(s => s.StepName).IsRequired().HasMaxLength(200);
             sb.Property(s => s.State)
@@ -47,7 +50,7 @@ internal sealed class WorkflowConfiguration : IEntityTypeConfiguration<Workflow>
         builder.OwnsMany(w => w.Nodes, nb =>
         {
             nb.WithOwner().HasForeignKey("WorkflowId");
-            nb.Property<Guid>("Id").ValueGeneratedOnAdd();
+            nb.Property<Guid>("Id").ValueGeneratedNever();
             nb.HasKey("Id");
             nb.Property(n => n.Type)
                 .HasConversion<string>()
@@ -71,7 +74,7 @@ internal sealed class WorkflowConfiguration : IEntityTypeConfiguration<Workflow>
         builder.OwnsMany(w => w.Edges, eb =>
         {
             eb.WithOwner().HasForeignKey("WorkflowId");
-            eb.Property<Guid>("Id").ValueGeneratedOnAdd();
+            eb.Property<Guid>("Id").ValueGeneratedNever();
             eb.HasKey("Id");
             eb.Property(e => e.SourceNodeId).IsRequired();
             eb.Property(e => e.TargetNodeId).IsRequired();

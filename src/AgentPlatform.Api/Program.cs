@@ -65,6 +65,22 @@ if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("QuickStart
     logger.LogInformation("Database initialization completed.");
 }
 
+// ── Model client mode diagnostic ──────────────────────────────
+// 明确当前模型模式，避免「无密钥 + Stub 回退」时用户误以为配置正常却只收到模拟回复。
+{
+    var modelModeLogger = app.Services.GetRequiredService<ILogger<Program>>();
+    var modelProviderCfg = app.Configuration.GetSection("ModelClient:Provider").Value;
+    var llmConfiguredNow = !string.IsNullOrEmpty(app.Configuration["OpenAI:Key"])
+        || !string.IsNullOrEmpty(app.Configuration["DeepSeek:Key"])
+        || !string.IsNullOrEmpty(app.Configuration["VLLM:Url"]);
+    if (string.Equals(modelProviderCfg, "Stub", StringComparison.Ordinal) || !llmConfiguredNow)
+        modelModeLogger.LogWarning(
+            "模型客户端使用 StubModelClient（未配置真实 LLM：OpenAI:Key / DeepSeek:Key / VLLM:Url 全为空）。" +
+            "会话消息将返回模拟回复。要接入真实模型请设置上述任一密钥。");
+    else
+        modelModeLogger.LogInformation("模型客户端已接入真实 LLM 端点（{Provider}）。", modelProviderCfg);
+}
+
 // ── OpenAPI / Swagger / Scalar pipeline ───────────────────────────
 app.MapOpenApi();
 app.MapScalarApiReference();
