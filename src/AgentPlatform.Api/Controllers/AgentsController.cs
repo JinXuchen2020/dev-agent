@@ -1,6 +1,8 @@
 using AgentPlatform.Api.Models;
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Application.Agents.Commands.CreateAgent;
+using AgentPlatform.Application.Agents.Commands.DeleteAgent;
+using AgentPlatform.Application.Agents.Commands.UpdateAgent;
 using AgentPlatform.Application.Agents.Queries.GetAgent;
 using AgentPlatform.Application.Agents.Queries.GetAgents;
 using MediatR;
@@ -93,6 +95,44 @@ public sealed class AgentsController : ControllerBase
         var agents = await _mediator.Send(new GetAgentsQuery(), ct);
         var responses = agents.Select(AgentResponse.From);
         return Ok(responses);
+    }
+
+    /// <summary>
+    /// Updates an existing agent. Only supplied (non-null) fields are applied.
+    /// </summary>
+    /// <param name="id">The unique identifier of the agent to update.</param>
+    /// <param name="request">The fields to update.</param>
+    /// <param name="ct">A token to observe for cancellation of the request.</param>
+    [Authorize(Roles = "Admin")]
+    [HttpPut("{id}")]
+    public async Task<IActionResult> UpdateAgent(Guid id, [FromBody] UpdateAgentRequest request, CancellationToken ct)
+    {
+        var agent = await _mediator.Send(new UpdateAgentCommand(
+            id,
+            request.Name,
+            request.RoleCode,
+            request.ModelProvider,
+            request.ModelName,
+            request.ModelApiUrl,
+            request.SystemPrompt,
+            request.Status), ct);
+
+        if (agent is null) return NotFound();
+        return Ok(AgentResponse.From(agent));
+    }
+
+    /// <summary>
+    /// Deletes an agent by its unique identifier.
+    /// </summary>
+    /// <param name="id">The unique identifier of the agent to delete.</param>
+    /// <param name="ct">A token to observe for cancellation of the request.</param>
+    [Authorize(Roles = "Admin")]
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteAgent(Guid id, CancellationToken ct)
+    {
+        var deleted = await _mediator.Send(new DeleteAgentCommand(id), ct);
+        if (!deleted) return NotFound();
+        return NoContent();
     }
 }
 

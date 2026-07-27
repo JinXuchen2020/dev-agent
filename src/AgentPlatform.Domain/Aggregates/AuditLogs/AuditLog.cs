@@ -57,6 +57,7 @@ public sealed class AuditLog : IAggregateRoot
 public enum AuditActionType
 {
     CreateAgent,
+    UpdateAgent,
     DeleteAgent,
     RunWorkflow,
     PauseWorkflow,

@@ -32,7 +32,7 @@ public sealed class Agent : ITenantScoped, IAggregateRoot
     /// <summary>
     /// Gets the functional role assigned to the agent.
     /// </summary>
-    public AgentType Role { get; private init; } = null!;
+    public AgentType Role { get; private set; } = null!;
 
     /// <summary>
     /// Gets or sets the model endpoint configuration used by the agent for LLM invocations.
@@ -130,6 +130,17 @@ public sealed class Agent : ITenantScoped, IAggregateRoot
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         Name = name;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Updates the functional role assigned to the agent.
+    /// </summary>
+    /// <param name="role">The new role for the agent.</param>
+    public void UpdateRole(AgentType role)
+    {
+        ArgumentNullException.ThrowIfNull(role);
+        Role = role;
         UpdatedAt = DateTime.UtcNow;
     }
 

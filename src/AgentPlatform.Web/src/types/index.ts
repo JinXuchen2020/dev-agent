@@ -1,10 +1,12 @@
 export interface Agent {
   id: string;
   name: string;
-  role: { roleCode: string };
-  modelEndpoint?: { modelId: string };
+  roleCode: string;
+  modelProvider?: string | null;
+  modelName?: string | null;
+  tenantId: string;
+  status?: string;
   systemPrompt: string;
-  status: string;
   createdAt: string;
 }
 
@@ -15,6 +17,17 @@ export interface CreateAgentRequest {
   modelName?: string | null;
   modelApiUrl?: string | null;
   systemPrompt?: string | null;
+}
+
+// PATCH-style update: all fields optional; backend applies only the supplied ones.
+export interface UpdateAgentRequest {
+  name?: string | null;
+  roleCode?: string | null;
+  modelProvider?: string | null;
+  modelName?: string | null;
+  modelApiUrl?: string | null;
+  systemPrompt?: string | null;
+  status?: string | null;
 }
 
 export interface ApiKey {
