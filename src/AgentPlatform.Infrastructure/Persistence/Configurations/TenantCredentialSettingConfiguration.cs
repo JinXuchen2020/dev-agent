@@ -19,6 +19,7 @@ internal sealed class TenantCredentialSettingConfiguration : IEntityTypeConfigur
         builder.Property(k => k.Id).ValueGeneratedNever();
         builder.Property(k => k.TenantId).IsRequired();
         builder.Property(k => k.Category).IsRequired();
+        builder.Property(k => k.Name).IsRequired().HasMaxLength(100);
         builder.Property(k => k.Provider).IsRequired().HasMaxLength(50);
         builder.Property(k => k.EncryptedApiKey).IsRequired().HasMaxLength(2000);
         builder.Property(k => k.ApiKeyPrefix).IsRequired().HasMaxLength(20);
@@ -27,6 +28,7 @@ internal sealed class TenantCredentialSettingConfiguration : IEntityTypeConfigur
         builder.Property(k => k.IsEnabled).IsRequired();
         builder.Property(k => k.CreatedAt).IsRequired();
         builder.Property(k => k.UpdatedAt).IsRequired();
-        builder.HasIndex(k => new { k.TenantId, k.Category }).IsUnique();
+        // 一个租户可配置多个同类凭据（如多个不同模型），故不再对 (TenantId, Category) 做唯一约束。
+        builder.HasIndex(k => new { k.TenantId, k.Category });
     }
 }

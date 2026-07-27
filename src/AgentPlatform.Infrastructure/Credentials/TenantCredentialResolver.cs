@@ -31,20 +31,17 @@ internal sealed class TenantCredentialResolver : ITenantCredentialResolver
 
     private static string CacheKey(Guid tenantId, CredentialCategory category) => $"tcs:{tenantId}:{category}";
 
-    public async Task<TenantCredentialSetting?> ResolveAsync(
+    public async Task<IReadOnlyList<TenantCredentialSetting>> ResolveAsync(
         Guid tenantId, CredentialCategory category, CancellationToken ct = default)
     {
         var key = CacheKey(tenantId, category);
-        if (_cache.TryGetValue<TenantCredentialSetting>(key, out var cached))
+        if (_cache.TryGetValue<List<TenantCredentialSetting>>(key, out var cached) && cached is not null)
             return cached;
 
-        var setting = await _repository.GetByTenantAndCategoryAsync(tenantId, category, ct);
-        if (setting is not null)
-        {
-            _cache.Set(key, setting, CacheSliding);
-        }
+        var settings = (await _repository.GetAllByTenantAndCategoryAsync(tenantId, category, ct)).ToList();
+        _cache.Set(key, settings, CacheSliding);
 
-        return setting;
+        return settings;
     }
 
     public void Invalidate(Guid tenantId, CredentialCategory category)

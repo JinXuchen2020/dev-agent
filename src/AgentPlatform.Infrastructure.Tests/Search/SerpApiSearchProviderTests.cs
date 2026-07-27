@@ -32,7 +32,7 @@ public class SerpApiSearchProviderTests
             credentialResolver = Substitute.For<ITenantCredentialResolver>();
             credentialResolver
                 .ResolveAsync(Arg.Any<Guid>(), Arg.Any<CredentialCategory>(), Arg.Any<CancellationToken>())
-                .Returns(Task.FromResult<TenantCredentialSetting>(null));
+                .Returns(new List<TenantCredentialSetting>());
         }
 
         if (tenantProvider is null)
@@ -142,11 +142,11 @@ public class SerpApiSearchProviderTests
     {
         var tenantId = Guid.NewGuid();
         var cred = new TenantCredentialSetting(
-            Guid.NewGuid(), tenantId, CredentialCategory.Search, "SerpApi", "enc", "aaaaaaaa", null, null, true);
+            Guid.NewGuid(), tenantId, CredentialCategory.Search, "My SerpApi", "SerpApi", "enc", "aaaaaaaa", null, null, true);
         var resolver = Substitute.For<ITenantCredentialResolver>();
         resolver
             .ResolveAsync(tenantId, CredentialCategory.Search, Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(cred));
+            .Returns(new List<TenantCredentialSetting> { cred });
         var tenantProvider = Substitute.For<ITenantProvider>();
         tenantProvider.GetTenantId().Returns(tenantId);
         var encryption = Substitute.For<IApiKeyEncryptionService>();
@@ -172,11 +172,11 @@ public class SerpApiSearchProviderTests
     {
         var tenantId = Guid.NewGuid();
         var cred = new TenantCredentialSetting(
-            Guid.NewGuid(), tenantId, CredentialCategory.Search, "SerpApi", "enc", "aaaaaaaa", null, null, true);
+            Guid.NewGuid(), tenantId, CredentialCategory.Search, "My SerpApi", "SerpApi", "enc", "aaaaaaaa", null, null, true);
         var resolver = Substitute.For<ITenantCredentialResolver>();
         resolver
             .ResolveAsync(tenantId, CredentialCategory.Search, Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(cred));
+            .Returns(new List<TenantCredentialSetting> { cred });
         var tenantProvider = Substitute.For<ITenantProvider>();
         tenantProvider.GetTenantId().Returns(tenantId);
         var encryption = Substitute.For<IApiKeyEncryptionService>();

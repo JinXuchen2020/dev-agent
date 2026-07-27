@@ -14,7 +14,7 @@ using Xunit;
 namespace AgentPlatform.Infrastructure.Tests.Models;
 
 /// <summary>
-/// 验证 F13 模型客户端租户隔离：有 BYO 凭据返回租户专属客户端，无/禁用则返回 null（回退平台）。
+/// 验证 F13 模型客户端租户隔离（多凭据）：有 BYO 凭据返回租户专属客户端列表，无/全禁用则返回空列表（回退平台）。
 /// </summary>
 public class TenantModelClientResolverTests
 {
@@ -32,57 +32,69 @@ public class TenantModelClientResolverTests
     }
 
     [Fact]
-    public async Task ResolveAsync_ReturnsNull_WhenNoCredential()
+    public async Task ResolveAsync_ReturnsEmpty_WhenNoCredential()
     {
         var resolver = Substitute.For<ITenantCredentialResolver>();
         resolver
             .ResolveAsync(TenantId, CredentialCategory.Model, Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<TenantCredentialSetting>(null));
+            .Returns(new List<TenantCredentialSetting>());
         var sut = Create(resolver, Substitute.For<IApiKeyEncryptionService>());
 
         var result = await sut.ResolveAsync(TenantId);
 
-        Assert.Null(result);
+        Assert.Empty(result);
     }
 
     [Fact]
-    public async Task ResolveAsync_ReturnsNull_WhenCredentialDisabled()
+    public async Task ResolveAsync_ReturnsEmpty_WhenAllCredentialsDisabled()
     {
-        var cred = new TenantCredentialSetting(
-            Guid.NewGuid(), TenantId, CredentialCategory.Model, "DeepSeek", "enc", "sk-abcd1234",
-            "https://api.deepseek.com", "deepseek-chat", isEnabled: false);
+        var creds = new List<TenantCredentialSetting>
+        {
+            new(Guid.NewGuid(), TenantId, CredentialCategory.Model, "My DeepSeek", "DeepSeek", "enc", "sk-abcd1234",
+                "https://api.deepseek.com", "deepseek-chat", isEnabled: false),
+        };
         var resolver = Substitute.For<ITenantCredentialResolver>();
         resolver
             .ResolveAsync(TenantId, CredentialCategory.Model, Arg.Any<CancellationToken>())
-            .Returns(cred);
+            .Returns(creds);
         var sut = Create(resolver, Substitute.For<IApiKeyEncryptionService>());
 
         var result = await sut.ResolveAsync(TenantId);
 
-        Assert.Null(result);
+        Assert.Empty(result);
     }
 
     [Fact]
-    public async Task ResolveAsync_ReturnsTenantClient_WithNormalizedProviderAndModel()
+    public async Task ResolveAsync_ReturnsOneClientPerEnabledCredential_WithNormalizedProviderAndModel()
     {
-        var cred = new TenantCredentialSetting(
-            Guid.NewGuid(), TenantId, CredentialCategory.Model, "DeepSeek", "enc", "sk-abcd1234",
-            "https://api.deepseek.com", "deepseek-chat", isEnabled: true);
+        var creds = new List<TenantCredentialSetting>
+        {
+            new(Guid.NewGuid(), TenantId, CredentialCategory.Model, "My DeepSeek", "DeepSeek", "enc1", "sk-abcd1234",
+                "https://api.deepseek.com", "deepseek-chat", isEnabled: true),
+            new(Guid.NewGuid(), TenantId, CredentialCategory.Model, "My GPT", "OpenAI", "enc2", "sk-efgh5678",
+                null, "gpt-4o", isEnabled: true),
+            // 禁用项应被排除
+            new(Guid.NewGuid(), TenantId, CredentialCategory.Model, "Disabled", "VLLM", "enc3", "sk-ijkl9012",
+                "http://vllm", "vllm-model", isEnabled: false),
+        };
         var resolver = Substitute.For<ITenantCredentialResolver>();
         resolver
             .ResolveAsync(TenantId, CredentialCategory.Model, Arg.Any<CancellationToken>())
-            .Returns(cred);
+            .Returns(creds);
         var encryption = Substitute.For<IApiKeyEncryptionService>();
-        encryption.DecryptKey("enc").Returns("real-key");
+        encryption.DecryptKey("enc1").Returns("real-key-1");
+        encryption.DecryptKey("enc2").Returns("real-key-2");
         var sut = Create(resolver, encryption);
 
         var result = await sut.ResolveAsync(TenantId);
 
-        Assert.NotNull(result);
-        Assert.IsType<ModelTelemetryDecorator>(result.Client);
-        var candidate = Assert.Single(result.Candidates);
-        Assert.Equal("deepseek", candidate.Provider);   // 归一化小写
-        Assert.Equal("deepseek-chat", candidate.ModelId);
-        Assert.Equal(100, candidate.Priority);
+        Assert.Equal(2, result.Count);
+        var deepseek = result.Single(r => r.Candidates[0].Provider == "deepseek");
+        Assert.IsType<ModelTelemetryDecorator>(deepseek.Client);
+        Assert.Equal("deepseek-chat", deepseek.Candidates[0].ModelId);
+        Assert.Equal(100, deepseek.Candidates[0].Priority);
+
+        var openai = result.Single(r => r.Candidates[0].Provider == "openai");
+        Assert.Equal("gpt-4o", openai.Candidates[0].ModelId);
     }
 }

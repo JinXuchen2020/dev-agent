@@ -95,7 +95,7 @@ public class AgentRoutingSteps
         var tenantModelResolver = Substitute.For<ITenantModelClientResolver>();
         tenantModelResolver
             .ResolveAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<TenantModelResolution?>(null));
+            .Returns(new List<TenantModelResolution>());
         var platformModelProvider = Substitute.For<IPlatformModelProvider>();
         platformModelProvider.GetCandidates()
             .Returns(_routerSettings.Candidates

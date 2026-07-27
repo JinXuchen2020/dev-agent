@@ -56,24 +56,43 @@ public sealed class ModelRouter : IModelRouter
         ArgumentNullException.ThrowIfNull(request.Messages);
 
         var tenantId = _tenantProvider.GetTenantId();
-        var tenantResolution = await _modelResolver.ResolveAsync(tenantId, ct);
+        var tenantResolutions = await _modelResolver.ResolveAsync(tenantId, ct);
 
-        // Tenant with an active BYO model credential => serve via their own key (no platform budget).
+        // Map each BYO candidate model id to the client built from its own credential key, so that
+        // multiple BYO models (potentially different providers) each route through their own key.
+        var byoClients = new Dictionary<string, IModelClient>(StringComparer.Ordinal);
+        var byoCandidates = new List<ModelCandidate>();
+        foreach (var resolution in tenantResolutions)
+        {
+            foreach (var candidate in resolution.Candidates)
+            {
+                byoClients[candidate.ModelId] = resolution.Client;
+                byoCandidates.Add(candidate);
+            }
+        }
+
+        // Tenant with at least one active BYO model credential => BYO candidates take priority (no platform budget).
         // Otherwise fall back to platform models, billed per tenant via the cost controller.
-        IModelClient activeClient = tenantResolution?.Client ?? _platformModelClient;
-        var candidates = tenantResolution?.Candidates ?? _platformModelProvider.GetCandidates();
-        var usePlatformBudget = tenantResolution is null;
+        var platformCandidates = _platformModelProvider.GetCandidates();
+        var candidates = byoCandidates.Count > 0
+            ? byoCandidates.Concat(platformCandidates).ToList()
+            : platformCandidates;
 
-        if (usePlatformBudget)
+        if (byoCandidates.Count == 0)
             _logger.LogInformation("Routing for tenant {TenantId} via platform models", tenantId);
         else
-            _logger.LogInformation("Routing for tenant {TenantId} via tenant BYO model client", tenantId);
+            _logger.LogInformation("Routing for tenant {TenantId} via {Count} tenant BYO model client(s)", tenantId, byoClients.Count);
 
         var candidateList = BuildCandidateList(request, candidates);
 
         foreach (var candidate in candidateList)
         {
             ct.ThrowIfCancellationRequested();
+
+            // Per-candidate client + budget decision: BYO models use their own key (no platform budget);
+            // platform models use the platform client and are billed per tenant.
+            var usePlatformBudget = !byoClients.ContainsKey(candidate.ModelId);
+            var activeClient = usePlatformBudget ? _platformModelClient : byoClients[candidate.ModelId];
 
             if (usePlatformBudget && !_costController.TryReserve(candidate, _routerSettings.DefaultEstimatedTokens, tenantId))
             {

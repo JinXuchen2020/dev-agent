@@ -28,7 +28,7 @@
 ### 3.1 聚合 `TenantCredentialSetting`（Domain，新增 · 通用凭据）
 - 字段：`Guid Id`（**`ValueGeneratedNever()`**，规避 EF「Guid 主键 `ValueGeneratedOnAdd` + 预置 `Guid.NewGuid()` → UPDATE 命中 0 行」陷阱，见 MEMORY.md）、`Guid TenantId`（实现 `ITenantScoped` → `HasQueryFilter` 自动租户隔离）、`CredentialCategory`(枚举 **Model / Search**)、`Provider`(string，模型=OpenAI/DeepSeek/VLLM/Custom；搜索=SerpApi，v1 仅单一 provider)、`string EncryptedApiKey`（密文）、`string ApiKeyPrefix`（前 8 字符，掩码展示用）、`string? BaseUrl`、`string? ModelName`（仅模型类用）、`bool IsEnabled`、`DateTime CreatedAt`/`UpdatedAt`。
 - 行为：构造/`Update(plaintextKey, ...)` 调 `IApiKeyEncryptionService.EncryptKey` 得 `(EncryptedKey, KeyPrefix)`；`GetDecryptedKey()` 调 `DecryptKey`（仅服务端内部用，绝不外泄）。
-- 仓储：`ITenantCredentialSettingRepository`（`GetByTenantAndCategoryAsync(Guid tenantId, CredentialCategory)` / `UpsertAsync(...)`）；EF 配置 `TenantCredentialSettingConfiguration`：`ToTable("TenantCredentialSetting")`、`HasQueryFilter(t => t.TenantId == tenantId)`。
+- 仓储：`ITenantCredentialSettingRepository`（`GetAllByTenantAndCategoryAsync` / `GetByIdAsync` / `AddAsync` / `UpdateAsync` / `DeleteAsync`）；EF 配置 `TenantCredentialSettingConfiguration`：`ToTable("TenantCredentialSettings")`、增 `Name` 列、`(TenantId, Category)` 改为非唯一索引、`HasQueryFilter(t => t.TenantId == tenantId)`、`Id` 显式 `ValueGeneratedNever`。
 - **新增 EF 迁移**：`dotnet ef migrations add AddTenantCredentialSetting`（含 `#pragma warning disable IDE0161`）。
 
 ### 3.2 凭据解析器（核心改造，最小契约变更）
@@ -123,7 +123,7 @@
   - 模型：`PerTenantDailyBudget = 1.00`（USD/租户/天，平台模型累计花费超限即拒并提示配 BYO-Key）；
   - 搜索：`PerTenantDailySearchQuota = 100`（次/租户/天，平台内置搜索超次即拒并提示配 BYO-Key）。
   - BYO-Key（A）不设限（成本归租户自己）。关闭 B 仅需配置开关 `Platform:BuiltInModelsEnabled=false`（预留，v1 默认 true）。
-- **S3 每租户每类凭据数（v1）= 单条活跃设置（锁定，由实现者设定）**：`PUT /api/v1/tenant/credentials` 即 **upsert**（按 `tenantId + category`），覆盖写；不设多 provider 并存。GET 返回该唯一设置或 204。
+- **S3 每租户每类凭据数（v1）= 多条（列表，由用户 2026-07-27 决策反转原"单条"锁定）**：一个租户可配置**多个不同模型**（不同 Provider / 密钥 / 模型名），搜索类同理。后端由"单条 upsert"改为**列表 CRUD**：`GET /api/v1/tenant/credentials?category=` 返回该租户该类全部凭据（数组，可空）；`POST` 新增；`PUT /api/v1/tenant/credentials/{id}` 按 Id 更新；`DELETE /api/v1/tenant/credentials/{id}` 按 Id 删除。`TenantCredentialSetting` 增 `Name`（列表内显示名）列，`(TenantId, Category)` 唯一索引改为非唯一；`ITenantCredentialResolver` 返回 `IReadOnlyList`；`ModelRouter` 按 candidate→client 映射支持多 BYO key 并存路由。前端「我的凭据」页以表格展示全部模型/搜索凭据，支持新增/编辑/删除。
 - **S4 前端范围 = 并入 Agent 配置页（锁定，由实现者设定）**：**不新增独立菜单项/页面**；在现有 **Agent 配置页**内嵌 `Tabs: 模型 + 搜索` 两个凭据配置区（结构与后端同构：provider Select + ApiKey `Input.Password` 掩码 + BaseUrl/ModelName 输入 + 保存）；Agent/会话创建处的模型下拉接 `GET /api/v1/models`（含平台模型 + 若租户自配则并列）。
 - **S5 搜索凭据纳入本 feature = 是（锁定）**：`TenantCredentialSetting` 增 `Category=Search`，复用加密/隔离/RBAC/掩码全套基件；`SerpApiSearchProvider` 改为运行时按租户解析 key。
 - **S6 搜索 provider 范围（v1）= 仅 SerpApi（锁定）**：对齐 F6 S1 决策 `Provider="SerpApi"`；多搜索方（Brave/Tavily）留待后续（DI 已按 `Provider` 选择，易扩展）。

@@ -23,6 +23,7 @@ import type {
   ResearchProgressEvent,
   CredentialCategory,
   TenantCredentialDto,
+  CreateTenantCredentialRequest,
   UpdateTenantCredentialRequest,
   PlatformModelDto,
 } from '../types';
@@ -220,14 +221,20 @@ export const logoutRequest = () =>
   api.post<void>('/auth/logout').then(() => undefined);
 
 // F13 多租户凭据（模型 + 搜索，BYO-Key + 平台内置）。
-// 204 = 租户尚未配置该类凭据；返回 null 由前端提示去填写或选用平台内置。
-export const getTenantCredential = (category: CredentialCategory) =>
+// 一个租户可配置多个同类凭据，统一以列表返回（可能为空数组）。
+export const getTenantCredentials = (category: CredentialCategory) =>
   api
-    .get<TenantCredentialDto>('/tenant/credentials', { params: { category } })
-    .then((r): TenantCredentialDto | null => (r.status === 204 ? null : r.data));
+    .get<TenantCredentialDto[]>('/tenant/credentials', { params: { category } })
+    .then((r) => r.data ?? []);
+
+export const createTenantCredential = (req: CreateTenantCredentialRequest) =>
+  api.post<TenantCredentialDto>('/tenant/credentials', req).then((r) => r.data);
 
 export const updateTenantCredential = (req: UpdateTenantCredentialRequest) =>
-  api.put<TenantCredentialDto>('/tenant/credentials', req).then((r) => r.data);
+  api.put<TenantCredentialDto>(`/tenant/credentials/${req.id}`, req).then((r) => r.data);
+
+export const deleteTenantCredential = (id: string) =>
+  api.delete<void>(`/tenant/credentials/${id}`).then(() => undefined);
 
 // 平台模型目录（platform-* + 当前租户 BYO 模型并列），不含密钥。
 export const getPlatformModels = () =>

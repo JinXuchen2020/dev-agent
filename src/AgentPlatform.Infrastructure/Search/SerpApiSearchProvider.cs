@@ -111,8 +111,9 @@ internal sealed class SerpApiSearchProvider : ISearchProvider
 
     private async Task<string?> TryResolveTenantKeyAsync(Guid tenantId, CancellationToken ct)
     {
-        var cred = await _credentialResolver.ResolveAsync(tenantId, CredentialCategory.Search, ct);
-        if (cred is null || !cred.IsEnabled)
+        var creds = await _credentialResolver.ResolveAsync(tenantId, CredentialCategory.Search, ct);
+        var cred = creds.FirstOrDefault(c => c.IsEnabled);
+        if (cred is null)
             return null;
 
         return _encryption.DecryptKey(cred.EncryptedApiKey);

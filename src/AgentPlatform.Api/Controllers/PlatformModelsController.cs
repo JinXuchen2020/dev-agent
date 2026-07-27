@@ -39,10 +39,10 @@ public sealed class PlatformModelsController : ControllerBase
             .Select(c => new PlatformModelDto(c.ModelId, c.Provider, c.ModelId, false))
             .ToList();
 
-        var tenantResolution = await _tenantModelResolver.ResolveAsync(_tenant.GetTenantId(), ct);
-        if (tenantResolution is not null)
+        var tenantResolutions = await _tenantModelResolver.ResolveAsync(_tenant.GetTenantId(), ct);
+        foreach (var resolution in tenantResolutions)
         {
-            foreach (var c in tenantResolution.Candidates)
+            foreach (var c in resolution.Candidates)
             {
                 list.Add(new PlatformModelDto(c.ModelId, c.Provider,
                     $"我的 · {c.Provider} ({c.ModelId})", true));

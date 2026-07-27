@@ -20,6 +20,9 @@ public sealed class TenantCredentialSetting : ITenantScoped, IAggregateRoot
     /// <summary>Gets the credential category (Model / Search).</summary>
     public CredentialCategory Category { get; private set; }
 
+    /// <summary>Gets the user-assigned display name (e.g. "My GPT-4o"), used to identify a credential within a tenant's list.</summary>
+    public string Name { get; private set; } = null!;
+
     /// <summary>Gets the provider name (e.g. "DeepSeek", "SerpApi").</summary>
     public string Provider { get; private set; } = null!;
 
@@ -57,6 +60,7 @@ public sealed class TenantCredentialSetting : ITenantScoped, IAggregateRoot
         Guid id,
         Guid tenantId,
         CredentialCategory category,
+        string name,
         string provider,
         string encryptedApiKey,
         string keyPrefix,
@@ -68,6 +72,7 @@ public sealed class TenantCredentialSetting : ITenantScoped, IAggregateRoot
             throw new ArgumentException("Id must not be empty.", nameof(id));
         if (tenantId == Guid.Empty)
             throw new ArgumentException("TenantId must not be empty.", nameof(tenantId));
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(provider);
         ArgumentException.ThrowIfNullOrWhiteSpace(encryptedApiKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(keyPrefix);
@@ -75,6 +80,7 @@ public sealed class TenantCredentialSetting : ITenantScoped, IAggregateRoot
         Id = id;
         TenantId = tenantId;
         Category = category;
+        Name = name;
         Provider = provider;
         EncryptedApiKey = encryptedApiKey;
         ApiKeyPrefix = keyPrefix;
@@ -89,12 +95,14 @@ public sealed class TenantCredentialSetting : ITenantScoped, IAggregateRoot
     /// Updates the credential in place. Callers must pass the freshly-encrypted key + prefix
     /// (encryption is performed in the application layer, not here).
     /// </summary>
-    public void Update(string provider, string encryptedApiKey, string keyPrefix, string? baseUrl, string? modelName, bool isEnabled)
+    public void Update(string name, string provider, string encryptedApiKey, string keyPrefix, string? baseUrl, string? modelName, bool isEnabled)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(provider);
         ArgumentException.ThrowIfNullOrWhiteSpace(encryptedApiKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(keyPrefix);
 
+        Name = name;
         Provider = provider;
         EncryptedApiKey = encryptedApiKey;
         ApiKeyPrefix = keyPrefix;

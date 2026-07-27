@@ -12,7 +12,7 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import type { AgentConfiguration } from '../types';
 import { getAgentConfigurations } from '../services/api';
-import CredentialForm from '../components/CredentialForm';
+import CredentialManager from '../components/CredentialManager';
 import { CredentialCategory } from '../types';
 
 const columns = (onView: (r: AgentConfiguration) => void): ColumnsType<AgentConfiguration> => [
@@ -115,12 +115,12 @@ const AgentConfigurationsPage: React.FC = () => {
             {
               key: 'model',
               label: '模型',
-              children: <CredentialForm category={CredentialCategory.Model} />,
+              children: <CredentialManager category={CredentialCategory.Model} />,
             },
             {
               key: 'search',
               label: '搜索',
-              children: <CredentialForm category={CredentialCategory.Search} />,
+              children: <CredentialManager category={CredentialCategory.Search} />,
             },
           ]}
         />

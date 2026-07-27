@@ -316,6 +316,8 @@ export type CredentialCategory =
   (typeof CredentialCategory)[keyof typeof CredentialCategory];
 
 export interface TenantCredentialDto {
+  id: string;
+  name: string;
   category: CredentialCategory;
   provider: string;
   apiKeyMask: string;
@@ -324,7 +326,19 @@ export interface TenantCredentialDto {
   isEnabled: boolean;
 }
 
+export interface CreateTenantCredentialRequest {
+  category: CredentialCategory;
+  name: string;
+  provider: string;
+  apiKey: string;
+  baseUrl?: string | null;
+  modelName?: string | null;
+  isEnabled?: boolean;
+}
+
 export interface UpdateTenantCredentialRequest {
+  id: string;
+  name: string;
   category: CredentialCategory;
   provider: string;
   apiKey?: string | null;
