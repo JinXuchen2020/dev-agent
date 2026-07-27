@@ -22,6 +22,10 @@
 | 认证炸：no DefaultChallengeScheme | 查认证默认方案 | #27 多方案无默认、#28 handler 误 Fail |
 | Swagger 无法测受保护端点 | 查 SecurityDefinition | #29 无 Authorize 按钮、#30 bearer 双前缀 |
 | 运行时缺表 `no such table` | 查 EnsureCreated/Migrate 混用 | #31 迁移反模式 + pending model change |
+| 列表页整页 ErrorState（某 GET 400） | 查控制器 take 校验早于 handler clamp | #32 take<1 控制器 400 早于 handler Math.Clamp |
+| 角色被误标「自定义」/ 内建区恒空 | 查前端硬编码 code 与 DB 是否对齐 | #33 角色分类双源不一致（AgentType vs AgentRoleDefinition） |
+| 设计文档「锁定决策」被用户推翻 | 查用户真实使用（文档决策可修订） | #34 设计决策非铁律 |
+| curl 中文参数返回 400 | 查 Git Bash 编码（非后端 bug） | #35 命令行中文参数编码 |
 | 架构违规（编译不报） | 查 ArchitectureTests | 教训见 #5/#6/#8，用架构测试自动拦截 |
 
 ---
@@ -158,6 +162,19 @@
 Swagger 没 Authorize → 查 AddSecurityDefinition
 运行时缺表 → 查 EnsureCreated/Migrate 混用
 ```
+
+---
+
+## 6.13 2026-07-27 新增坑（Dashboards / 角色 / 流程）
+
+| # | 现象 | 根因 | 避免 |
+|---|------|------|------|
+| 32 | Dashboard 整页 ErrorState，Network 显示 `GET /api/v1/workflows?take=0` → 400 | 列表端点控制器层 `if (take < 1) return BadRequest` 早于 handler 内部的 `Math.Clamp(take,1,100)`；前端为取 `totalCount` 故意传 `take=0` → 被拒；且 Dashboard 用 `error = a||w||s||f` 的 OR 逻辑，3 个 `take=0` 请求全 400 → 整页错误态 | 只取计数用 `take=1`（handler 的 `totalCount` 由独立 COUNT 得出，与 take 无关）；要做 count-only 须同步改 Workflows/ExecutionLogs/AgentConfigurations 三处控制器 + handler + 单测（见 08 §8.13） |
+| 33 | 系统架构/产品经理等平台默认角色被标成「自定义」，内建区恒空 | `AgentRoleDefinition`（DB，code=architecture/development/...）与 `AgentType`（代码值对象，code=architect/developer/...）两套 code 完全不互通；前端用硬编码 `BUILT_IN_ROLES=['architect',...]` 判定内建，对不上 DB code；聚合又无 `IsBuiltIn` 字段 | 统一以 DB 为准（`AgentRoleDefinition.IsBuiltIn`），`AgentType` 降为镜像 + parity 测试；前端按 flag 分区，删硬编码列表（F19 方案） |
+| 34 | 设计文档「已锁定」决策被用户实战推翻（如 F13 S3 单条→列表） | 把 feature-dev 高风险闸口的「先设计」误解为「冻结需求」 | 设计文档决策节标注「待用户拍板 / 可修订」；用户反馈优先，直接改文档 + 改实现（见 08 §8.12） |
+| 35 | 用 `curl -d '{"name":"中文"}'` 调后端返回 400，但 ASCII 正常 | Git Bash 在 inline JSON 里把中文 UTF-8 编码成乱码，后端收到非法 JSON | 浏览器/前端 axios 正常；命令行验证中文用 `python -c "urllib.request(...json.dumps(body).encode('utf-8'), headers={'Content-Type':'application/json; charset=utf-8'})"` |
+
+**教训：** 控制器层的输入校验若比 handler 内部兜底更严，会产生「handler 本可处理却被挡在门外」的静默失败；列表页用 OR 聚合错误会让单点 400 拖垮整页——错误隔离要逐请求处理。
 
 ---
 

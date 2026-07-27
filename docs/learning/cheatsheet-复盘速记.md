@@ -50,6 +50,10 @@
 认证 challenge 炸 → 查默认方案 / policy scheme
 Swagger 没 Authorize → 查 AddSecurityDefinition
 运行时缺表     → 查 EnsureCreated/Migrate 混用
+列表整页报错   → 查任一请求 400（take<1 控制器校验早于 handler clamp，见 08 §8.13）
+设计决策被推翻   → 查用户真实使用（S3 单条→列表，文档决策可修订，见 08 §8.12）
+角色误标自定义   → 查前端硬编码 code 与 DB 对齐（IsBuiltIn 修复，F19）
+curl 中文 400   → 查 Git Bash 编码（非后端 bug，用 Python urllib 发请求）
 ```
 
 ---
