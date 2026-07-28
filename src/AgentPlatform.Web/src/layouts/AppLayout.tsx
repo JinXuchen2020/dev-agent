@@ -17,7 +17,9 @@ import {
   GlobalOutlined,
   KeyOutlined,
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { useAppStore } from '../stores/appStore';
+import LanguageSwitcher from '../components/LanguageSwitcher';
 
 const { Header, Sider, Content } = Layout;
 
@@ -27,6 +29,7 @@ const AppLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { token } = theme.useToken();
+  const { t } = useTranslation();
 
   // 凭据管理后端为 [Authorize(Roles="Admin,Operator")]，非该角色打开页面会 403，
   // 故侧边栏入口仅对 Admin / Operator 显示，避免无权用户看到报错页。
@@ -34,17 +37,17 @@ const AppLayout: React.FC = () => {
     !!userRole && ['admin', 'operator'].includes(userRole.toLowerCase());
 
   const menuItems = [
-    { key: '/', icon: <DashboardOutlined />, label: 'Dashboard' },
-    { key: '/agents', icon: <RobotOutlined />, label: 'Agents' },
-    { key: '/workflows', icon: <ApartmentOutlined />, label: 'Workflows' },
-    { key: '/workflows/new', icon: <ApartmentOutlined />, label: 'Workflow Editor' },
-    { key: '/agent-roles', icon: <TeamOutlined />, label: 'Agent Roles' },
-    { key: '/agent-configurations', icon: <SettingOutlined />, label: 'Configurations' },
-    { key: '/credentials', icon: <KeyOutlined />, label: '我的凭据' },
-    { key: '/execution-logs', icon: <FileTextOutlined />, label: 'Execution Logs' },
-    { key: '/knowledge-bases', icon: <BookOutlined />, label: '知识库' },
-    { key: '/conversations', icon: <MessageOutlined />, label: '会话' },
-    { key: '/research', icon: <GlobalOutlined />, label: 'Research' },
+    { key: '/', icon: <DashboardOutlined />, label: t('nav.dashboard') },
+    { key: '/agents', icon: <RobotOutlined />, label: t('nav.agents') },
+    { key: '/workflows', icon: <ApartmentOutlined />, label: t('nav.workflows') },
+    { key: '/workflows/new', icon: <ApartmentOutlined />, label: t('nav.workflowEditor') },
+    { key: '/agent-roles', icon: <TeamOutlined />, label: t('nav.agentRoles') },
+    { key: '/agent-configurations', icon: <SettingOutlined />, label: t('nav.configurations') },
+    { key: '/credentials', icon: <KeyOutlined />, label: t('nav.credentials') },
+    { key: '/execution-logs', icon: <FileTextOutlined />, label: t('nav.executionLogs') },
+    { key: '/knowledge-bases', icon: <BookOutlined />, label: t('nav.knowledgeBases') },
+    { key: '/conversations', icon: <MessageOutlined />, label: t('nav.conversations') },
+    { key: '/research', icon: <GlobalOutlined />, label: t('nav.research') },
   ];
   if (!isAdminOrOperator) {
     // 仅 Admin/Operator 可见「我的凭据」（与后端 RBAC 对齐）。
@@ -54,12 +57,12 @@ const AppLayout: React.FC = () => {
 
   const handleLogout = (): void => {
     logout();
-    message.success('已退出登录');
+    message.success(t('layout.logoutSuccess'));
     navigate('/login');
   };
 
   const userMenu = {
-    items: [{ key: 'logout', icon: <LogoutOutlined />, label: '退出登录' }],
+    items: [{ key: 'logout', icon: <LogoutOutlined />, label: t('nav.logout') }],
     onClick: ({ key }: { key: string }): void => {
       if (key === 'logout') handleLogout();
     },
@@ -117,14 +120,15 @@ const AppLayout: React.FC = () => {
         >
           <Button
             type="text"
-            aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
+            aria-label={sidebarCollapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
             icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
             onClick={toggleSidebar}
           />
+          <LanguageSwitcher />
           <Dropdown menu={userMenu} placement="bottomRight">
             <Button type="text" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Avatar size="small" icon={<UserOutlined />} />
-              <span>{userEmail ?? '未登录'}</span>
+              <span>{userEmail ?? t('nav.notLoggedIn')}</span>
             </Button>
           </Dropdown>
         </Header>

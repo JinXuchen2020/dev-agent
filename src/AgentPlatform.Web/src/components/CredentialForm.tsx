@@ -24,6 +24,7 @@ import {
   discoverProviderModels,
   getErrorMessage,
 } from '../services/api';
+import { useTranslation } from 'react-i18next';
 
 const { Paragraph, Text } = Typography;
 
@@ -42,6 +43,7 @@ const CredentialForm: React.FC<{
   onSaved: () => void;
   onCancel: () => void;
 }> = ({ category, mode, editing, onSaved, onCancel }) => {
+  const { t } = useTranslation();
   const isModel = category === CredentialCategory.Model;
   const [form] = Form.useForm();
   const [saving, setSaving] = useState(false);
@@ -70,9 +72,9 @@ const CredentialForm: React.FC<{
   const discoverDisabledTip = !isModel
     ? ''
     : !apiKeyFilled
-      ? '请先填写 API Key 后再拉取'
+      ? t('pages.credentials.fetchNeedKey')
       : needsBaseUrl && !baseUrlFilled
-        ? 'VLLM / Custom 需先填写 Base URL'
+        ? t('pages.credentials.fetchNeedBaseUrl')
         : '';
 
   // 编辑模式：用传入的凭据回填；创建模式：给默认 provider。
@@ -105,7 +107,7 @@ const CredentialForm: React.FC<{
     const apiKey = watchedApiKey;
     const baseUrl = watchedBaseUrl;
     if (!apiKeyFilled) {
-      message.warning('请先填写 API Key 后再拉取模型');
+      message.warning(t('pages.credentials.fetchNeedKey'));
       return;
     }
     setDiscovering(true);
@@ -116,9 +118,9 @@ const CredentialForm: React.FC<{
           label: m.ownedBy ? `${m.id}（${m.ownedBy}）` : m.id,
         }));
         setModelOptions(opts);
-        message.success(`已拉取 ${list.length} 个模型`);
+        message.success(t('pages.credentials.fetchedCount', { count: list.length }));
       })
-      .catch((err: unknown) => message.error('拉取失败：' + getErrorMessage(err)))
+      .catch((err: unknown) => message.error(t('pages.credentials.fetchFailed') + '：' + getErrorMessage(err)))
       .finally(() => setDiscovering(false));
   };
 
@@ -147,11 +149,11 @@ const CredentialForm: React.FC<{
 
     op
       .then((dto) => {
-        message.success(mode === 'edit' ? '凭据已更新' : '凭据已添加');
+        message.success(mode === 'edit' ? t('pages.credentials.saveUpdated') : t('pages.credentials.saveSuccess'));
         if (dto) setMask(dto.apiKeyMask);
         onSaved();
       })
-      .catch((err: unknown) => message.error('保存失败：' + getErrorMessage(err)))
+      .catch((err: unknown) => message.error(t('pages.credentials.saveFailed') + '：' + getErrorMessage(err)))
       .finally(() => setSaving(false));
   };
 
@@ -163,54 +165,54 @@ const CredentialForm: React.FC<{
       initialValues={{ isEnabled: true, provider: isModel ? 'OpenAI' : 'SerpApi' }}
     >
       <Form.Item
-        label="名称"
+        label={t('pages.credentials.nameLabel')}
         name="name"
-        rules={[{ required: true, message: '请填写凭据名称（便于在列表中区分）' }]}
+        rules={[{ required: true, message: t('pages.credentials.nameRequired') }]}
       >
-        <Input placeholder={isModel ? '如：我的 GPT-4o' : '如：我的 SerpApi'} />
+        <Input placeholder={isModel ? t('pages.credentials.namePlaceholderModel') : t('pages.credentials.namePlaceholderSearch')} />
       </Form.Item>
       <Form.Item
-        label="Provider"
+        label={t('pages.credentials.providerLabel')}
         name="provider"
-        rules={[{ required: true, message: '请选择 Provider' }]}
+        rules={[{ required: true, message: t('pages.credentials.providerRequired') }]}
       >
         <Select options={providerOptions} />
       </Form.Item>
       <Form.Item
-        label="API Key"
+        label={t('pages.credentials.apiKeyLabel')}
         name="apiKey"
         extra={
           mode === 'edit' && mask
-            ? '留空则保留现有密钥（掩码：' + mask + '）'
-            : '必填'
+            ? t('pages.credentials.apiKeyEditHint') + mask + '）'
+            : t('pages.credentials.required')
         }
         rules={
           mode === 'edit'
             ? []
-            : [{ required: true, message: '请填写 API Key' }]
+            : [{ required: true, message: t('pages.credentials.apiKeyRequired') }]
         }
       >
         <Input.Password
-          placeholder={mode === 'edit' ? '留空保留现有密钥' : 'sk-... / 你的密钥'}
+          placeholder={mode === 'edit' ? t('pages.credentials.keepKeyHint') : t('pages.credentials.apiKeyPlaceholder')}
           autoComplete="new-password"
         />
       </Form.Item>
       <Form.Item
-        label="Base URL"
+        label={t('pages.credentials.baseUrlLabel')}
         name="baseUrl"
-        extra={isModel ? 'OpenAI 兼容端点；OpenAI 官方可留空' : 'SerpApi 端点；通常留空'}
+        extra={isModel ? t('pages.credentials.baseUrlModelHint') : t('pages.credentials.baseUrlSearchHint')}
       >
-        <Input placeholder={isModel ? 'https://api.openai.com/v1 或自定义端点' : 'https://serpapi.com'} />
+        <Input placeholder={isModel ? t('pages.credentials.baseUrlPlaceholderModel') : t('pages.credentials.baseUrlPlaceholderSearch')} />
       </Form.Item>
       {isModel && (
         <Form.Item
-          label="Model Name"
+          label={t('pages.credentials.modelNameLabel')}
           name="modelName"
-          rules={[{ required: true, message: '请填写模型名' }]}
+          rules={[{ required: true, message: t('pages.credentials.modelNameRequired') }]}
         >
           <AutoComplete
             options={modelOptions}
-            placeholder="gpt-4o / deepseek-chat / 自定义模型名"
+            placeholder={t('pages.credentials.modelNamePlaceholder')}
             filterOption={(input, option) =>
               (option?.value ?? '').toLowerCase().includes(input.toLowerCase())
             }
@@ -228,31 +230,31 @@ const CredentialForm: React.FC<{
                 disabled={!canDiscover}
                 onClick={handleDiscover}
               >
-                拉取模型
+                {t('pages.credentials.fetchModels')}
               </Button>
             </Tooltip>
             <Text type="secondary">
-              填 Key + Base URL 后，从 provider 账户拉取可访问模型清单
+              {t('pages.credentials.fetchHint')}
             </Text>
           </Space>
         </Form.Item>
       )}
-      <Form.Item label="启用" name="isEnabled" valuePropName="checked">
+      <Form.Item label={t('pages.credentials.enabledLabel')} name="isEnabled" valuePropName="checked">
         <Switch />
       </Form.Item>
       <Form.Item>
         <Space>
           <Button type="primary" htmlType="submit" loading={saving}>
-            保存
+            {t('common.save')}
           </Button>
           <Button onClick={onCancel} disabled={saving}>
-            取消
+            {t('common.cancel')}
           </Button>
         </Space>
       </Form.Item>
       {mode === 'edit' && mask && (
         <Paragraph type="secondary">
-          当前密钥掩码：<Text code>{mask}</Text>
+          {t('pages.credentials.currentMask')}：<Text code>{mask}</Text>
         </Paragraph>
       )}
     </Form>

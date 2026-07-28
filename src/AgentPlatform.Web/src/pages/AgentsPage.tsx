@@ -4,19 +4,20 @@ import type { ColumnsType } from 'antd/es/table';
 import type { Agent, AgentRole, PlatformModelDto, CreateAgentRequest, UpdateAgentRequest } from '../types';
 import { getAgents, getAgentRoles, getPlatformModels, createAgent, updateAgent, deleteAgent } from '../services/api';
 import { useAppStore } from '../stores/appStore';
+import { useTranslation } from 'react-i18next';
 
 const { Title } = Typography;
 
-const columns: ColumnsType<Agent> = [
-  { title: 'Name', dataIndex: 'name', key: 'name' },
-  { title: 'Role', dataIndex: 'roleCode', key: 'roleCode' },
-  { title: 'Model', dataIndex: 'modelName', key: 'modelName', render: (m: string | null) => m ?? <span style={{ color: '#999' }}>-</span> },
-  { title: 'System Prompt', dataIndex: 'systemPrompt', key: 'systemPrompt', ellipsis: true },
-  { title: 'Status', dataIndex: 'status', key: 'status', render: (s: string) => <Tag color={s === 'Inactive' ? 'default' : 'green'}>{s ?? 'Active'}</Tag> },
-  { title: 'Created', dataIndex: 'createdAt', key: 'createdAt', render: (d: string) => new Date(d).toLocaleString() },
-];
-
 const AgentsPage: React.FC = () => {
+  const { t } = useTranslation();
+  const columns: ColumnsType<Agent> = [
+    { title: t('common.name'), dataIndex: 'name', key: 'name' },
+    { title: t('pages.agents.roleLabel'), dataIndex: 'roleCode', key: 'roleCode' },
+    { title: t('pages.agents.modelLabel'), dataIndex: 'modelName', key: 'modelName', render: (m: string | null) => m ?? <span style={{ color: '#999' }}>-</span> },
+    { title: t('pages.agents.colSystemPrompt'), dataIndex: 'systemPrompt', key: 'systemPrompt', ellipsis: true },
+    { title: t('common.status'), dataIndex: 'status', key: 'status', render: (s: string) => <Tag color={s === 'Inactive' ? 'default' : 'green'}>{s ?? 'Active'}</Tag> },
+    { title: t('pages.agents.colCreated'), dataIndex: 'createdAt', key: 'createdAt', render: (d: string) => new Date(d).toLocaleString() },
+  ];
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -107,10 +108,10 @@ const AgentsPage: React.FC = () => {
       if (editing) {
         const payload: UpdateAgentRequest = { ...base, status };
         await updateAgent(editing.id, payload);
-        message.success('已更新 Agent');
+        message.success(t('pages.agents.updated'));
       } else {
         await createAgent(base);
-        message.success('已创建 Agent');
+        message.success(t('pages.agents.created'));
       }
       setModalOpen(false);
       setEditing(null);
@@ -118,7 +119,7 @@ const AgentsPage: React.FC = () => {
     } catch (e: unknown) {
       // validateFields 抛错（表单内联校验）时不重复提示；仅后端错误提示。
       if ((e as { response?: unknown })?.response) {
-        message.error('保存失败：' + ((e as { message?: string }).message ?? '请确认权限'));
+        message.error(t('pages.agents.saveFailed') + '：' + ((e as { message?: string }).message ?? t('pages.agents.permissionHint')));
       }
     } finally {
       setSubmitting(false);
@@ -128,10 +129,10 @@ const AgentsPage: React.FC = () => {
   const handleDelete = async (agent: Agent) => {
     try {
       await deleteAgent(agent.id);
-      message.success('已删除 Agent');
+      message.success(t('pages.agents.deleted'));
       load();
     } catch (e: unknown) {
-      message.error('删除失败：' + ((e as { message?: string }).message ?? '请确认权限'));
+      message.error(t('pages.agents.deleteFailed') + '：' + ((e as { message?: string }).message ?? t('pages.agents.permissionHint')));
     }
   };
 
@@ -142,7 +143,7 @@ const AgentsPage: React.FC = () => {
       all.push({
         modelId: editing.modelName,
         provider: editing.modelProvider ?? '',
-        displayName: `${editing.modelName}（当前）`,
+        displayName: `${editing.modelName}${t('pages.agents.currentModel')}`,
         isTenantOwned: false,
       });
     }
@@ -153,19 +154,19 @@ const AgentsPage: React.FC = () => {
       .filter((m) => m.isTenantOwned)
       .map((m) => ({ label: m.displayName, value: m.modelId }));
     return [
-      ...(platform.length ? [{ label: '平台模型', options: platform }] : []),
-      ...(byo.length ? [{ label: '我的模型', options: byo }] : []),
+      ...(platform.length ? [{ label: t('pages.agents.platformModels'), options: platform }] : []),
+      ...(byo.length ? [{ label: t('pages.agents.myModels'), options: byo }] : []),
     ];
   }, [models, editing]);
 
   const actionColumn: ColumnsType<Agent>[number] = {
-    title: '操作',
+    title: t('common.operation'),
     key: 'actions',
     render: (_, r) => (
       <Space>
-        <Button size="small" onClick={() => openEdit(r)}>编辑</Button>
-        <Popconfirm title="确认删除该 Agent？" okText="删除" cancelText="取消" onConfirm={() => handleDelete(r)}>
-          <Button size="small" danger>删除</Button>
+        <Button size="small" onClick={() => openEdit(r)}>{t('common.edit')}</Button>
+        <Popconfirm title={t('pages.agents.deleteConfirm')} okText={t('common.delete')} cancelText={t('common.cancel')} onConfirm={() => handleDelete(r)}>
+          <Button size="small" danger>{t('common.delete')}</Button>
         </Popconfirm>
       </Space>
     ),
@@ -174,10 +175,10 @@ const AgentsPage: React.FC = () => {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>Agents</Title>
+        <Title level={4} style={{ margin: 0 }}>{t('pages.agents.title')}</Title>
         {isAdmin && (
           <Button type="primary" onClick={openCreate}>
-            + 新建 Agent
+            {t('pages.agents.newAgent')}
           </Button>
         )}
       </div>
@@ -191,55 +192,55 @@ const AgentsPage: React.FC = () => {
           pagination={{ pageSize: 10 }}
         />
       )}
-      <Modal
-        title={editing ? '编辑 Agent' : '新建 Agent'}
-        open={modalOpen}
-        onOk={handleSubmit}
-        confirmLoading={submitting}
-        onCancel={() => { setModalOpen(false); setEditing(null); }}
-        destroyOnHidden
-        okText="保存"
-        cancelText="取消"
-      >
-        <Form form={form} layout="vertical">
-          <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
-            <Input placeholder="Agent 名称" />
-          </Form.Item>
-          <Form.Item name="roleCode" label="角色">
-            <Select
-              allowClear
-              placeholder="选择角色"
-              loading={loadingCreate}
-              options={roles.map((r) => ({ label: r.name || r.roleCode, value: r.roleCode }))}
-            />
-          </Form.Item>
-          <Form.Item
-            name="modelName"
-            label="模型"
-            extra="接 GET /api/v1/models：平台内置模型与当前租户自配模型并列。"
-          >
-            <Select
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              placeholder="选择模型"
-              loading={loadingCreate}
-              options={modelOptions}
-            />
-          </Form.Item>
-          <Form.Item name="status" label="状态">
-            <Select
-              options={[
-                { label: 'Active', value: 'Active' },
-                { label: 'Inactive', value: 'Inactive' },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="systemPrompt" label="系统提示词">
-            <Input.TextArea rows={4} placeholder="定义 Agent 的行为与职责" />
-          </Form.Item>
-        </Form>
-      </Modal>
+        <Modal
+          title={editing ? t('pages.agents.editAgent') : t('pages.agents.newAgent')}
+          open={modalOpen}
+          onOk={handleSubmit}
+          confirmLoading={submitting}
+          onCancel={() => { setModalOpen(false); setEditing(null); }}
+          destroyOnHidden
+          okText={t('common.save')}
+          cancelText={t('common.cancel')}
+        >
+          <Form form={form} layout="vertical">
+            <Form.Item name="name" label={t('pages.agents.nameLabel')} rules={[{ required: true, message: t('pages.agents.nameRequired') }]}>
+              <Input placeholder={t('pages.agents.namePlaceholder')} />
+            </Form.Item>
+            <Form.Item name="roleCode" label={t('pages.agents.roleLabel')}>
+              <Select
+                allowClear
+                placeholder={t('pages.agents.rolePlaceholder')}
+                loading={loadingCreate}
+                options={roles.map((r) => ({ label: r.name || r.roleCode, value: r.roleCode }))}
+              />
+            </Form.Item>
+            <Form.Item
+              name="modelName"
+              label={t('pages.agents.modelLabel')}
+              extra={t('pages.agents.modelExtra')}
+            >
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder={t('pages.agents.modelPlaceholder')}
+                loading={loadingCreate}
+                options={modelOptions}
+              />
+            </Form.Item>
+            <Form.Item name="status" label={t('pages.agents.statusLabel')}>
+              <Select
+                options={[
+                  { label: t('pages.agents.active'), value: 'Active' },
+                  { label: t('pages.agents.inactive'), value: 'Inactive' },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item name="systemPrompt" label={t('pages.agents.systemPromptLabel')}>
+              <Input.TextArea rows={4} placeholder={t('pages.agents.systemPromptPlaceholder')} />
+            </Form.Item>
+          </Form>
+        </Modal>
     </div>
   );
 };

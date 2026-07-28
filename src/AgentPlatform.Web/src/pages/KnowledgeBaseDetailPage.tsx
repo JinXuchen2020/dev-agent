@@ -8,6 +8,7 @@ import { getKnowledgeBase, uploadDocument, getErrorMessage } from '../services/a
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
 import { colors } from '../theme/tokens';
+import { useTranslation } from 'react-i18next';
 
 const KnowledgeBaseDetailPage: React.FC = () => {
   const { id = '' } = useParams();
@@ -17,6 +18,7 @@ const KnowledgeBaseDetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const { message } = AntApp.useApp();
+  const { t } = useTranslation();
 
   const load = () => {
     setLoading(true);
@@ -25,7 +27,7 @@ const KnowledgeBaseDetailPage: React.FC = () => {
         setKb({ name: data.name, collectionName: data.collectionName, embeddingModel: data.embeddingModel, description: data.description });
         setDocuments(data.documents);
       })
-      .catch(() => message.error('加载知识库详情失败'))
+      .catch(() => message.error(t('pages.knowledgeBases.loadDetailFailed')))
       .finally(() => setLoading(false));
   };
 
@@ -35,7 +37,7 @@ const KnowledgeBaseDetailPage: React.FC = () => {
     setUploading(true);
     try {
       await uploadDocument(id, file);
-      message.success(`文档「${file.name}」已切分入库`);
+      message.success(t('pages.knowledgeBases.docIndexed', { name: file.name }));
       load();
     } catch (err) {
       message.error(getErrorMessage(err));
@@ -47,27 +49,27 @@ const KnowledgeBaseDetailPage: React.FC = () => {
 
   const columns: ColumnsType<KnowledgeDocument> = [
     {
-      title: '文件名',
+      title: t('pages.knowledgeBases.colFileName'),
       dataIndex: 'fileName',
       key: 'fileName',
       render: (n: string) => <span style={{ color: colors.textPrimary, fontWeight: 500 }}>{n}</span>,
     },
     {
-      title: '类型',
+      title: t('pages.knowledgeBases.colType'),
       dataIndex: 'contentType',
       key: 'contentType',
       width: 160,
-      render: (t: string) => <Tag>{t || 'text/plain'}</Tag>,
+      render: (ct: string) => <Tag>{ct || 'text/plain'}</Tag>,
     },
     {
-      title: '分块数',
+      title: t('pages.knowledgeBases.colChunks'),
       dataIndex: 'chunkCount',
       key: 'chunkCount',
       width: 90,
       render: (c: number) => <span style={{ color: colors.textMuted }}>{c}</span>,
     },
     {
-      title: '入库时间',
+      title: t('pages.knowledgeBases.colIndexedAt'),
       dataIndex: 'createdAt',
       key: 'createdAt',
       render: (d: string) => <span style={{ color: colors.textMuted }}>{d}</span>,
@@ -77,16 +79,16 @@ const KnowledgeBaseDetailPage: React.FC = () => {
   return (
     <div>
       <PageHeader
-        title={kb?.name ?? '知识库详情'}
-        subtitle="上传文档（.txt/.md/.csv/.json/.html/.pdf 等），系统自动提取文本、切分并向量入库"
+        title={kb?.name ?? t('pages.knowledgeBases.detailTitle')}
+        subtitle={t('pages.knowledgeBases.uploadSubtitle')}
         actions={
           <Space>
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/knowledge-bases')}>
-              返回列表
+              {t('pages.knowledgeBases.backToList')}
             </Button>
             <Upload beforeUpload={handleUpload} showUploadList={false} accept=".txt,.md,.csv,.json,.html,.htm,.xml,.pdf">
               <Button type="primary" icon={<UploadOutlined />} loading={uploading}>
-                上传文档
+                {t('pages.knowledgeBases.uploadDoc')}
               </Button>
             </Upload>
           </Space>
@@ -97,22 +99,22 @@ const KnowledgeBaseDetailPage: React.FC = () => {
         <Spin style={{ display: 'block', margin: '80px auto' }} />
       ) : (
         <>
-          <Card title="知识库信息" style={{ marginBottom: 20 }}>
+          <Card title={t('pages.knowledgeBases.kbInfo')} style={{ marginBottom: 20 }}>
             <Descriptions column={2} size="small">
-              <Descriptions.Item label="向量集合">
+              <Descriptions.Item label={t('pages.knowledgeBases.vectorCollection')}>
                 <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{kb?.collectionName}</span>
               </Descriptions.Item>
-              <Descriptions.Item label="Embedding 模型">
+              <Descriptions.Item label={t('pages.knowledgeBases.embeddingModel')}>
                 <Tag color="blue">{kb?.embeddingModel}</Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="描述" span={2}>
+              <Descriptions.Item label={t('common.description')} span={2}>
                 {kb?.description || '-'}
               </Descriptions.Item>
             </Descriptions>
           </Card>
 
-          <Card title={`文档列表（${documents.length}）`}>
-            <Table columns={columns} dataSource={documents} rowKey="id" pagination={false} locale={{ emptyText: '暂无文档，点击右上角上传' }} />
+          <Card title={t('pages.knowledgeBases.documentsCount', { count: documents.length })}>
+            <Table columns={columns} dataSource={documents} rowKey="id" pagination={false} locale={{ emptyText: t('pages.knowledgeBases.emptyDocs') }} />
           </Card>
         </>
       )}

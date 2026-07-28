@@ -18,12 +18,14 @@ import {
   getErrorMessage,
 } from '../services/api';
 import CredentialForm from './CredentialForm';
+import { useTranslation } from 'react-i18next';
 
 const { Paragraph, Text } = Typography;
 
 // F13 凭据管理面板：按类别（模型 / 搜索）展示当前租户自有的全部凭据列表，
 // 支持新增、编辑、删除。复用 CredentialForm 作为新增/编辑弹窗。
 const CredentialManager: React.FC<{ category: CredentialCategory }> = ({ category }) => {
+  const { t } = useTranslation();
   const isModel = category === CredentialCategory.Model;
   const [list, setList] = useState<TenantCredentialDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,7 +36,7 @@ const CredentialManager: React.FC<{ category: CredentialCategory }> = ({ categor
     setLoading(true);
     getTenantCredentials(category)
       .then(setList)
-      .catch((err: unknown) => message.error('加载凭据失败：' + getErrorMessage(err)))
+      .catch((err: unknown) => message.error(t('errors.loadFailed') + '：' + getErrorMessage(err)))
       .finally(() => setLoading(false));
   }, [category]);
 
@@ -55,21 +57,21 @@ const CredentialManager: React.FC<{ category: CredentialCategory }> = ({ categor
   const handleDelete = (record: TenantCredentialDto) => {
     deleteTenantCredential(record.id)
       .then(() => {
-        message.success('已删除凭据');
+        message.success(t('pages.credentials.deleteSuccess'));
         load();
       })
-      .catch((err: unknown) => message.error('删除失败：' + getErrorMessage(err)));
+      .catch((err: unknown) => message.error(t('errors.deleteFailed') + '：' + getErrorMessage(err)));
   };
 
   const columns = [
     {
-      title: '名称',
+      title: t('pages.credentials.nameLabel'),
       dataIndex: 'name',
       key: 'name',
       render: (v: string) => <Text strong>{v}</Text>,
     },
     {
-      title: 'Provider',
+      title: t('pages.credentials.providerLabel'),
       dataIndex: 'provider',
       key: 'provider',
       render: (v: string) => <Tag color="blue">{v}</Tag>,
@@ -77,7 +79,7 @@ const CredentialManager: React.FC<{ category: CredentialCategory }> = ({ categor
     ...(isModel
       ? [
           {
-            title: '模型',
+            title: t('pages.agents.modelLabel'),
             dataIndex: 'modelName',
             key: 'modelName',
             render: (v: string | null) => v ?? <Text type="secondary">—</Text>,
@@ -85,20 +87,20 @@ const CredentialManager: React.FC<{ category: CredentialCategory }> = ({ categor
         ]
       : []),
     {
-      title: '密钥掩码',
+      title: t('pages.credentials.keyMask'),
       dataIndex: 'apiKeyMask',
       key: 'apiKeyMask',
       render: (v: string) => <Text code>{v}</Text>,
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'isEnabled',
       key: 'isEnabled',
       render: (v: boolean) =>
-        v ? <Tag color="green">启用</Tag> : <Tag color="default">停用</Tag>,
+        v ? <Tag color="green">{t('common.enabled')}</Tag> : <Tag color="default">{t('common.disabled')}</Tag>,
     },
     {
-      title: '操作',
+      title: t('common.operation'),
       key: 'actions',
       render: (_: unknown, record: TenantCredentialDto) => (
         <Space>
@@ -108,18 +110,18 @@ const CredentialManager: React.FC<{ category: CredentialCategory }> = ({ categor
             icon={<EditOutlined />}
             onClick={() => openEdit(record)}
           >
-            编辑
+            {t('common.edit')}
           </Button>
           <Popconfirm
-            title="确认删除该凭据？"
-            description="删除后该模型/搜索密钥将立即失效。"
-            okText="删除"
+            title={t('pages.credentials.deleteConfirm')}
+            description={t('pages.credentials.deleteDesc')}
+            okText={t('common.delete')}
             okButtonProps={{ danger: true }}
-            cancelText="取消"
+            cancelText={t('common.cancel')}
             onConfirm={() => handleDelete(record)}
           >
             <Button size="small" type="link" danger icon={<DeleteOutlined />}>
-              删除
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -131,12 +133,12 @@ const CredentialManager: React.FC<{ category: CredentialCategory }> = ({ categor
     <div>
       <Paragraph type="secondary">
         {isModel
-          ? '本租户自有的模型密钥列表。你可添加多个不同模型（不同 Provider / 密钥），对话与 Agent 均可在模型下拉中选择使用。'
-          : '本租户自有的搜索密钥列表（用于联网调研 Research）。'}
+          ? t('pages.credentials.noCredentialModel')
+          : t('pages.credentials.noCredentialSearch')}
       </Paragraph>
       <div style={{ marginBottom: 12 }}>
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-          添加{isModel ? '模型' : '搜索'}凭据
+          {isModel ? t('pages.credentials.addModel') : t('pages.credentials.addSearch')}
         </Button>
       </div>
       <Table<TenantCredentialDto>
@@ -145,10 +147,10 @@ const CredentialManager: React.FC<{ category: CredentialCategory }> = ({ categor
         columns={columns}
         dataSource={list}
         pagination={false}
-        locale={{ emptyText: '尚未添加任何凭据，点击上方按钮添加' }}
+        locale={{ emptyText: t('empty.credentials') }}
       />
       <Modal
-        title={editing ? `编辑${isModel ? '模型' : '搜索'}凭据` : `添加${isModel ? '模型' : '搜索'}凭据`}
+        title={editing ? (isModel ? t('pages.credentials.editModel') : t('pages.credentials.editSearch')) : (isModel ? t('pages.credentials.addModel') : t('pages.credentials.addSearch'))}
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
         footer={null}

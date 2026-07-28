@@ -19,10 +19,12 @@ import { ResearchEventTypeValue, type ResearchProgressEvent, type ResearchReport
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
 import { colors } from '../theme/tokens';
+import { useTranslation } from 'react-i18next';
 
 const { Text, Paragraph, Title } = Typography;
 
 const ResearchPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message } = AntApp.useApp();
   const [question, setQuestion] = useState('');
   const [focus, setFocus] = useState('');
@@ -53,14 +55,14 @@ const ResearchPage: React.FC = () => {
         (e) => {
           setEvents((prev) => [...prev, e]);
           if (e.type === ResearchEventTypeValue.Report && e.report) setReport(e.report);
-          if (e.type === ResearchEventTypeValue.Error) setErrorMsg(e.error ?? '未知错误');
+          if (e.type === ResearchEventTypeValue.Error) setErrorMsg(e.error ?? t('pages.research.unknownError'));
         },
         controller.signal,
       );
-    } catch (err) {
+      } catch (err) {
       const name = (err as { name?: string })?.name;
       if (name !== 'AbortError') {
-        message.error('调研失败：' + getErrorMessage(err));
+        message.error(t('pages.research.error') + '：' + getErrorMessage(err));
       }
     } finally {
       setRunning(false);
@@ -81,7 +83,7 @@ const ResearchPage: React.FC = () => {
             color: 'blue',
             children: (
               <div>
-                <Text strong>已规划 {e.queries?.length ?? 0} 个检索查询</Text>
+                <Text strong>{t('pages.research.planQueries', { count: e.queries?.length ?? 0 })}</Text>
                 <div style={{ marginTop: 6 }}>
                   {(e.queries ?? []).map((q, i) => (
                     <Tag key={i}>{q}</Tag>
@@ -91,37 +93,37 @@ const ResearchPage: React.FC = () => {
             ),
           };
         case ResearchEventTypeValue.SearchStart:
-          return { color: 'blue', children: <Text>检索中：{e.query}</Text> };
+          return { color: 'blue', children: <Text>{t('pages.research.searching', { query: e.query })}</Text> };
         case ResearchEventTypeValue.SearchDone:
           if ((e.message ?? '').startsWith('检索失败')) {
             return { color: 'red', children: <Text type="danger">{e.message}</Text> };
           }
           return {
             color: 'green',
-            children: <Text>检索完成：{e.query}（{e.snippetCount ?? 0} 条结果）</Text>,
+            children: <Text>{t('pages.research.searchDone', { query: e.query, count: e.snippetCount ?? 0 })}</Text>,
           };
         case ResearchEventTypeValue.Synthesize:
-          return { color: 'blue', children: <Text>正在综合报告…</Text> };
+          return { color: 'blue', children: <Text>{t('pages.research.synthesizing')}</Text> };
         case ResearchEventTypeValue.Error:
-          return { color: 'red', children: <Text type="danger">错误：{e.error}</Text> };
+          return { color: 'red', children: <Text type="danger">{t('pages.research.error') + '：' + e.error}</Text> };
         default:
-          return { color: 'gray', children: <Text type="secondary">未知事件</Text> };
+          return { color: 'gray', children: <Text type="secondary">{t('pages.research.unknownEvent')}</Text> };
       }
     });
 
   const renderReport = (r: ResearchReport) => (
     <div>
-      <Divider orientation="left">调研报告</Divider>
+      <Divider orientation="left">{t('pages.research.reportHeading')}</Divider>
       <Space wrap style={{ marginBottom: 12 }}>
-        <Tag color="blue">步骤：{r.stepsUsed}</Tag>
-        <Tag color="green">来源：{r.sources.length}</Tag>
+        <Tag color="blue">{t('pages.research.steps', { count: r.stepsUsed })}</Tag>
+        <Tag color="green">{t('pages.research.sourcesCount', { count: r.sources.length })}</Tag>
         {r.tokenUsage && (
-          <Tag color="default">Token：{r.tokenUsage.promptTokens + r.tokenUsage.completionTokens}</Tag>
+          <Tag color="default">{t('pages.research.token', { count: r.tokenUsage.promptTokens + r.tokenUsage.completionTokens })}</Tag>
         )}
       </Space>
       {r.sources.length > 0 && (
         <div style={{ marginBottom: 16 }}>
-          <Text strong>参考来源</Text>
+          <Text strong>{t('pages.research.sources')}</Text>
           <List
             size="small"
             style={{ marginTop: 6 }}
@@ -154,33 +156,33 @@ const ResearchPage: React.FC = () => {
   return (
     <div>
       <PageHeader
-        title="Research（联网多步调研）"
-        subtitle="输入一个开放问题，Research Agent 会规划多个检索查询、真实联网检索，并流式返回结构化调研报告。"
+        title={t('pages.research.title')}
+        subtitle={t('pages.research.subtitle')}
       />
       <Card>
         <Alert
           type="info"
           showIcon
-          message="检索依赖后端 SerpApi Key 配置；未配置时各查询会返回失败，但报告仍会基于已规划内容生成。"
+          message={t('pages.research.alertMsg')}
           style={{ marginBottom: 16 }}
         />
         <Input.TextArea
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
-          placeholder="输入要调研的问题，例如：2025 年大模型推理成本下降趋势及主要驱动因素"
+          placeholder={t('pages.research.questionPlaceholder')}
           autoSize={{ minRows: 3, maxRows: 8 }}
         />
         <Space wrap style={{ marginTop: 12 }}>
           <Input
             value={focus}
             onChange={(e) => setFocus(e.target.value)}
-            placeholder="补充侧重方向（可选）"
+            placeholder={t('pages.research.focusPlaceholder')}
             style={{ width: 280 }}
             allowClear
           />
           <span>
             <Text type="secondary" style={{ marginRight: 8 }}>
-              最大步数
+              {t('pages.research.maxSteps')}
             </Text>
             <InputNumber
               min={1}
@@ -197,11 +199,11 @@ const ResearchPage: React.FC = () => {
             disabled={!question.trim()}
             onClick={handleRun}
           >
-            开始调研
+            {t('pages.research.start')}
           </Button>
           {running && (
             <Button icon={<StopOutlined />} onClick={handleStop}>
-              停止
+              {t('pages.research.stop')}
             </Button>
           )}
         </Space>
@@ -212,10 +214,10 @@ const ResearchPage: React.FC = () => {
         {timelineItems.length > 0 ? (
           <Timeline items={timelineItems} />
         ) : (
-          !running && <Empty description="输入问题后点击「开始调研」，进度会实时显示在这里" />
+          !running && <Empty description={t('pages.research.emptyHint')} />
         )}
         {running && timelineItems.length === 0 && (
-          <Text type="secondary">正在规划检索查询…</Text>
+          <Text type="secondary">{t('pages.research.planning')}</Text>
         )}
         {report && renderReport(report)}
       </Card>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Input, Button, App as AntApp } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { loginRequest } from '../services/api';
 import { useAppStore } from '../stores/appStore';
 import { colors, radius, fontStack } from '../theme/tokens';
@@ -12,6 +13,7 @@ const LoginPage: React.FC = () => {
   const loginReal = useAppStore((s) => s.loginReal);
   const loginDemo = useAppStore((s) => s.loginDemo);
   const { message } = AntApp.useApp();
+  const { t } = useTranslation();
   const from = (location.state as { from?: { pathname?: string } })?.from;
   const [email, setEmail] = useState('admin@acme.io');
   const [password, setPassword] = useState('');
@@ -22,14 +24,14 @@ const LoginPage: React.FC = () => {
     try {
       const res = await loginRequest({ email, password });
       loginReal(res.user);
-      message.success('登录成功');
+      message.success(t('login.success'));
       navigate(from?.pathname || '/', { replace: true });
     } catch (e: unknown) {
       const status = (e as { response?: { status?: number } })?.response?.status;
       if (status === 401) {
-        message.error('邮箱或密码错误');
+        message.error(t('login.failedWrong'));
       } else {
-        message.error('登录失败，请确认后端已启动并支持用户登录');
+        message.error(t('login.failedOther'));
       }
     } finally {
       setLoading(false);
@@ -38,7 +40,7 @@ const LoginPage: React.FC = () => {
 
   const handleDemo = () => {
     loginDemo(email || 'admin@acme.io');
-    message.warning('已使用本地演示会话（无真实鉴权）');
+    message.warning(t('login.demoSuccess'));
     navigate(from?.pathname || '/', { replace: true });
   };
 
@@ -74,29 +76,29 @@ const LoginPage: React.FC = () => {
         </div>
 
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 26, fontWeight: 600, color: colors.textPrimary }}>欢迎回来</div>
-          <div style={{ fontSize: 14, color: colors.textSecondary, marginTop: 6 }}>登录到您的租户管理后台</div>
+          <div style={{ fontSize: 26, fontWeight: 600, color: colors.textPrimary }}>{t('login.welcome')}</div>
+          <div style={{ fontSize: 14, color: colors.textSecondary, marginTop: 6 }}>{t('login.subtitle')}</div>
         </div>
 
         <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label style={{ fontSize: 13, fontWeight: 500, color: colors.textPrimary }}>邮箱</label>
+          <label style={{ fontSize: 13, fontWeight: 500, color: colors.textPrimary }}>{t('login.email')}</label>
           <Input
             size="large"
             prefix={<UserOutlined />}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="admin@acme.io"
+            placeholder={t('login.emailPlaceholder')}
           />
         </div>
 
         <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label style={{ fontSize: 13, fontWeight: 500, color: colors.textPrimary }}>密码</label>
+          <label style={{ fontSize: 13, fontWeight: 500, color: colors.textPrimary }}>{t('login.password')}</label>
           <Input.Password
             size="large"
             prefix={<LockOutlined />}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="请输入密码"
+            placeholder={t('login.passwordPlaceholder')}
             onPressEnter={handleLogin}
           />
         </div>
@@ -109,7 +111,7 @@ const LoginPage: React.FC = () => {
           onClick={handleLogin}
           style={{ height: 48, borderRadius: radius.card, fontSize: 15, fontWeight: 600 }}
         >
-          登录
+          {t('login.submit')}
         </Button>
 
         <Button
@@ -119,11 +121,11 @@ const LoginPage: React.FC = () => {
           onClick={handleDemo}
           style={{ fontSize: 12 }}
         >
-          使用本地演示会话（无真实鉴权）
+          {t('login.demoSession')}
         </Button>
 
         <div style={{ fontSize: 12, color: colors.textMuted, textAlign: 'center' }}>
-          演示默认账号 admin@acme.io / Admin@123456（生产环境请修改）
+          {t('login.demoHint')}
         </div>
       </div>
     </div>

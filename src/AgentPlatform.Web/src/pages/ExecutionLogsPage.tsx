@@ -5,10 +5,12 @@ import { useNavigate } from 'react-router-dom';
 import type { ExecutionLog } from '../types';
 import { getExecutionLogs } from '../services/api';
 import { mapWorkflowStatus, WORKFLOW_STATUS_FILTER_OPTIONS } from '../status';
+import { useTranslation } from 'react-i18next';
 
 const { Title } = Typography;
 
 const ExecutionLogsPage: React.FC = () => {
+  const { t } = useTranslation();
   const [logs, setLogs] = useState<ExecutionLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<number | undefined>(undefined);
@@ -37,9 +39,9 @@ const ExecutionLogsPage: React.FC = () => {
   }, [fetchLogs, page, pageSize, statusFilter]);
 
   const columns: ColumnsType<ExecutionLog> = [
-    { title: 'Workflow', dataIndex: 'workflowName', key: 'workflowName' },
+    { title: t('pages.executionLogs.colWorkflow'), dataIndex: 'workflowName', key: 'workflowName' },
     {
-      title: 'Status',
+      title: t('common.status'),
       dataIndex: 'status',
       key: 'status',
       render: (s: string | number) => {
@@ -47,20 +49,20 @@ const ExecutionLogsPage: React.FC = () => {
         return <Tag color={m.color}>{m.label}</Tag>;
       },
     },
-    { title: 'Total Steps', dataIndex: 'totalSteps', key: 'totalSteps' },
+    { title: t('pages.executionLogs.colTotalSteps'), dataIndex: 'totalSteps', key: 'totalSteps' },
     {
-      title: 'Progress',
+      title: t('pages.executionLogs.colProgress'),
       key: 'progress',
       render: (_, r) => (
         <Space>
-          <Tag color="success">{r.completedSteps} done</Tag>
-          {r.failedSteps > 0 && <Tag color="error">{r.failedSteps} failed</Tag>}
+          <Tag color="success">{t('pages.executionLogs.done', { count: r.completedSteps })}</Tag>
+          {r.failedSteps > 0 && <Tag color="error">{t('pages.executionLogs.failed', { count: r.failedSteps })}</Tag>}
         </Space>
       ),
     },
-    { title: 'Started', dataIndex: 'startedAt', key: 'startedAt', render: (d: string) => new Date(d).toLocaleString() },
+    { title: t('pages.executionLogs.colStarted'), dataIndex: 'startedAt', key: 'startedAt', render: (d: string) => new Date(d).toLocaleString() },
     {
-      title: 'Completed',
+      title: t('pages.executionLogs.colCompleted'),
       dataIndex: 'completedAt',
       key: 'completedAt',
       render: (d: string | null) => (d ? new Date(d).toLocaleString() : '-'),
@@ -71,12 +73,12 @@ const ExecutionLogsPage: React.FC = () => {
     <div>
       <Space style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
         <Title level={4} style={{ margin: 0 }}>
-          Execution Logs
+          {t('pages.executionLogs.title')}
         </Title>
         <Select<number>
           allowClear
-          aria-label="Filter status"
-          placeholder="Filter status"
+          aria-label={t('pages.executionLogs.filterStatus')}
+          placeholder={t('pages.executionLogs.filterStatus')}
           style={{ width: 180 }}
           value={statusFilter}
           onChange={(v) => {
@@ -93,7 +95,7 @@ const ExecutionLogsPage: React.FC = () => {
           columns={columns}
           dataSource={logs}
           rowKey="id"
-          pagination={{ current: page, pageSize, total, showTotal: (t) => `共 ${t} 条` }}
+          pagination={{ current: page, pageSize, total, showTotal: (total) => t('common.total', { count: total }) }}
           onChange={(p) => {
             setPage(p.current ?? 1);
             setPageSize(p.pageSize ?? 10);

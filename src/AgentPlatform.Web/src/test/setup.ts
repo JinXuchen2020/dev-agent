@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom';
+import '../locales'; // F15 · 初始化 i18next（默认 zh-CN），使组件测试中 t() 返回真实文案而非 key
 
 // jsdom 缺省没有 matchMedia / ResizeObserver，antd v5 组件（Table/Modal/Select 等）
 // 在渲染时会访问它们，补最小桩避免测试环境抛错。

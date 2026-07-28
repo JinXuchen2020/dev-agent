@@ -11,20 +11,41 @@ import {
 } from '@ant-design/icons';
 import type { ReactNode } from 'react';
 import { StepType } from '../../types';
-import { STEP_TYPE_LABEL } from '../../stores/workflowCanvasStore';
+import { useTranslation } from 'react-i18next';
 
-const PALETTE: { type: StepType; desc: string; icon: ReactNode }[] = [
-  { type: StepType.Start, desc: '工作流入口', icon: <PlayCircleOutlined /> },
-  { type: StepType.LLM, desc: '一次 LLM 调用', icon: <ThunderboltOutlined /> },
-  { type: StepType.Agent, desc: '分配给指定 Agent', icon: <RobotOutlined /> },
-  { type: StepType.Critic, desc: '评审 / 收敛', icon: <AuditOutlined /> },
-  { type: StepType.Knowledge, desc: '从知识库检索', icon: <BookOutlined /> },
-  { type: StepType.Tool, desc: '调用平台工具', icon: <ToolOutlined /> },
-  { type: StepType.Code, desc: '在沙箱跑代码', icon: <CodeOutlined /> },
-  { type: StepType.End, desc: '汇总出口', icon: <CheckCircleOutlined /> },
+const PALETTE: { type: StepType; icon: ReactNode }[] = [
+  { type: StepType.Start, icon: <PlayCircleOutlined /> },
+  { type: StepType.LLM, icon: <ThunderboltOutlined /> },
+  { type: StepType.Agent, icon: <RobotOutlined /> },
+  { type: StepType.Critic, icon: <AuditOutlined /> },
+  { type: StepType.Knowledge, icon: <BookOutlined /> },
+  { type: StepType.Tool, icon: <ToolOutlined /> },
+  { type: StepType.Code, icon: <CodeOutlined /> },
+  { type: StepType.End, icon: <CheckCircleOutlined /> },
 ];
 
 export default function NodePalette() {
+  const { t } = useTranslation();
+  const NODE_TYPE_LABEL: Record<StepType, string> = {
+    [StepType.Start]: t('canvas.nodeType.start'),
+    [StepType.End]: t('canvas.nodeType.end'),
+    [StepType.LLM]: t('canvas.nodeType.llm'),
+    [StepType.Agent]: t('canvas.nodeType.agent'),
+    [StepType.Critic]: t('canvas.nodeType.critic'),
+    [StepType.Knowledge]: t('canvas.nodeType.knowledge'),
+    [StepType.Tool]: t('canvas.nodeType.tool'),
+    [StepType.Code]: t('canvas.nodeType.code'),
+  };
+  const NODE_DESC: Record<StepType, string> = {
+    [StepType.Start]: t('canvas.nodeDesc.start'),
+    [StepType.End]: t('canvas.nodeDesc.end'),
+    [StepType.LLM]: t('canvas.nodeDesc.llm'),
+    [StepType.Agent]: t('canvas.nodeDesc.agent'),
+    [StepType.Critic]: t('canvas.nodeDesc.critic'),
+    [StepType.Knowledge]: t('canvas.nodeDesc.knowledge'),
+    [StepType.Tool]: t('canvas.nodeDesc.tool'),
+    [StepType.Code]: t('canvas.nodeDesc.code'),
+  };
   const onDragStart = (e: React.DragEvent, type: StepType) => {
     e.dataTransfer.setData('application/reactflow', String(type));
     e.dataTransfer.effectAllowed = 'move';
@@ -40,9 +61,9 @@ export default function NodePalette() {
         overflowY: 'auto',
       }}
     >
-      <Typography.Text strong>节点面板</Typography.Text>
+      <Typography.Text strong>{t('canvas.nodePanel')}</Typography.Text>
       <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4 }}>
-        拖拽到画布添加节点
+        {t('canvas.dragHint')}
       </Typography.Paragraph>
       {PALETTE.map((p) => (
         <div
@@ -64,8 +85,8 @@ export default function NodePalette() {
         >
           <span style={{ color: '#1677ff', fontSize: 16 }}>{p.icon}</span>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>{STEP_TYPE_LABEL[p.type]}</div>
-            <div style={{ fontSize: 11, color: '#8c8c8c' }}>{p.desc}</div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{NODE_TYPE_LABEL[p.type]}</div>
+            <div style={{ fontSize: 11, color: '#8c8c8c' }}>{NODE_DESC[p.type]}</div>
           </div>
         </div>
       ))}

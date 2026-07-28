@@ -111,8 +111,8 @@
 - 决策（见 `./model-discovery.md` §6）：D1 edit 模式探测密钥 = 仅用表单现填 Key（不做后端解密存量，用户 2026-07-27 拍板）/ D2 范围仅模型类（搜索无模型列表语义）/ D3 无 schema 变更（不落库，无 EF 迁移）/ D4 安全边界（Admin 专用+用户自有 provider 出站，密钥不落库不记日志）。
 - 风险：🔴 高风险（新增端点+鉴权+路由+前端契约，触发 feature-dev 高风险闸口，先设计后实现）；出站请求 SSRF 面（Admin 专用可接受，后续可加域名白名单，不在本范围）；非标准 `/models` 返回容错（缺 `owned_by`/非数组 data 容忍）。
 
-### F15 · 多语言国际化（i18n，暂仅中文 + 英文）  [P1]  open  🟡中风险（前端跨切面文案抽取 + 全局 Provider 注入）
-- 设计文档：`features/i18n.md`（已建，§5 决策 D1–D4 待锁定）
+### F15 · 多语言国际化（i18n，暂仅中文 + 英文）  [P1]  done  🟡中风险（前端跨切面文案抽取 + 全局 Provider 注入）
+- 设计文档：`features/i18n.md`（已建，§5 决策 D1–D4 已锁定 2026-07-28）
 - 目标：引入 `i18next` + `react-i18next`，顶栏「中文 / English」切换并持久化到 localStorage（默认 zh-CN）；Antd `ConfigProvider` 与 `dayjs` 区域同步。v1 仅 zh-CN + en-US 两套，优先抽取 UI 框架级文案（导航/标题/按钮/表单标签/空态/错误态），领域数据（用户填的 agent 描述等）不做。
 - 核心改造：
   - 新增 `src/locales/`（index.ts 初始化 + zh-CN.ts + en-US.ts + config.ts），`i18n.use(initReactI18next).init(...)`，`lng` 读 `localStorage('app-locale')`、回退 `zh-CN`。
@@ -123,7 +123,8 @@
   - 基础设施：i18n 初始化、zh-CN/en-US 齐备、默认 zh-CN、刷新从 localStorage 恢复。
   - 切换器：顶栏可切中/英、即时生效、Antd+dayjs locale 同步；各页标题/按钮/表单标签/空态/错误态双语正确、默认中文视觉不回归。
   - 质量门：tsc 0 error + vitest 全过 + vite build 通过；新增资源 key 对称性单测（zh-CN 与 en-US 顶层 key 一致）；`.quality-gate.json` 追加 notes 保 cleared:true。
-- 决策（见 `./i18n.md` §5，待锁定）：D1 后端错误文案 v1 不本地化 / D2 资源用 .ts 对象 / D3 默认 zh-CN / D4 v1 仅 UI 框架级文案（领域数据不做）。
+- **完成记录（2026-07-28）**：feature-builder 流水线端到端实现并提交（分支 `feat/f15-i18n`）。新增 `src/locales/`（index.ts 初始化 + zh-CN.ts + en-US.ts + config.ts，`en-US.ts` 以 `Resources = typeof zhCN` 类型镜像 + `src/__tests__/i18n-symmetry.test.ts` 运行时对称测试强制 key 一致）；新增 `components/LanguageSwitcher.tsx`（顶栏中文/English 切换 + `localStorage('app-locale')` 持久化）；`App.tsx` `ConfigProvider(antd locale)` + `dayjs.locale` 随 `languageChanged` 事件联动；全站 UI 框架级文案 `t()` 化（导航/登录/页标题/按钮/表单标签/Empty/ErrorState/message），领域数据按 D4 不翻。三道质量门 PASS（`.quality-gate.json` 推进 `f15-i18n`，`cleared:true`）；前端 `tsc --noEmit` **0 error** + `vitest` **30/30 green**（10 测试文件，含新增 config 4 项）+ `vite build` 通过。**审查修复**：P1 `common.total` 双包缺失导致分页泄露原始键串→补键；P2 模块级 `columns` 在组件外调用 `t()` 触发 TS2304→改组件内工厂；P2/P3 多处漏翻硬编码 UI 串→统一 `t()`；P3 en-US 镜像重写 + 新增 `config.test.ts`。codebase-optimizer P3 36 个未引用 i18n key 已 waiver（antd 重叠词由 ConfigProvider 本地化、`errors.*` 预留 D1、`empty.*` 预留 Empty 描述）。质量报告 `docs/quality/f15-i18n-gate.md`。
+- 决策（见 `./i18n.md` §5，已锁定 2026-07-28）：D1 后端错误文案 v1 不本地化 / D2 资源用 .ts 对象 / D3 默认 zh-CN / D4 v1 仅 UI 框架级文案（领域数据不做）。
 - 风险：🟡 中风险（几乎全前端页文案抽取，工作量大；key 规范需统一）；缓解：先定 common/nav/login 高频命名空间，按 §3.5 优先级分批小步提交；第三方画布(@xyflow/react)内置菜单 v1 可能仍中文，列已知残留。
 
 ### F16 · 列表统一改为卡片（Card）形式展示  [P2]  open  🟡中风险（前端多列表页渲染层改造）
