@@ -4,6 +4,8 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Domain.Aggregates.TenantCredentials;
+using AgentPlatform.Domain.Enums;
 using AgentPlatform.Infrastructure.Search;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -14,11 +16,47 @@ namespace AgentPlatform.Infrastructure.Tests.Search;
 
 public class SerpApiSearchProviderTests
 {
-    private static SerpApiSearchProvider Provider(HttpMessageHandler handler, SearchSettings settings = null)
+    private static SerpApiSearchProvider Provider(
+        HttpMessageHandler handler,
+        SearchSettings settings = null,
+        ITenantCredentialResolver credentialResolver = null,
+        ITenantProvider tenantProvider = null,
+        IApiKeyEncryptionService encryption = null,
+        ICostController costController = null)
     {
         settings ??= new SearchSettings { SerpApiKey = "testkey", TimeoutSeconds = 15 };
         var factory = new StubHttpClientFactory(handler);
-        return new SerpApiSearchProvider(factory, Options.Create(settings), Substitute.For<ILogger<SerpApiSearchProvider>>());
+
+        if (credentialResolver is null)
+        {
+            credentialResolver = Substitute.For<ITenantCredentialResolver>();
+            credentialResolver
+                .ResolveAsync(Arg.Any<Guid>(), Arg.Any<CredentialCategory>(), Arg.Any<CancellationToken>())
+                .Returns(new List<TenantCredentialSetting>());
+        }
+
+        if (tenantProvider is null)
+        {
+            tenantProvider = Substitute.For<ITenantProvider>();
+            tenantProvider.GetTenantId().Returns(Guid.NewGuid());
+        }
+
+        encryption ??= Substitute.For<IApiKeyEncryptionService>();
+
+        if (costController is null)
+        {
+            costController = Substitute.For<ICostController>();
+            costController.TryRecordSearch(Arg.Any<Guid>()).Returns(true);
+        }
+
+        return new SerpApiSearchProvider(
+            factory,
+            Options.Create(settings),
+            credentialResolver,
+            tenantProvider,
+            costController,
+            encryption,
+            Substitute.For<ILogger<SerpApiSearchProvider>>());
     }
 
     [Fact]
@@ -96,6 +134,68 @@ public class SerpApiSearchProviderTests
 
         Assert.False(result.Success);
         Assert.Contains("搜索请求失败", result.ErrorMessage);
+    }
+
+    // ── F13 租户隔离（搜索 · 重点）──
+    [Fact]
+    public async Task SearchAsync_UsesTenantByoKey_WhenConfigured()
+    {
+        var tenantId = Guid.NewGuid();
+        var cred = new TenantCredentialSetting(
+            Guid.NewGuid(), tenantId, CredentialCategory.Search, "My SerpApi", "SerpApi", "enc", "aaaaaaaa", null, null, true);
+        var resolver = Substitute.For<ITenantCredentialResolver>();
+        resolver
+            .ResolveAsync(tenantId, CredentialCategory.Search, Arg.Any<CancellationToken>())
+            .Returns(new List<TenantCredentialSetting> { cred });
+        var tenantProvider = Substitute.For<ITenantProvider>();
+        tenantProvider.GetTenantId().Returns(tenantId);
+        var encryption = Substitute.For<IApiKeyEncryptionService>();
+        encryption.DecryptKey("enc").Returns("aaa");
+
+        var json = "{\"organic_results\":[]}";
+        var handler = new StubHttpMessageHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) });
+        var provider = Provider(handler,
+            new SearchSettings { SerpApiKey = "platformkey", TimeoutSeconds = 15 },
+            resolver, tenantProvider, encryption);
+
+        var result = await provider.SearchAsync("x", 5, default);
+
+        Assert.True(result.Success);
+        var uri = handler.CapturedRequest.RequestUri.ToString();
+        Assert.Contains("api_key=aaa", uri);
+        Assert.DoesNotContain("api_key=platformkey", uri);
+    }
+
+    [Fact]
+    public async Task SearchAsync_ByoKeyBypassesPlatformQuota()
+    {
+        var tenantId = Guid.NewGuid();
+        var cred = new TenantCredentialSetting(
+            Guid.NewGuid(), tenantId, CredentialCategory.Search, "My SerpApi", "SerpApi", "enc", "aaaaaaaa", null, null, true);
+        var resolver = Substitute.For<ITenantCredentialResolver>();
+        resolver
+            .ResolveAsync(tenantId, CredentialCategory.Search, Arg.Any<CancellationToken>())
+            .Returns(new List<TenantCredentialSetting> { cred });
+        var tenantProvider = Substitute.For<ITenantProvider>();
+        tenantProvider.GetTenantId().Returns(tenantId);
+        var encryption = Substitute.For<IApiKeyEncryptionService>();
+        encryption.DecryptKey("enc").Returns("aaa");
+        var costController = Substitute.For<ICostController>();
+        costController.TryRecordSearch(Arg.Any<Guid>()).Returns(false); // 平台配额已耗尽
+
+        var json = "{\"organic_results\":[]}";
+        var handler = new StubHttpMessageHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) });
+        var provider = Provider(handler,
+            new SearchSettings { SerpApiKey = "platformkey", TimeoutSeconds = 15 },
+            resolver, tenantProvider, encryption, costController);
+
+        var result = await provider.SearchAsync("x", 5, default);
+
+        // BYO 密钥不受平台配额限制，仍应成功。
+        Assert.True(result.Success);
+        Assert.Contains("api_key=aaa", handler.CapturedRequest.RequestUri.ToString());
     }
 
     private sealed class StubHttpMessageHandler : HttpMessageHandler

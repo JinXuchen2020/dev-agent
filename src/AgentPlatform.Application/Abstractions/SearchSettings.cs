@@ -23,4 +23,10 @@ public sealed class SearchSettings
 
     /// <summary>Default number of results requested per query.</summary>
     public int DefaultMaxResults { get; set; } = 5;
+
+    /// <summary>
+    /// Gets or sets the maximum number of platform-provided search calls a single tenant may make per day.
+    /// BYO-SerpApi (tenant-owned) search is not subject to this quota. Default 100 calls/tenant/day (F13 S2).
+    /// </summary>
+    public int PerTenantDailySearchQuota { get; set; } = 100;
 }

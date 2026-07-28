@@ -15,9 +15,9 @@
 | Phase 3 | 平台化 | 前端 + 监控 | React Web UI、Grafana 大盘、React Flow、OpenTelemetry、CI/CD |
 | Phase 4 | 知识接地与加固（上线前必做） | 把声称完成实为存根的能力落地 | RAG 接真 PGVector、Critic fail-loud、DB 端分页、真 tokenizer 压缩 |
 | Phase 5 ✅ | 安全加固（launch-blocking） | 把声称要做的认证/多租户落地 | JWT/API-Key 认证、RBAC、真实多租户、限流、提示注入防护、审计、API Key AES-256-GCM 加密 |
-| Phase 6 | 前沿特性与收尾 | 优化 + 亮点 | Code Agent、Research Agent、性能压测、BDD 全量、简历作品集 |
+| Phase 6 | 前沿特性与收尾 | 优化 + 亮点 | Code Agent、Research Agent（✅F6）、行动层（✅F5）、性能压测、BDD 全量、简历作品集；F13 多租户凭据（安全后延伸，✅已完成） |
 
-> **进度**：Phase 1~5 均已落地（Phase 5 于 2026-07-21 二次评审闭环 PASS，`dotnet test` 103/103）。Phase 6 为后续。Phase 5 的知识点与排障详解见 `09`（加固）与 `10-phase5-security-learnings.md`（安全）。
+> **进度**：Phase 1~5 均已落地（Phase 5 于 2026-07-21 二次评审闭环 PASS，`dotnet test` 103/103）。Phase 6 进入实质实现期：**F5 行动层（2026-07-24 完成）**、**F6 Research Agent（2026-07-24 完成）**、**F13 多租户凭据配置（2026-07-27 完成，安全加固后的延伸史诗）** 均已交付；**F14–F19 设计就绪待实现**（见 `features/backlog.md`）。Phase 5 的知识点与排障详解见 `09`（加固）与 `10-phase5-security-learnings.md`（安全）。
 
 ## 7.2 为什么 Phase 1 全部用 Stub
 
@@ -132,6 +132,32 @@ Phase 2 跑通了核心逻辑，但**只有 API 没有 UI，只有日志没有�
 第六步：优化 + 亮点（Phase 6）
   └─ 性能、文档、CV 亮点
 ```
+
+---
+
+## 7.9 当前状态（2026-07-27 更新）
+
+Phase 1~5 全部完成，Phase 6 进入实质实现期，并已向后延伸出安全加固后的「多租户凭据」史诗：
+
+- **F5 行动层（2026-07-24 完成）**：`NativeToolExecutor` 真实 HTTP、`ProcessCodeSandbox` 真实进程、Tool/Code 工作流节点——Agent 真正能做事。
+- **F6 Research Agent（2026-07-24 完成）**：SerpApi 真实联网多步调研 + SSE 流式。
+- **F13 多租户凭据配置（2026-07-27 完成）**：补齐多租户化最后一环——外部 API 凭据层租户隔离（模型 LLM key + 搜索 SerpApi key 同构 BYO-Key + 平台内置回退 + 租户键控配额 + AES-256-GCM 加密）。详见 `features/model-config.md` 与 `docs/quality/f13-gate.md`。
+
+**当前 backlog（设计就绪、待实现，详见 `features/backlog.md`）：**
+
+| Feature | 优先级 | 一句话 |
+|---------|--------|--------|
+| F14 供应商模型发现 | P0 | 填 Key+BaseUrl 拉取 OpenAI 兼容 /models 模型清单 |
+| F15 多语言 i18n | P1 | i18next + react-i18next，zh-CN/en-US 顶栏切换 |
+| F16 列表改卡片 | P2 | EntityCardGrid 通用组件替代各页 `<Table>` |
+| F17 AgentConfiguration 实例化（方案 A） | P2 | 把版本化 YAML 定义孤岛变为真模板库 + 消除重复凭据 tab |
+| F18 Dashboard 图表 | P1 | analytics/summary 端点 + 6 KPI + C1–C6 图，对标 Dify/LangSmith/Flowise/n8n/Coze |
+| F19 Agent Roles 内建+合并 | P1 | AgentRoleDefinition 加 IsBuiltIn + 合并 AgentType/AgentRoleDefinition 两套分类为「以 DB 为准」 |
+
+**两项架构发现（驱动 F17/F19）：**
+
+1. `AgentConfiguration` 是孤岛：运行时零引用（全仓 `AgentConfigurationId` = 0 处），只建了「库」没建「消费端」→ F17 补实例化链路（从定义实例化 Agent）。
+2. 角色分类分裂：`AgentType`（architect/developer/tester/pm/tech-writer/reviewer，纯代码值对象）与 `AgentRoleDefinition`（architecture/development/testing/product/documentation/requirement，DB 聚合）**两套 code 完全不互通**；前端用硬编码 `BUILT_IN_ROLES` 判定内建却对不上 DB code → 系统架构等被误标「自定义」→ F19 加 `IsBuiltIn` 并把 `AgentType` 降为 DB 镜像（parity 测试强制对齐）。`RoleBasedSelectionStrategy` 只按 `WorkflowStep.StepName` 匹配、不读 `AgentType`，故合并角色 code 不影响路由（回归安全）。
 
 ---
 

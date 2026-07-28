@@ -28,7 +28,7 @@
 ### 3.1 聚合 `TenantCredentialSetting`（Domain，新增 · 通用凭据）
 - 字段：`Guid Id`（**`ValueGeneratedNever()`**，规避 EF「Guid 主键 `ValueGeneratedOnAdd` + 预置 `Guid.NewGuid()` → UPDATE 命中 0 行」陷阱，见 MEMORY.md）、`Guid TenantId`（实现 `ITenantScoped` → `HasQueryFilter` 自动租户隔离）、`CredentialCategory`(枚举 **Model / Search**)、`Provider`(string，模型=OpenAI/DeepSeek/VLLM/Custom；搜索=SerpApi，v1 仅单一 provider)、`string EncryptedApiKey`（密文）、`string ApiKeyPrefix`（前 8 字符，掩码展示用）、`string? BaseUrl`、`string? ModelName`（仅模型类用）、`bool IsEnabled`、`DateTime CreatedAt`/`UpdatedAt`。
 - 行为：构造/`Update(plaintextKey, ...)` 调 `IApiKeyEncryptionService.EncryptKey` 得 `(EncryptedKey, KeyPrefix)`；`GetDecryptedKey()` 调 `DecryptKey`（仅服务端内部用，绝不外泄）。
-- 仓储：`ITenantCredentialSettingRepository`（`GetByTenantAndCategoryAsync(Guid tenantId, CredentialCategory)` / `UpsertAsync(...)`）；EF 配置 `TenantCredentialSettingConfiguration`：`ToTable("TenantCredentialSetting")`、`HasQueryFilter(t => t.TenantId == tenantId)`。
+- 仓储：`ITenantCredentialSettingRepository`（`GetAllByTenantAndCategoryAsync` / `GetByIdAsync` / `AddAsync` / `UpdateAsync` / `DeleteAsync`）；EF 配置 `TenantCredentialSettingConfiguration`：`ToTable("TenantCredentialSettings")`、增 `Name` 列、`(TenantId, Category)` 改为非唯一索引、`HasQueryFilter(t => t.TenantId == tenantId)`、`Id` 显式 `ValueGeneratedNever`。
 - **新增 EF 迁移**：`dotnet ef migrations add AddTenantCredentialSetting`（含 `#pragma warning disable IDE0161`）。
 
 ### 3.2 凭据解析器（核心改造，最小契约变更）
@@ -79,7 +79,7 @@
   - `PUT` → `UpdateTenantCredentialRequest`（`CredentialCategory`[Required]、`Provider`[Required]、`string? ApiKey`(明文，仅入站，服务端加密后丢弃)、`string? BaseUrl`、`string? ModelName`、`bool IsEnabled`）；成功后使该 `tenantId+category` 缓存失效。
   - 缺省返回 204/空（租户尚未配置 → 前端提示去填或选平台内置）。
 - `TenantCredentialDto` / `UpdateTenantCredentialRequest`（`Api.Models`）。
-- 前端（S4 锁定：并入 Agent 配置页，不新增独立页面）：在现有 **Agent 配置页**内嵌 `Tabs: 模型 + 搜索` 两个凭据配置区，结构同构：`Form` + `Input.Password` 掩码 + provider `Select`（模型=OpenAI/DeepSeek/VLLM/Custom；搜索=SerpApi）+ BaseUrl/ModelName 输入 + 保存；Agent/会话创建处模型下拉接 `GET /api/v1/models`（含平台模型 + 若租户自配则并列）；侧栏 `menuItems` **不**新增项。
+- 前端（S4 锁定：并入 Agent 配置页，不新增独立页面）：在现有 **Agent 配置页**内嵌 `Tabs: 模型 + 搜索` 两个凭据配置区，结构同构：`Form` + `Input.Password` 掩码 + provider `Select`（模型=OpenAI/DeepSeek/VLLM/Custom；搜索=SerpApi）+ BaseUrl/ModelName 输入 + 保存；Agent/会话创建处模型下拉接 `GET /api/v1/models`（含平台模型 + 若租户自配则并列）；侧栏 `menuItems` **不**新增项。**（S4 最后一项已完成：Agent 创建页「+ 新建 Agent」Modal 与会话详情页顶栏「选择模型」下拉均已接 `GET /api/v1/models`——平台模型 / 我的模型 分组并列；会话选中模型经 `sendMessage(model=modelId)` 透传为 `PreferredModel` 路由。）**
 
 ## §4 数据模型
 - **新增聚合 `TenantCredentialSetting` + 表 `TenantCredentialSetting` + EF 迁移**（必须 `dotnet ef migrations add AddTenantCredentialSetting`）。
@@ -123,13 +123,13 @@
   - 模型：`PerTenantDailyBudget = 1.00`（USD/租户/天，平台模型累计花费超限即拒并提示配 BYO-Key）；
   - 搜索：`PerTenantDailySearchQuota = 100`（次/租户/天，平台内置搜索超次即拒并提示配 BYO-Key）。
   - BYO-Key（A）不设限（成本归租户自己）。关闭 B 仅需配置开关 `Platform:BuiltInModelsEnabled=false`（预留，v1 默认 true）。
-- **S3 每租户每类凭据数（v1）= 单条活跃设置（锁定，由实现者设定）**：`PUT /api/v1/tenant/credentials` 即 **upsert**（按 `tenantId + category`），覆盖写；不设多 provider 并存。GET 返回该唯一设置或 204。
+- **S3 每租户每类凭据数（v1）= 多条（列表，由用户 2026-07-27 决策反转原"单条"锁定）**：一个租户可配置**多个不同模型**（不同 Provider / 密钥 / 模型名），搜索类同理。后端由"单条 upsert"改为**列表 CRUD**：`GET /api/v1/tenant/credentials?category=` 返回该租户该类全部凭据（数组，可空）；`POST` 新增；`PUT /api/v1/tenant/credentials/{id}` 按 Id 更新；`DELETE /api/v1/tenant/credentials/{id}` 按 Id 删除。`TenantCredentialSetting` 增 `Name`（列表内显示名）列，`(TenantId, Category)` 唯一索引改为非唯一；`ITenantCredentialResolver` 返回 `IReadOnlyList`；`ModelRouter` 按 candidate→client 映射支持多 BYO key 并存路由。前端「我的凭据」页以表格展示全部模型/搜索凭据，支持新增/编辑/删除。
 - **S4 前端范围 = 并入 Agent 配置页（锁定，由实现者设定）**：**不新增独立菜单项/页面**；在现有 **Agent 配置页**内嵌 `Tabs: 模型 + 搜索` 两个凭据配置区（结构与后端同构：provider Select + ApiKey `Input.Password` 掩码 + BaseUrl/ModelName 输入 + 保存）；Agent/会话创建处的模型下拉接 `GET /api/v1/models`（含平台模型 + 若租户自配则并列）。
 - **S5 搜索凭据纳入本 feature = 是（锁定）**：`TenantCredentialSetting` 增 `Category=Search`，复用加密/隔离/RBAC/掩码全套基件；`SerpApiSearchProvider` 改为运行时按租户解析 key。
 - **S6 搜索 provider 范围（v1）= 仅 SerpApi（锁定）**：对齐 F6 S1 决策 `Provider="SerpApi"`；多搜索方（Brave/Tavily）留待后续（DI 已按 `Provider` 选择，易扩展）。
 - 其余默认：`CredentialCategory` 枚举（Model/Search）、掩码 = `••••`+prefix、`StubModelClient` 作模型最终兜底。
 
 ## §8 质量门记录（实现后填）
-- 8.1 **ddd-code-reviewer**：（实现后填）
-- 8.2 **ddd-phase-quality-gate**：（实现后填）
-- 8.3 **codebase-optimizer**：（实现后填）
+- 8.1 **ddd-code-reviewer**：PASS（对抗式审查覆盖全部 F13 后端文件；修复 1 个 P0：TenantCredentialsController.Put 直接写仓储但未提交 IUnitOfWork.SaveChangesAsync（本控制器不走 MediatR 命令、无 UnitOfWorkBehavior 自动提交）→ 凭据永不落库；已注入 IUnitOfWork 显式 SaveChangesAsync 与命令处理器行为一致；新增 EF 集成测试 TenantCredentialSettingRepositoryTests 锁定落库+租户隔离+upsert 不重复行。核对真实副作用：① 密钥加密——TenantCredentialSetting 仅存 EncryptedApiKey+ApiKeyPrefix，PUT 入站明文加密即丢弃，GET 返回 apiKeyMask=••••+prefix（绝不明文）；② 租户隔离——TenantCredentialSetting:ITenantScoped → AppDbContext.HasQueryFilter 自动隔离，TenantCredentialResolver 按 tenantId 解析，集成测试断言租户 B 取不到 A 的凭据；③ 运行时按租户解析——SerpApiSearchProvider 每次 SearchAsync 经 TryResolveTenantKeyAsync(tenantId) 取 key，BYO key 绕过平台配额（SerpApiSearchProviderTests 断言 api_key=aaa 非平台 key）；④ ValueGeneratedNever——TenantCredentialSettingConfiguration.Id 显式 ValueGeneratedNever；⑤ 接口零改动——IModelClient/ISearchProvider/ResearchCommandHandler 未改；⑥ RBAC——TenantCredentialsController[Authorize(Roles=Admin,Operator)]、PlatformModelsController[Authorize]。P0/P1/P2/P3=0（审查后））
+- 8.2 **ddd-phase-quality-gate**：PASS（P0=0 P1=0 P2=1 P3=0；12 类审计：DI 注册完整(TenantCredentialSettingRepository/TenantCredentialResolver/TenantModelClientResolver/IPlatformModelProvider 均 Scoped 注册 + AddMemoryCache)/DDD 分层(接口 Abstractions·实现 Infrastructure·DI Infrastructure)/有 EF 迁移需求已生成 AddTenantCredentialSetting(ValueGeneratedNever)/无硬编码密钥(密文落库+配置走 IOptions)/CancellationToken 全链路透传/实现类 internal sealed/IMemoryCache 缓存仅密文实体非 Singleton 自管集合/空 provider 守卫(TenantCredentialSetting 构造校验)/[ApiController] 自动校验/IOptions<T> 注入/新增枚举常量无零引用/XML 中文注释齐备/Swagger 沿用全局；P2=1 为单测覆盖项——已补 EF 集成测试后实质达标；P3=0；checklist 已嵌 features/model-config.md §6）
+- 8.3 **codebase-optimizer**：PASSED（七维度扫描 F13：架构——ModelRouter/TenantModelClientResolver/SerpApiSearchProvider 各自独立承担解析职责、平台↔租户降级链清晰；代码质量——0 any（前端 tsc 0 error）+ strict + internal sealed + 中文 XML + 前端 Input.Password 掩码；正确性——真实 HttpClient（SerpApiSearchProviderTests 用 StubHttpMessageHandler 验证真实 GET 构造）、真实加密往返（IApiKeyEncryptionService）、EF 集成测试验证真实落库；测试——新增 11 例（TenantModelClientResolverTests 3 + SerpApiSearchProviderTests BYO 2 + TenantCredentialSettingRepositoryTests 1 + 既有 CostController/AgentRouting 改造）；性能——HttpClient 走 IHttpClientFactory 池化 + 请求级超时 CancellationTokenSource、凭据解析按 tenantId 缓存 + PUT 失效；安全——密钥 AES-256-GCM 落库、明文不出 API/不进日志、BYO 绕过平台配额防滥用；工程化——dotnet build 0 警告 0 错误 + tsc --noEmit 0 错误 + 全方案测试全绿，前端无死代码；按 feature-builder 约束在 feat/f13-multi-tenant-credentials 分支分析+修复，未新建分支或推送）

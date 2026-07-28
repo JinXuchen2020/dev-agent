@@ -6,41 +6,43 @@ using AgentPlatform.Domain.ValueObjects;
 namespace AgentPlatform.Application.Routing.Services;
 
 /// <summary>
-/// Implements <see cref="ICostController"/> to track daily token spending against a configurable budget,
-/// using per-provider pricing to reserve, settle, and release estimated costs.
+/// Implements <see cref="ICostController"/> to track per-tenant daily token spending against a configurable
+/// budget, using per-provider pricing to reserve, settle, and release estimated costs. Also enforces a
+/// per-tenant daily quota on platform-provided search calls.
+/// BYO-key (tenant-owned) models/search bypass the budget/quota since cost is borne by the tenant.
 /// </summary>
 public sealed class CostController : ICostController
 {
-    private Money _dailyBudget;
-    private Money _todaySpent = Money.Zero;
-    private DateTime _lastResetDate = DateTime.UtcNow.Date;
     private readonly object _lock = new();
     private readonly PricingSettings _pricing;
     private readonly ILogger<CostController> _logger;
+    private readonly Money _perTenantDailyBudget;
+    private readonly int _perTenantSearchQuota;
+    private DateTime _lastResetDate = DateTime.UtcNow.Date;
+    private readonly Dictionary<Guid, Money> _spentByTenant = new();
+    private readonly Dictionary<Guid, int> _searchCountByTenant = new();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="CostController"/> class.
     /// </summary>
     /// <param name="pricingOptions">The options accessor providing per-provider token pricing.</param>
-    /// <param name="routerOptions">The options accessor providing the daily budget limit.</param>
+    /// <param name="routerOptions">The options accessor providing the per-tenant daily budget limit.</param>
+    /// <param name="searchOptions">The options accessor providing the per-tenant daily search quota.</param>
     /// <param name="logger">The logger used to record cost events and warnings.</param>
     public CostController(
         IOptions<PricingSettings> pricingOptions,
         IOptions<RouterSettings> routerOptions,
+        IOptions<SearchSettings> searchOptions,
         ILogger<CostController> logger)
     {
-        _dailyBudget = new Money(routerOptions.Value.DailyBudget);
         _pricing = pricingOptions.Value;
+        _perTenantDailyBudget = new Money(routerOptions.Value.PerTenantDailyBudget);
+        _perTenantSearchQuota = searchOptions.Value.PerTenantDailySearchQuota;
         _logger = logger;
     }
 
-    /// <summary>
-    /// Attempts to reserve an estimated token cost for the given candidate against the daily budget.
-    /// </summary>
-    /// <param name="candidate">The model candidate for which to reserve cost.</param>
-    /// <param name="estimatedTokens">The estimated number of tokens for the upcoming request.</param>
-    /// <returns><c>true</c> if the reservation was accepted; <c>false</c> if the budget would be exceeded.</returns>
-    public bool TryReserve(ModelCandidate candidate, int estimatedTokens)
+    /// <inheritdoc/>
+    public bool TryReserve(ModelCandidate candidate, int estimatedTokens, Guid tenantId)
     {
         ArgumentNullException.ThrowIfNull(candidate);
         ArgumentException.ThrowIfNullOrWhiteSpace(candidate.Provider);
@@ -51,33 +53,26 @@ public sealed class CostController : ICostController
         {
             ResetIfNewDay();
 
-            if ((_todaySpent + estimatedCost) > _dailyBudget)
+            var spent = GetOrZero(tenantId);
+            if ((spent + estimatedCost) > _perTenantDailyBudget)
             {
                 _logger.LogWarning(
-                    "Budget exceeded: spent {Spent}, estimated {Est}, budget {Budget}. Skipping {Provider}/{Model}.",
-                    _todaySpent.Amount, estimatedCost.Amount, _dailyBudget.Amount, candidate.Provider, candidate.ModelId);
+                    "Tenant {TenantId} budget exceeded: spent {Spent}, estimated {Est}, budget {Budget}. Skipping {Provider}/{Model}.",
+                    tenantId, spent.Amount, estimatedCost.Amount, _perTenantDailyBudget.Amount, candidate.Provider, candidate.ModelId);
                 return false;
             }
 
-            _todaySpent += estimatedCost;
+            _spentByTenant[tenantId] = spent + estimatedCost;
             return true;
         }
     }
 
-    /// <summary>
-    /// Reconciles a previously reserved cost against the actual token usage after the request completes.
-    /// </summary>
-    /// <param name="candidate">The model candidate whose usage is being settled.</param>
-    /// <param name="actualTokenUsage">The actual token usage reported by the model, or <c>null</c> if unknown.</param>
-    /// <param name="reservedTokens">The number of tokens that were originally reserved.</param>
-    public void SettleUsage(ModelCandidate candidate, TokenUsage? actualTokenUsage, int reservedTokens)
+    /// <inheritdoc/>
+    public void SettleUsage(ModelCandidate candidate, TokenUsage? actualTokenUsage, int reservedTokens, Guid tenantId)
     {
         ArgumentNullException.ThrowIfNull(candidate);
 
         var reservedCost = new Money(GetCostPerUnit(candidate.Provider) * reservedTokens);
-
-        Money totalAfterSettle;
-        Money delta;
 
         lock (_lock)
         {
@@ -86,70 +81,71 @@ public sealed class CostController : ICostController
             if (actualTokenUsage is null)
             {
                 // Unknown actual usage — keep the reservation as the settled cost
-                delta = Money.Zero;
-                totalAfterSettle = _todaySpent;
-            }
-            else
-            {
-                var actualCost = new Money(GetCostPerUnit(candidate.Provider) * actualTokenUsage.TotalTokens);
-                delta = actualCost - reservedCost;
-                _todaySpent += delta;
-                totalAfterSettle = _todaySpent;
+                return;
             }
 
+            var actualCost = new Money(GetCostPerUnit(candidate.Provider) * actualTokenUsage.TotalTokens);
+            var delta = actualCost - reservedCost;
+            _spentByTenant[tenantId] = GetOrZero(tenantId) + delta;
+
             _logger.LogInformation(
-                "Cost settled: reserved {Reserved}, actual {Actual}, delta {Delta}. Total spent: {Total}",
-                reservedCost.Amount,
-                actualTokenUsage?.TotalTokens ?? reservedTokens,
-                delta.Amount,
-                totalAfterSettle.Amount);
+                "Cost settled for tenant {TenantId}: reserved {Reserved}, actual {Actual}, delta {Delta}. Total spent: {Total}",
+                tenantId, reservedCost.Amount, actualTokenUsage?.TotalTokens ?? reservedTokens,
+                delta.Amount, GetOrZero(tenantId).Amount);
         }
     }
 
-    /// <summary>
-    /// Releases a previously reserved token cost back to the daily budget when the request did not complete.
-    /// </summary>
-    /// <param name="candidate">The model candidate whose reservation should be released.</param>
-    /// <param name="reservedTokens">The number of tokens that were originally reserved.</param>
-    public void ReleaseReservation(ModelCandidate candidate, int reservedTokens)
+    /// <inheritdoc/>
+    public void ReleaseReservation(ModelCandidate candidate, int reservedTokens, Guid tenantId)
     {
         ArgumentNullException.ThrowIfNull(candidate);
 
         var reservedCost = new Money(GetCostPerUnit(candidate.Provider) * reservedTokens);
 
-        Money totalAfterRelease;
-
         lock (_lock)
         {
             ResetIfNewDay();
-            _todaySpent -= reservedCost;
-            if (_todaySpent.Amount < 0)
-            {
-                _logger.LogWarning(
-                    "ReleaseReservation made _todaySpent negative ({Negative}), clamping to zero. Reserved: {Reserved}. This indicates a reservation tracking bug.",
-                    _todaySpent.Amount, reservedCost.Amount);
-                _todaySpent = Money.Zero;
-            }
-            totalAfterRelease = _todaySpent;
+            var current = GetOrZero(tenantId) - reservedCost;
+            _spentByTenant[tenantId] = current.Amount < 0 ? Money.Zero : current;
 
             _logger.LogInformation(
-                "Released reservation: {Reserved}. Total spent: {Total}",
-                reservedCost.Amount, totalAfterRelease.Amount);
+                "Released reservation for tenant {TenantId}: {Reserved}. Total spent: {Total}",
+                tenantId, reservedCost.Amount, GetOrZero(tenantId).Amount);
         }
     }
 
-    /// <summary>
-    /// Returns the total amount spent today.
-    /// </summary>
-    /// <returns>A <see cref="Money"/> value representing today's cumulative spend.</returns>
-    public Money GetTodaySpent()
+    /// <inheritdoc/>
+    public Money GetTodaySpent(Guid tenantId)
     {
         lock (_lock)
         {
             ResetIfNewDay();
-            return _todaySpent;
+            return GetOrZero(tenantId);
         }
     }
+
+    /// <inheritdoc/>
+    public bool TryRecordSearch(Guid tenantId)
+    {
+        lock (_lock)
+        {
+            ResetIfNewDay();
+            var count = _searchCountByTenant.GetValueOrDefault(tenantId, 0);
+            if (count >= _perTenantSearchQuota)
+            {
+                _logger.LogWarning(
+                    "Tenant {TenantId} platform search quota exhausted: {Count}/{Quota}.",
+                    tenantId, count, _perTenantSearchQuota);
+                return false;
+            }
+
+            _searchCountByTenant[tenantId] = count + 1;
+            return true;
+        }
+    }
+
+    private Money GetOrZero(Guid tenantId) =>
+        _spentByTenant.TryGetValue(tenantId, out var spent) ? spent : Money.Zero;
 
     private decimal GetCostPerUnit(string provider)
     {
@@ -170,9 +166,10 @@ public sealed class CostController : ICostController
         if (today > _lastResetDate)
         {
             _logger.LogInformation(
-                "Daily budget reset: previous spent {Previous}, date {PreviousDate} -> {NewDate}",
-                _todaySpent.Amount, _lastResetDate, today);
-            _todaySpent = Money.Zero;
+                "Daily budget/quota reset: previous date {PreviousDate} -> {NewDate}",
+                _lastResetDate, today);
+            _spentByTenant.Clear();
+            _searchCountByTenant.Clear();
             _lastResetDate = today;
         }
     }

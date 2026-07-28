@@ -5,7 +5,7 @@ using MediatR;
 namespace AgentPlatform.Application.Routing.Queries.GetCostReport;
 
 /// <summary>
-/// Represents a query to retrieve a cost report summarizing today's spending.
+/// Represents a query to retrieve a cost report summarizing today's spending for the current tenant.
 /// </summary>
 public record GetCostReportQuery : IRequest<CostReportResponse>;
 
@@ -16,12 +16,12 @@ public record GetCostReportQuery : IRequest<CostReportResponse>;
 /// <param name="Currency">The currency code of the spent amount (e.g., "USD").</param>
 public record CostReportResponse(decimal TodaySpent, string Currency);
 
-internal sealed class GetCostReportQueryHandler(ICostController costController)
+internal sealed class GetCostReportQueryHandler(ICostController costController, ITenantProvider tenantProvider)
     : IRequestHandler<GetCostReportQuery, CostReportResponse>
 {
     public Task<CostReportResponse> Handle(GetCostReportQuery request, CancellationToken cancellationToken)
     {
-        var spent = costController.GetTodaySpent();
+        var spent = costController.GetTodaySpent(tenantProvider.GetTenantId());
         return Task.FromResult(new CostReportResponse(spent.Amount, spent.Currency));
     }
 }

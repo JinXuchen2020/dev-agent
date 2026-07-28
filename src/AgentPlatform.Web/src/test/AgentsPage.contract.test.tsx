@@ -4,19 +4,20 @@ import AgentsPage from '../pages/AgentsPage';
 import * as api from '../services/api';
 import type { Agent } from '../types';
 
-// 完全按照后端 AgentResponse 的真实形状构造（camelCase、嵌套 role.roleCode、
-// modelEndpoint.modelId、status 小写、systemPrompt、createdAt）。
-// 这一层就是“API 契约”。如果前端列映射错位（读成扁平 roleCode /
-// 缺 modelEndpoint / 缺 status 与 systemPrompt），表格会渲染成 '-' 或空白，
-// 下面的断言就会失败——这正是此前 QA 漏掉的回归。
+// 严格按照后端 AgentResponse 的真实形状构造（camelCase、扁平 roleCode / modelName /
+// modelProvider / status "Active"/"Inactive" / systemPrompt / tenantId / createdAt）。
+// 这一层就是“API 契约”。如果前端列映射错位（读成嵌套 role / modelEndpoint、
+// 缺 systemPrompt），表格会渲染成 '-' 或空白，下面的断言就会失败。
 const SAMPLE: Agent[] = [
   {
     id: 'a1',
     name: '文档摘要助手',
-    role: { roleCode: 'developer' },
-    modelEndpoint: { modelId: 'gpt-4o' },
+    roleCode: 'developer',
+    modelProvider: 'openai',
+    modelName: 'gpt-4o',
+    tenantId: '00000000-0000-0000-0000-000000000001',
+    status: 'Active',
     systemPrompt: '你是一个文档摘要助手',
-    status: 'active',
     createdAt: '2026-07-01T10:00:00Z',
   },
 ];
@@ -24,12 +25,16 @@ const SAMPLE: Agent[] = [
 vi.mock('../services/api', () => ({
   getAgents: vi.fn(),
   getAgentRoles: vi.fn(),
+  getPlatformModels: vi.fn(),
   createAgent: vi.fn(),
+  updateAgent: vi.fn(),
+  deleteAgent: vi.fn(),
 }));
 
 beforeEach(() => {
   vi.mocked(api.getAgents).mockResolvedValue(SAMPLE);
   vi.mocked(api.getAgentRoles).mockResolvedValue([]);
+  vi.mocked(api.getPlatformModels).mockResolvedValue([]);
 });
 
 describe('AgentsPage 列映射契约', () => {
@@ -42,14 +47,14 @@ describe('AgentsPage 列映射契约', () => {
     // 角色列：必须出现 roleCode，而不是曾经的 '-'
     expect(screen.getByText('developer')).toBeInTheDocument();
 
-    // Model 列：必须出现 modelEndpoint.modelId，而不是曾经的 '-'
+    // Model 列：必须出现 modelName，而不是曾经的 '-'
     expect(screen.getByText('gpt-4o')).toBeInTheDocument();
 
     // System Prompt 列：必须出现真实内容，而不是曾经的空白
     expect(screen.getByText('你是一个文档摘要助手')).toBeInTheDocument();
 
     // 状态列：必须渲染出 status（徽章文字），而不是曾经的 undefined→空
-    expect(screen.getByText('active')).toBeInTheDocument();
+    expect(screen.getByText('Active')).toBeInTheDocument();
 
     // 创建时间列：必须渲染出时间，而不是曾经的空白
     expect(screen.getByText(/2026\/7\/1|2026-07-01|7\/1\/2026/)).toBeInTheDocument();

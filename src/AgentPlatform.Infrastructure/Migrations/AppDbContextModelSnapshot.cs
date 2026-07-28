@@ -377,6 +377,61 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.ToTable("KnowledgeDocument", (string)null);
                 });
 
+            modelBuilder.Entity("AgentPlatform.Domain.Aggregates.TenantCredentials.TenantCredentialSetting", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApiKeyPrefix")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BaseUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Category")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EncryptedApiKey")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ModelName")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "Category");
+
+                    b.ToTable("TenantCredentialSettings", (string)null);
+                });
+
             modelBuilder.Entity("AgentPlatform.Domain.Aggregates.ToolDefinitions.ToolDefinition", b =>
                 {
                     b.Property<Guid>("Id")
@@ -641,7 +696,6 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.OwnsMany("AgentPlatform.Domain.Aggregates.Conversations.Message", "Messages", b1 =>
                         {
                             b1.Property<Guid>("Id")
-                                .ValueGeneratedOnAdd()
                                 .HasColumnType("TEXT");
 
                             b1.Property<string>("Content")
@@ -773,7 +827,6 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.OwnsMany("AgentPlatform.Domain.Aggregates.Workflows.WorkflowEdge", "Edges", b1 =>
                         {
                             b1.Property<Guid>("Id")
-                                .ValueGeneratedOnAdd()
                                 .HasColumnType("TEXT");
 
                             b1.Property<string>("Label")
@@ -802,7 +855,6 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.OwnsMany("AgentPlatform.Domain.Aggregates.Workflows.WorkflowNode", "Nodes", b1 =>
                         {
                             b1.Property<Guid>("Id")
-                                .ValueGeneratedOnAdd()
                                 .HasColumnType("TEXT");
 
                             b1.Property<Guid?>("AssignedAgentId")
@@ -864,7 +916,6 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.OwnsMany("AgentPlatform.Domain.Aggregates.Workflows.WorkflowStep", "Steps", b1 =>
                         {
                             b1.Property<Guid>("Id")
-                                .ValueGeneratedOnAdd()
                                 .HasColumnType("TEXT");
 
                             b1.Property<Guid?>("AssignedAgentId")

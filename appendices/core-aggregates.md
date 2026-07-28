@@ -76,6 +76,13 @@ public enum ToolSource
 }
 ```
 
+// Domain/Enums/CredentialCategory.cs（F13 多租户凭据）
+public enum CredentialCategory
+{
+    Model,   // 模型 LLM 凭据
+    Search   // 搜索凭据（SerpApi）
+}
+
 ### A.2 聚合根
 
 ```csharp
@@ -157,6 +164,22 @@ public class User : ITenantScoped, IAggregateRoot   // 用户聚合（F2 新增�
     public string Role { get; private set; }                    // Admin / Operator / Viewer
     public bool IsActive { get; private set; }
     public DateTime CreatedAt { get; private init; }
+}
+
+// Domain/Aggregates/TenantCredentials/TenantCredentialSetting.cs（F13 多租户凭据）
+public class TenantCredentialSetting : ITenantScoped, IAggregateRoot   // 租户外部 API 凭据聚合（落库加密）
+{
+    public Guid Id { get; private init; }                 // 调用方生成；EF 配置 ValueGeneratedNever
+    public Guid TenantId { get; private init; }            // 租户 ID（HasQueryFilter 隔离）
+    public CredentialCategory Category { get; private set; } // Model / Search
+    public string Provider { get; private set; }           // OpenAI / DeepSeek / VLLM / Custom / SerpApi
+    public string EncryptedApiKey { get; private set; }    // 密文（AES-256-GCM），绝不存明文
+    public string ApiKeyPrefix { get; private set; }       // 明文前 8 字符，仅用于掩码展示
+    public string? BaseUrl { get; private set; }           // 模型端点 / 自定义 OpenAI 兼容 base
+    public string? ModelName { get; private set; }         // 仅模型类用
+    public bool IsEnabled { get; private set; }
+    public DateTime CreatedAt { get; private init; }
+    public DateTime UpdatedAt { get; private set; }
 }
 
 ### A.3 实体（非聚合根）
@@ -283,6 +306,14 @@ public interface IUserRepository
     Task<User?> GetByEmailAsync(Guid tenantId, string email, CancellationToken ct = default);
     Task<User?> GetByIdAsync(Guid id, CancellationToken ct = default);
     void Add(User user);
+}
+
+// Domain/Repositories/ITenantCredentialSettingRepository.cs（F13 多租户凭据）
+public interface ITenantCredentialSettingRepository
+{
+    Task<TenantCredentialSetting?> GetByTenantAndCategoryAsync(
+        Guid tenantId, CredentialCategory category, CancellationToken ct = default);
+    Task UpsertAsync(TenantCredentialSetting setting, CancellationToken ct = default);
 }
 ```
 

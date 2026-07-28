@@ -78,9 +78,9 @@
 - 验收：多步搜索 → 结构化报告且外部搜索 API 真实 HTTP 调用（mock transport 覆盖真实请求路径）。
 - 关键设计：独立 `ResearchCommandHandler`（非工作流 step 循环）；`ISearchProvider`+`SerpApiSearchProvider`（真实 HttpClient，密钥走 `SearchSettings`/环境变量，**不落库**）；复用 `IModelClient`（测试可 StubModelClient）。
 
-> **🔝 当前最高优先级史诗 = F13（多租户凭据配置：模型 + 搜索 BYO-Key + 平台内置 [P0]）**，建议优先于 F7–F12 排期。设计文档 `./model-config.md` 已建且 §7 决策 **S1–S6 已锁定（2026-07-27）**：S1 仅 OpenAI 兼容 / S2 B 启用+默认配额（模型 $1/天、搜索 100 次/天）/ S3 每租户每类单条 upsert / S4 并入 Agent 配置页（不新增独立页）/ S5 搜索纳入 / S6 搜索仅 SerpApi。可进实现。
+> **F13（多租户凭据配置）已 done**；其 UX 衍生「填 Key+Base URL 后拉取可访问模型清单」已拆为独立最高优先级史诗 **F14（供应商模型发现 [P0]）**，见下方，设计文档 `./model-discovery.md` 已建。F13 实现中 S3（单条 upsert→多条目列表）、S4（并入配置页→独立「我的凭据」页）两项决策已被用户实战推翻并反转，最新状态以 `./model-config.md` 与 `./model-discovery.md` 为准。
 
-### F13 · 多租户凭据配置（模型 + 搜索，BYO-Key + 平台内置）  [P0 最高优先级]  open  🔴高风险（破坏性后端 + 密钥安全 + 多租户隔离）
+### F13 · 多租户凭据配置（模型 + 搜索，BYO-Key + 平台内置）  [P0 最高优先级]  done  🔴高风险（破坏性后端 + 密钥安全 + 多租户隔离）
 - 设计文档：`features/model-config.md`（已升级为「通用租户凭据」，Model + Search 两 `Category`）
 - 目标：补齐多租户化最后一环——外部 API 凭据层租户隔离（**模型 LLM key + Research 用 SerpApi 搜索 key 同构处理**）。双轨：A 用户自配凭据（模型 provider/API Key/BaseUrl/模型名，或搜索 SerpApi Key，按租户隔离）；B 平台内置凭据（运营方 `appsettings` 已配密钥暴露为可选，替代哑 stub / 全局 `SearchSettings` 硬编码，作上手/试用层）。
 - 核心改造：把 `SemanticKernelModelClient`（现全局启动时构建）与 `SerpApiSearchProvider`（现构造时固化 `SearchSettings.SerpApiKey`，见 `SerpApiSearchProvider.cs:26,32,44`）都改为 per-tenant 解析；抽 `ITenantCredentialResolver`（category=Model/Search）+ `TenantProvider`；`ModelRouter`/`SerpApiSearchProvider` 运行时按租户取 key，无则回退平台默认。新增 `TenantCredentialSetting` 聚合（落库加密复用 `IApiKeyEncryptionService` AES-256-GCM，掩码 `••••`+prefix）；端点 `GET/PUT /api/v1/tenant/credentials?category=Model|Search`（RBAC Admin/Operator）+ `GET /api/v1/models`（平台模型清单）；前端 `CredentialSettingsPage`（`Tabs: 模型 + 搜索`）+ 模型下拉接平台模型。配额经扩展 `ICostController` 为租户键控（`PerTenantDailyBudget` 模型 / `PerTenantDailySearchQuota` 搜索，防 B 滥用）。
@@ -93,6 +93,102 @@
   - **配额**：平台模型超 `PerTenantDailyBudget` / 平台搜索超 `PerTenantDailySearchQuota` → 拒绝并提示配 BYO-Key；BYO-Key 不受限。
   - **QA**：build 0/0、`dotnet test` 全绿（含新增租户隔离/加密/路由合并/搜索租户化单测）、前端 `tsc`+`qa.mjs` 全绿、既有 238 测试不回归。
 - 决策状态（见 `./model-config.md` §7，2026-07-27 全部锁定）：S1 仅 OpenAI 兼容 / S2 B 启用+默认配额（模型 `PerTenantDailyBudget=1.00` USD/天、搜索 `PerTenantDailySearchQuota=100` 次/天）/ S3 每租户每类单条 upsert / S4 并入 Agent 配置页（不新增独立 `CredentialSettingsPage`）/ S5 搜索纳入（SerpApi key 前台可配）/ S6 搜索仅 SerpApi。
+- **完成记录（2026-07-27）**：feature-builder 全栈实跑落地。后端 Domain(`TenantCredentialSetting`+`CredentialCategory`+仓储)/Application(`ITenantCredentialResolver`/`ITenantModelClientResolver`/`IPlatformModelProvider`+租户键控 `ICostController`+`ModelRouter` 新 ctor)/Infrastructure(`SemanticKernelModelClient.CreateForTenant` 工厂/`TenantCredentialResolver`+缓存失效/`TenantModelClientResolver`/`PlatformModelsProvider`/`SerpApiSearchProvider` 运行时按租户解析 key/`CostController` 租户键控/EF 迁移 `AddTenantCredentialSetting`)/Api(`TenantCredentialsController`+`PlatformModelsController`+DTOs)。前端 Agent 配置页内嵌 `Tabs: 模型+搜索` 凭据配置（`Input.Password` 掩码 + provider Select + 保存），`types/index.ts`+`api.ts` 补齐；`tsc --noEmit` 0 error。三道质量门 PASS（`.quality-gate.json` 推进 `f13-multi-tenant-credentials`）；`dotnet test src/AgentPlatform.sln` 全绿（含 F13 新增 EF 集成测试验证落库+租户隔离+upsert 不重复行）。**审查修复 P0**：`TenantCredentialsController.Put` 原直接写仓储但未提交 `IUnitOfWork.SaveChangesAsync`（本控制器不走 MediatR 命令、无 `UnitOfWorkBehavior` 自动提交），导致凭据永不落库——已注入 `IUnitOfWork` 显式提交，与命令处理器行为一致。
+
+### F14 · 供应商模型发现（填 Key+Base URL 后拉取可访问模型清单）  [P0 最高优先级]  open  🔴高风险（新增端点 + 鉴权 + 路由 + 前端契约）
+- 设计文档：`features/model-discovery.md`（已建，§6 决策 D1 已锁定）
+- 目标：用户在「我的凭据」/Agent 配置页填 API Key + Base URL 后，可一键拉取该 provider 账户下所有可访问模型（`GET /v1/models`，OpenAI 兼容），以下拉供选择，免去手动拼模型名。来源 F13 凭据配置 UX 衍生（F13 当前 Model Name 为手动文本框）。
+- 核心改造：
+  - 后端新端点 `POST /api/v1/tenant/credentials/discover-models`，body `{ provider, apiKey, baseUrl? }`；解析 provider 默认 BaseUrl（OpenAI→`https://api.openai.com/v1`、DeepSeek→`https://api.deepseek.com/v1`，VLLM/Custom 必填 baseUrl）/ `IHttpClientFactory` `GET {baseUrl}/models`（`Bearer`，请求级超时 15s）/ 解析 OpenAI 兼容 `{data:[{id,owned_by}]}` 返回 `List<ProviderModelInfo>(Id,OwnedBy)`；错误 401/403/404/超时/传输 → 400 + 中文原因；`[Authorize(Roles="Admin,Operator")]`；密钥仅探测，不落库不记日志。
+  - 新服务 `IProviderModelDiscovery` + `ProviderModelDiscovery`（Infrastructure），DI `AddScoped`；单测 mock `HttpMessageHandler` 覆盖 URL/解析/401。
+  - 前端 `CredentialForm`：模型类 Model Name 由 `Input` 改 `AutoComplete`（选项来自发现结果，允许手动自定义）；「拉取模型」按钮（填 Key+BaseUrl 可用，loading+错误）；edit 模式 Key 留空时按钮禁用并要求先填 Key（**D1：不做后端解密存量密钥探测**）。
+- 验收子项：
+  - 后端 discover-models：OpenAI/DeepSeek 默认 base 补全正确；VLLM/Custom 缺 baseUrl → 400；401/403/404 → 400 中文原因；解析 `id` 正确；空 `data` → 200 空数组；`StubHttpMessageHandler` 单测覆盖。
+  - 前端 AutoComplete 下拉填充 + 允许自定义；按钮 loading/错误；edit 模式留空 Key 时按钮提示先填 Key。
+  - e2e（Python UTF-8）：登录 → 填 Key+BaseUrl → discover → 返回模型列表 → 选一个 → 保存 → `GET /tenant/credentials` 列表含该 model。
+  - 质量门：build 0/0、`dotnet test` 全绿（含 discovery 单测）、前端 tsc 0 + vitest 全过 + vite build；实现后追加 `.quality-gate.json` notes 并保 `cleared:true`。
+- 决策（见 `./model-discovery.md` §6）：D1 edit 模式探测密钥 = 仅用表单现填 Key（不做后端解密存量，用户 2026-07-27 拍板）/ D2 范围仅模型类（搜索无模型列表语义）/ D3 无 schema 变更（不落库，无 EF 迁移）/ D4 安全边界（Admin 专用+用户自有 provider 出站，密钥不落库不记日志）。
+- 风险：🔴 高风险（新增端点+鉴权+路由+前端契约，触发 feature-dev 高风险闸口，先设计后实现）；出站请求 SSRF 面（Admin 专用可接受，后续可加域名白名单，不在本范围）；非标准 `/models` 返回容错（缺 `owned_by`/非数组 data 容忍）。
+
+### F15 · 多语言国际化（i18n，暂仅中文 + 英文）  [P1]  open  🟡中风险（前端跨切面文案抽取 + 全局 Provider 注入）
+- 设计文档：`features/i18n.md`（已建，§5 决策 D1–D4 待锁定）
+- 目标：引入 `i18next` + `react-i18next`，顶栏「中文 / English」切换并持久化到 localStorage（默认 zh-CN）；Antd `ConfigProvider` 与 `dayjs` 区域同步。v1 仅 zh-CN + en-US 两套，优先抽取 UI 框架级文案（导航/标题/按钮/表单标签/空态/错误态），领域数据（用户填的 agent 描述等）不做。
+- 核心改造：
+  - 新增 `src/locales/`（index.ts 初始化 + zh-CN.ts + en-US.ts + config.ts），`i18n.use(initReactI18next).init(...)`，`lng` 读 `localStorage('app-locale')`、回退 `zh-CN`。
+  - 新增 `components/LanguageSwitcher.tsx`（顶栏右上角，切 `i18n.changeLanguage` + 持久化 + 触发 `ConfigProvider locale` / `dayjs.locale` 联动）；`App.tsx` 顶层 `ConfigProvider` 随 `languageChanged` 事件切 `antd/locale/zh_CN`↔`en_US`、`dayjs` 切 `zh-cn`↔`en`。
+  - 各页面/组件 `useTranslation()` + `t('area.key')` 替换硬编码中文；v1 优先级：LanguageSwitcher+AppLayout 菜单+LoginPage → common 通用词 → 各页标题/Empty/message → CredentialForm/CredentialManager/ErrorState/useApiState。
+  - 资源用嵌套对象、点分隔 key（如 `nav.agents`/`common.save`），动态文本用插值 `t('key',{name})`；**不触后端**（v1 后端错误原文仍按原样展示，见 D1）。
+- 验收子项：
+  - 基础设施：i18n 初始化、zh-CN/en-US 齐备、默认 zh-CN、刷新从 localStorage 恢复。
+  - 切换器：顶栏可切中/英、即时生效、Antd+dayjs locale 同步；各页标题/按钮/表单标签/空态/错误态双语正确、默认中文视觉不回归。
+  - 质量门：tsc 0 error + vitest 全过 + vite build 通过；新增资源 key 对称性单测（zh-CN 与 en-US 顶层 key 一致）；`.quality-gate.json` 追加 notes 保 cleared:true。
+- 决策（见 `./i18n.md` §5，待锁定）：D1 后端错误文案 v1 不本地化 / D2 资源用 .ts 对象 / D3 默认 zh-CN / D4 v1 仅 UI 框架级文案（领域数据不做）。
+- 风险：🟡 中风险（几乎全前端页文案抽取，工作量大；key 规范需统一）；缓解：先定 common/nav/login 高频命名空间，按 §3.5 优先级分批小步提交；第三方画布(@xyflow/react)内置菜单 v1 可能仍中文，列已知残留。
+
+### F16 · 列表统一改为卡片（Card）形式展示  [P2]  open  🟡中风险（前端多列表页渲染层改造）
+- 设计文档：`features/card-layout.md`（已建，§5 决策 D1–D4 待锁定）
+- 目标：用户要求「所有页面的列表都用 card 形式展示」——把各实体列表页的 `<Table>` 替换为响应式卡片网格。新增通用 `components/EntityCardGrid.tsx`（网格 + 加载骨架 + 空态 + 响应式列），各页用 `renderCard(item)` 提供单卡（标题/摘要/状态 Tag/操作菜单），保留搜索/筛选栏与分页、删除 `Popconfirm`。
+- 核心改造：
+  - 目标页（v1 改卡片）：`AgentsPage`/`AgentConfigurationsPage`/`WorkflowsPage`/`ConversationsPage`/`KnowledgeBasesPage`/`CredentialManager`(凭据)/`ApiKeysPage`/`ExecutionLogsPage`/`AgentRolesPage`/`ResearchPage`（后者已是 `<List>`，可保持或适配网格）。⚠️ `AgentConfigurationsPage` 与 **F17** 强耦合（F17 会移除凭据 tab + 补 CRUD + 可能卡片化），建议 F16 先于 F17 或两者由 F17 统一收口该页（见 F17 D2）。⚠️ `AgentRolesPage` 与 **F19** 强耦合（F19 会重写该页：补 CRUD + 内建分区 + 引用计数），建议 F16 先于 F19 或两者由 F19 统一收口该页（见 F19 D1/风险）。
+  - `EntityCardGrid<T>`:`{ items, renderCard, loading?, emptyText?, gutter?, onItemClick? }`；`loading`→`Skeleton` 卡、`empty`→`Empty`、默认 `Row gutter=[16,16]` + `Col xs=24 sm=12 md=8 lg=6`（大屏 4 列）。
+  - 操作：卡片右上 `Dropdown`（⋯）收纳 编辑/删除/运行，删除保留 `Popconfirm`；点击卡进详情/开抽屉；分页（如日志的 `totalCount`）用网格下方 `Pagination` 复用现有 `skip/take`。
+  - 与 F15 i18n 协同：卡片静态文案走 `t()`（D3 建议 F16 落地即采用，避免 F15 二次抽取）。
+- 验收子项：
+  - 通用组件：loading 骨架 / emptyText 空态 / 响应式列 / onItemClick 齐备。
+  - 覆盖度：上述列表页均改卡片，信息等价（标题/摘要/状态/操作不丢）；搜索/筛选/分页保留生效。
+  - 质量门：tsc 0 error + vitest 全过（含 `EntityCardGrid` 渲染/空态/响应式单测）+ vite build 通过；`.quality-gate.json` 追加 notes 保 cleared:true。
+- 决策（见 `./card-layout.md` §5，待锁定）：D1 执行日志默认也改卡片（多列压为卡片元信息，或保留表格作例外）/ D2 详情内子表（step entries/文档列表/Steps）v1 保留 Table / D3 与 F15 顺序（建议 F16 即 `t()`）/ D4 卡片密度默认大屏 4 列、日志可降 3 列。
+- 风险：🟡 中风险（几乎所有列表页渲染层，工作量大）；缓解：先落 `EntityCardGrid` 单一基件，再逐页小步替换（每页一提交），优先高频页；信息密度须保关键字段（状态/时间/owner）不丢；与 F15 时序耦合（D3 规避）。
+
+### F17 · AgentConfiguration 实例化联动（方案 A 细化）  [P2]  open  🟡中风险（前端 CRUD 补全 + 1 新端点 + RBAC 收敛；不触 EF 迁移）
+- 设计文档：`features/agent-config-instantiation.md`（已建，§5 决策 D1–D4 待锁定）
+- 目标：把"版本化 YAML 定义库孤岛"`AgentConfiguration` 变为真正有用的「Agent 定义/模板库」——前端补完整 CRUD + `AgentsPage`「基于模板新建」从定义实例化 Agent + 消除与「我的凭据」页重复 tab 与 RBAC 不一致。来源：2026-07-27 对 `AgentConfigurationsPage` 的分析结论（方案 A）。
+- 核心改造：
+  - 后端新端点 `GET /api/v1/agent-configurations/{id}/template`（`[Authorize(Roles="Admin")]`，tenant-scoped）：解析 `YamlContent`→返回 `ConfigurationAgentTemplate(Name,RoleCode?,ModelProvider?,ModelName?,ModelApiUrl?,SystemPrompt,SourceVersion)`；新增 `Infrastructure/Yaml/AgentConfigurationYamlParser.cs`（复用已引 `YamlDotNet`），容错缺字段→null、非法 YAML→400 中文原因。后端 CRUD(POST/PUT/DELETE/GET) 已就绪，仅差前端 UI 与新 template 端点。
+  - （v1 可选溯源）`CreateAgentCommand` 加 `Guid? ConfigurationId`，handler 写审计溯源，不强制改 `Agent` 聚合（无 EF 迁移）。
+  - 前端 `AgentConfigurationsPage`：移除重复的「凭据设置」tab（凭据统一走「我的凭据」路由 `/credentials`）；补 新建/编辑/删除 模态（name/description/agentTypeCode Select 取 `getAgentRoles()`/yamlContent 代码框）；非 Admin 隐藏写按钮（GET 列表为 `[Authorize]` 任意登录可读，写才 Admin，RBAC 自然一致）。
+  - 前端 `AgentsPage`：加「基于模板新建」入口——列定义(`getAgentConfigurations()`)→选其一→`getAgentConfigurationTemplate(id)` 预填创建表单→用户微调→`createAgent`。
+  - `AppLayout`：Configurations 菜单项与后端 `[Authorize(Roles="Admin")]` 对齐（Admin-only 可见），消除非 Admin 见报错入口。
+  - `api.ts`+`types/index.ts`：补 `getAgentConfigurationTemplate`/`createAgentConfiguration`/`updateAgentConfiguration`/`deleteAgentConfiguration` + 对应 Request/Template 类型。
+- 验收子项：
+  - 后端 template 端点：字段映射正确；缺字段→null 兜底；非法 YAML→400 中文；跨租户 id→404；非 Admin→403；parser/handler 单测覆盖。
+  - 前端：定义可 CRUD（无凭据 tab）；「基于模板新建」预填正确且可改；Configurations 仅 Admin 可见；e2e(Admin 登录→建定义→基于模板建 Agent→字段一致→清理)。
+  - 质量门：build 0/0、`dotnet test` 全绿（含 parser/handler 单测）、前端 tsc 0 + vitest 全过 + vite build；`.quality-gate.json` 追加 notes 保 cleared:true。
+- 决策（见 `./agent-config-instantiation.md` §5，待锁定）：D1 实例化=前端预填为主、后端 `ConfigurationId` 仅溯源（v1 不强制改聚合/无迁移）/ D2 与 F16 时序（建议 F16 先行，F17 在其卡片 UI 叠加 CRUD+模板；否则 F17 自行卡片化并标记 F16 跳过该页）/ D3 YAML 编辑器 v1 用 TextArea（不引 Monaco）/ D4 模板字段映射约定（YAML 采纳 `AgentYamlModel` 结构，前端以 template 端点返回为准不自解析）。
+- 风险：🟡 中风险（前端 CRUD 跨模态 + 新端点 + AppLayout RBAC）；缓解：后端 CRUD 已就绪仅差 UI、template 端点只读+解析无写副作用、YAML 解析单点服务端；与 F16 渲染冲突见 D2 明确单一 owner 页。
+
+### F18 · Dashboard 图表充实（运行分析看板）  [P1]  open  🟡中风险（新增 analytics 端点 + 前端图表库 + 时间聚合）
+- 设计文档：`features/dashboard-charts.md`（已建，§7 决策 D1–D4 待锁定）
+- 目标：把当前仅 4 个计数卡的 Dashboard 升级为运行分析看板（KPI 卡 + 时间序列/分布图），对标 Dify/LangSmith/Flowise/n8n/Coze。来源：2026-07-27 用户要求"充实 dashboard 图表并分析可形成图表的内容 + 对标竞品"。
+- 现状核验（真实代码）：当前 `DashboardPage.tsx:35-66` 仅 4 个 `<Statistic>` 卡；后端**无 analytics REST 端点**（仅有 OpenTelemetry `/metrics` Prometheus 抓取，非前端消费）。可聚合数据源已确认：`ExecutionLog`(WorkflowId/WorkflowName/TenantId/Status/StartedAt/Entries[].Duration)、`Conversation`(TenantId/TotalTokenUsage/CreatedAt/Status)、`Agent`/`Workflow`(Status/CreatedAt)。成本数据缺口：无模型单价表 → v1 只做 Token 图不做 $ 成本图。
+- 竞品共性高价值图表：① 运行量趋势 ② 成功率 ③ 延迟 ④ Token 消耗 ⑤ 按 Agent/工作流拆分 ⑥ 对话量 ⑦ 时间范围选择器(7/14/30 天)。
+- 核心改造：
+  - 后端新端点 `GET /api/v1/analytics/summary?from=&to=`（`AnalyticsController`，沿用 Dashboard 现有可见性 `[Authorize]` 已认证可读，tenant-scoped via `ITenantProvider`）：单一 `DashboardSummaryDto` 一次返回全部图表数据（KPIs + ExecutionsByDay + TokenByDay + ConversationsByDay + LatencyByDay + TopWorkflows），避免 N 请求。Handler 取区间内原始行（租户过滤）**应用层按日桶聚合**（v1；留 SQL GROUP BY 下沉余地）。复用 `IExecutionLogRepository`/`IConversationRepository`。
+  - 前端：图表库推荐 `@ant-design/plots`（antd 官方 G2 封装，视觉一致），备选 `recharts`；`DashboardPage` 加 7/14/30 天范围选择器 + 6 KPI 卡（扩 Active Agents/Workflows/执行总数/成功率/总 Token/平均延迟）+ 图表网格 C1 执行量趋势(面积堆叠)/C2 成功率(折线)/C3 平均延迟/C4 Token 消耗/C5 对话量/C6 热门工作流 Top8(横向柱状)；`api.ts` 加 `getDashboardSummary(from,to)`；标签用 `t()`（与 F15 协同）。
+  - **无 EF 迁移**（纯查询端点）。
+- 验收子项：端点结构正确 + 租户隔离单测；前端 7/14/30 切换同步刷新、空数据空态不崩；KPI 与现有 4 卡口径一致；日桶聚合单测（成功率=completed/total、Token 求和、TopWorkflows 截前 8）；tsc 0 + vitest + vite build 通过。
+- 决策（见 `./dashboard-charts.md` §7，待锁定）：D1 v1 仅 Token 图不做 $ 成本图（缺单价表）/ D2 图表标签用 `t()`（与 F15 协同）/ D3 可见性沿用已认证可读（非仅 Admin）/ D4 图表库默认 `@ant-design/plots`(recharts 备选)。
+- 风险：🟡 中风险（新端点 + 图表库包体 + 应用层时间聚合）；缓解：聚合在应用层、量大再下沉 SQL；recharts 备选降包体；与 F16 不冲突（Dashboard 非表格页）、与 F15 协同即可。
+
+### F19 · Agent Roles 内建标记 + 页面补全 + 分类合并（统一角色目录，DB 为准）  [P1]  open  🟡中风险（角色分类值对象 + 聚合加列 + EF 迁移 + 新增 PUT 端点 + 前端页重写）
+- 设计文档：`features/agent-roles-builtin.md`（已建，§5 决策 D1–D4 已随用户拍板锁定）
+- 目标：① 修 bug——系统架构/产品经理等平台默认角色被错标"自定义"（前端 `BUILT_IN_ROLES` 硬编码 code 与 DB `AgentRoleDefinition` code 整套对不上 + 聚合无内建标记）；② 补全 `AgentRolesPage`（新建/编辑/删除 + 被引用计数，后端 CRUD 已就绪但缺 `PUT`）；③ 合并两套分裂分类（`AgentType` 硬编码值对象 vs `AgentRoleDefinition` DB 表）为**一套以数据库为准的统一角色目录**。来源：2026-07-27 用户对 `AgentRolesPage` 的分析反馈（"系统架构等应是内建"+"页面功能不全"），并明确"两条分类合并成一套统一角色目录，以数据库为准"。
+- 核心改造：
+  - `AgentRoleDefinition` 增 `IsBuiltIn`(bool,default false) + EF 迁移 `AddAgentRoleIsBuiltIn`；`DatabaseInitializer` 种子 7 个内建（architecture/development/testing/product/documentation/reviewer/requirement，`IsBuiltIn=true`）。既有 Agent 的 `Agent.Role.RoleCode`（如 development）与内建 code 一致 → 数据连续，无需迁移 Agent。
+  - 统一目录：`AgentRoleDefinition` 表 = 唯一权威；`AgentType` 值对象**降为内建目录的类型化镜像**，`Predefined` code 改为与 DB 内建完全一致；新增**架构 parity 测试**断言两者 code 集合相等 → 强制"DB 为准"，杜绝再次漂移。`Agent.Role` 仍绑 `AgentType`（不改动 Agent 聚合、不新增 Agent 迁移，低风险）。
+  - 内建判定：`AgentRoleSummary` 增 `IsBuiltIn`；前端删硬编码 `BUILT_IN_ROLES`、按 flag 分区。
+  - 页面补全：后端新增 `PUT /api/v1/agent-roles/{roleCode}` + `UpdateAgentRoleDefinitionCommand/Handler`；前端加「新建/编辑/删除」(内建 code 锁、不可删)；列表增「被引用 Agent 数」列（`IAgentRoleDefinitionRepository.CountAgentsByRoleCodeAsync`）。删除拦截内建/被引用（409）。
+  - `AgentsPage` 默认 `roleCode:'developer'` → 修正为真实内建 code（如 `development`）。
+- 验收子项：
+  - 内建角色在页面"内建"区正确显示，不再误标 Custom。
+  - 新建/编辑/删除可用（Admin）；非 Admin 无写按钮（RBAC 对齐）。
+  - 内建删除拦截、被 Agent 引用的自定义角色删除拦截（409 提示）。
+  - 列表显示每角色被引用 Agent 数。
+  - parity 测试通过（`AgentType.Predefined` code == DB 内建种子 code）。
+  - 现有 Agent 角色不丢、路由（`RoleBasedSelectionStrategy` 只按 StepName 匹配）行为不变（回归测试）。
+  - 质量门：build 0/0、`dotnet test` 全绿（含 parity + 引用计数单测）、前端 tsc 0 + vitest 全过 + vite build；`.quality-gate.json` 追加 notes 保 cleared:true。
+- 决策（见 `./agent-roles-builtin.md` §5，已锁定）：D1 合并策略=DB 为准 + AgentType 降镜像 + parity 测试（不动 Agent 聚合）；D2 内建集合 7 个（含新增 reviewer、沿用 requirement）；D3 补 PUT、内建 code 锁不可删；D4 AgentConfiguration.AgentTypeCode v1 不强制、仅文档建议。
+- 风险：🟡 中风险（聚合加列 + 迁移 + 新端点 + 前端重写）；缓解：EF 铁律（迁移 + `#pragma warning disable IDE0161`）；`AgentType.Predefined` code 改动需同步改 SpecFlow `AgentTypeMigration`（`"architect"`→`"architecture"` 等）；与 F16 强耦合（见下方 F16 协同）。
 
 ### F7 · 工作流平台化（program，可拆子史诗）  [P2/P3]  open  ⚠️高风险
 - 设计文档：`features/workflow-platformization.md`（待建，含子史诗拆分；来源 `./competitive-roadmap.md` 对标 Dify/n8n/LangGraph/Coze/Flowise）

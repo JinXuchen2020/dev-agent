@@ -136,9 +136,33 @@
 
 | 方法 | 路径 | 说明 | 权限 |
 | :--- | :--- | :--- | :--- |
-| GET | `/api/v1/models` | 可用模型列表 | read:workflow |
+| GET | `/api/v1/models` | 可用模型列表（平台内置 ∪ 租户 BYO，仅返回 `modelId/provider/displayName`，**不含密钥**） | authenticated |
 | POST | `/api/v1/models/test` | 测试模型连通性 | admin |
 | PUT | `/api/v1/models/{id}/priority` | 调整模型优先级 | admin |
+
+### I.5.1 多租户凭据 API（F13）
+
+多租户外部 API 凭据（模型 LLM key + 搜索 SerpApi key）的 BYO-Key 配置与平台内置回退。密钥属高敏，仅 `Admin/Operator` 可写；所有响应**绝不**返回明文密钥（掩码 `••••`+prefix）。
+
+| 方法 | 路径 | 说明 | 权限 |
+| :--- | :--- | :--- | :--- |
+| GET | `/api/v1/tenant/credentials?category=Model\|Search` | 获取当前租户某类凭据；未配置返回 `204`；返回 `TenantCredentialDto`（`apiKeyMask` 掩码，无明文） | Admin,Operator |
+| PUT | `/api/v1/tenant/credentials` | 创建/覆盖更新（upsert，按 `tenantId+category`）；入站明文 `apiKey` 加密后立即丢弃，留空则沿用既有密文；成功后使该租户+类别解析缓存失效 | Admin,Operator |
+
+```jsonc
+// PUT /api/v1/tenant/credentials 请求
+{
+  "category": 0,            // 0=Model, 1=Search
+  "provider": "DeepSeek",   // 模型: OpenAI/DeepSeek/VLLM/Custom；搜索: SerpApi
+  "apiKey": "sk-...",       // 明文，仅入站，服务端加密后丢弃；首次必填，更新可留空
+  "baseUrl": "https://api.deepseek.com", // 模型端点/自定义 OpenAI 兼容 base；搜索通常留空
+  "modelName": "deepseek-chat",          // 仅模型类
+  "isEnabled": true
+}
+
+// GET /api/v1/tenant/credentials?category=Model 响应（已配置）
+{ "category": 0, "provider": "DeepSeek", "apiKeyMask": "••••sk-ABCD1234", "baseUrl": "https://api.deepseek.com", "modelName": "deepseek-chat", "isEnabled": true }
+```
 
 ### I.6 对话 API（SSE 流式）
 

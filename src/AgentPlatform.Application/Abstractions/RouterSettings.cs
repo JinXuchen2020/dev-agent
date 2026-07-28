@@ -11,9 +11,16 @@ public sealed class RouterSettings
     public List<ModelCandidateConfig> Candidates { get; set; } = [];
 
     /// <summary>
-    /// Gets or sets the maximum amount that may be spent per day across all model calls.
+    /// Gets or sets the maximum amount that may be spent per day across all model calls (global / legacy cap).
     /// </summary>
     public decimal DailyBudget { get; set; } = 50.0m;
+
+    /// <summary>
+    /// Gets or sets the maximum amount a single tenant may spend per day on platform-provided models.
+    /// BYO-key (tenant-owned) models are not subject to this budget (cost is borne by the tenant).
+    /// Default 1.00 USD/tenant/day (F13 S2).
+    /// </summary>
+    public decimal PerTenantDailyBudget { get; set; } = 1.0m;
 
     /// <summary>
     /// Gets or sets the default estimated number of tokens used for cost reservation when actual usage is unknown.

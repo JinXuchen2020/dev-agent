@@ -1,10 +1,19 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Table, Typography, Tag, Spin, Drawer, Descriptions, Button } from 'antd';
+import {
+  Table,
+  Typography,
+  Tag,
+  Spin,
+  Drawer,
+  Descriptions,
+  Button,
+  Tabs,
+} from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { AgentConfiguration } from '../types';
 import { getAgentConfigurations } from '../services/api';
-
-const { Title, Paragraph } = Typography;
+import CredentialManager from '../components/CredentialManager';
+import { CredentialCategory } from '../types';
 
 const columns = (onView: (r: AgentConfiguration) => void): ColumnsType<AgentConfiguration> => [
   { title: 'Name', dataIndex: 'name', key: 'name' },
@@ -57,7 +66,8 @@ const AgentConfigurationsPage: React.FC = () => {
       })
       .catch((err: unknown) => {
         // AbortController 取消的请求忽略；其余错误已由全局拦截器记录
-        if ((err as { name?: string })?.name !== 'CanceledError') console.error('[AgentConfigurations] fetch failed', err);
+        if ((err as { name?: string })?.name !== 'CanceledError')
+          console.error('[AgentConfigurations] fetch failed', err);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -73,30 +83,62 @@ const AgentConfigurationsPage: React.FC = () => {
     setDrawerOpen(true);
   };
 
+  const configsTab = loading ? (
+    <Spin />
+  ) : (
+    <Table
+      columns={columns(openDrawer)}
+      dataSource={configs}
+      rowKey="id"
+      pagination={{
+        current: page,
+        pageSize,
+        total,
+        showTotal: (t) => `共 ${t} 条`,
+      }}
+      onChange={(p) => {
+        setPage(p.current ?? 1);
+        setPageSize(p.pageSize ?? 10);
+      }}
+    />
+  );
+
+  const tabItems = [
+    { key: 'configs', label: 'Agent 配置', children: configsTab },
+    {
+      key: 'creds',
+      label: '凭据设置',
+      children: (
+        <Tabs
+          defaultActiveKey="model"
+          items={[
+            {
+              key: 'model',
+              label: '模型',
+              children: <CredentialManager category={CredentialCategory.Model} />,
+            },
+            {
+              key: 'search',
+              label: '搜索',
+              children: <CredentialManager category={CredentialCategory.Search} />,
+            },
+          ]}
+        />
+      ),
+    },
+  ];
+
   return (
     <div>
-      <Title level={4}>Agent Configurations</Title>
-      {loading ? (
-        <Spin />
-      ) : (
-        <Table
-          columns={columns(openDrawer)}
-          dataSource={configs}
-          rowKey="id"
-          pagination={{
-            current: page,
-            pageSize,
-            total,
-            showTotal: (t) => `共 ${t} 条`,
-          }}
-          onChange={(p) => {
-            setPage(p.current ?? 1);
-            setPageSize(p.pageSize ?? 10);
-          }}
-        />
-      )}
+      <Typography.Title level={4}>Agent Configurations</Typography.Title>
+      <Tabs defaultActiveKey="configs" items={tabItems} />
 
-      <Drawer title="Agent Configuration" open={drawerOpen} onClose={() => setDrawerOpen(false)} width={640}>
+      <Drawer
+        title="Agent Configuration"
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        width={640}
+      >
         {selected && (
           <>
             <Descriptions column={1} bordered size="small" style={{ marginBottom: 16 }}>
@@ -108,7 +150,6 @@ const AgentConfigurationsPage: React.FC = () => {
                 {new Date(selected.createdAt).toLocaleString()}
               </Descriptions.Item>
             </Descriptions>
-            <Paragraph type="secondary">YAML Configuration</Paragraph>
             <pre
               style={{
                 background: '#0d1117',

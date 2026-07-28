@@ -12,13 +12,14 @@ import {
   Empty,
 } from 'antd';
 import { SendOutlined } from '@ant-design/icons';
-import type { Conversation, KnowledgeBase } from '../types';
+import type { Conversation, KnowledgeBase, PlatformModelDto } from '../types';
 import {
   getConversation,
   getKnowledgeBases,
   setConversationKnowledgeBase,
   removeConversationKnowledgeBase,
   sendMessage,
+  getPlatformModels,
   getErrorMessage,
 } from '../services/api';
 import PageHeader from '../components/PageHeader';
@@ -36,6 +37,8 @@ const ConversationDetailPage: React.FC = () => {
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
+  const [models, setModels] = useState<PlatformModelDto[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string | undefined>(undefined);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [savingKb, setSavingKb] = useState(false);
@@ -52,10 +55,12 @@ const ConversationDetailPage: React.FC = () => {
         return null;
       }),
       getKnowledgeBases().catch(() => [] as KnowledgeBase[]),
+      getPlatformModels().catch(() => [] as PlatformModelDto[]),
     ])
-      .then(([conv, kbs]) => {
+      .then(([conv, kbs, mdl]) => {
         setConversation(conv);
         setKnowledgeBases(kbs ?? []);
+        setModels(mdl ?? []);
         const history: ChatMessage[] = (conv?.messages ?? [])
           .map((m, i) => ({
             id: `${i}-${m.role}`,
@@ -90,7 +95,7 @@ const ConversationDetailPage: React.FC = () => {
     };
     setMessages((prev) => [...prev, userMsg]);
     try {
-      const res = await sendMessage(id, text);
+      const res = await sendMessage(id, text, selectedModel ? { model: selectedModel } : undefined);
       setMessages((prev) => [
         ...prev,
         { id: `a-${Date.now()}`, role: 'agent', content: res.reply },
@@ -140,6 +145,31 @@ const ConversationDetailPage: React.FC = () => {
         actions={
           <Space>
             {linkedKbName && <Tag color="blue">已挂：{linkedKbName}</Tag>}
+            <Select
+              style={{ width: 220 }}
+              placeholder="选择模型"
+              allowClear
+              value={selectedModel}
+              onChange={(v) => setSelectedModel(v || undefined)}
+              options={[
+                ...(models.filter((m) => !m.isTenantOwned).length
+                  ? [{
+                      label: '平台模型',
+                      options: models
+                        .filter((m) => !m.isTenantOwned)
+                        .map((m) => ({ label: m.displayName, value: m.modelId })),
+                    }]
+                  : []),
+                ...(models.filter((m) => m.isTenantOwned).length
+                  ? [{
+                      label: '我的模型',
+                      options: models
+                        .filter((m) => m.isTenantOwned)
+                        .map((m) => ({ label: m.displayName, value: m.modelId })),
+                    }]
+                  : []),
+              ]}
+            />
             <Select
               style={{ width: 240 }}
               placeholder="挂载知识库"

@@ -5,6 +5,8 @@ using AgentPlatform.Domain.ValueObjects;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using System.Linq;
+using System.Threading.Tasks;
 using TechTalk.SpecFlow;
 using Xunit;
 
@@ -38,7 +40,9 @@ public class AgentRoutingSteps
         pricingOptions.Value.Returns(new PricingSettings());
         var routerOptions = Substitute.For<IOptions<RouterSettings>>();
         routerOptions.Value.Returns(_routerSettings);
-        _costController = new CostController(pricingOptions, routerOptions, Substitute.For<ILogger<CostController>>());
+        var searchOptions = Substitute.For<IOptions<SearchSettings>>();
+        searchOptions.Value.Returns(new SearchSettings());
+        _costController = new CostController(pricingOptions, routerOptions, searchOptions, Substitute.For<ILogger<CostController>>());
     }
 
     [Given(@"主模型 ""(.*)"" 调用超时")]
@@ -88,8 +92,19 @@ public class AgentRoutingSteps
 
         var routerOptions = Substitute.For<IOptions<RouterSettings>>();
         routerOptions.Value.Returns(_routerSettings);
+        var tenantModelResolver = Substitute.For<ITenantModelClientResolver>();
+        tenantModelResolver
+            .ResolveAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(new List<TenantModelResolution>());
+        var platformModelProvider = Substitute.For<IPlatformModelProvider>();
+        platformModelProvider.GetCandidates()
+            .Returns(_routerSettings.Candidates
+                .Select(c => new ModelCandidate(c.ModelId, c.Provider, c.Priority))
+                .ToList());
+        var tenantProvider = Substitute.For<ITenantProvider>();
+        tenantProvider.GetTenantId().Returns(Guid.NewGuid());
         var logger = Substitute.For<ILogger<ModelRouter>>();
-        _router = new ModelRouter(_modelClient, _costController, _pipeline, logger, routerOptions);
+        _router = new ModelRouter(_modelClient, tenantModelResolver, tenantProvider, platformModelProvider, _costController, _pipeline, logger, routerOptions);
 
         try
         {
@@ -125,12 +140,14 @@ public class AgentRoutingSteps
     [Given("预算设置为零")]
     public void Given预算设置为零()
     {
-        _routerSettings.DailyBudget = 0;
+        _routerSettings.PerTenantDailyBudget = 0;
         var pricingOptions = Substitute.For<IOptions<PricingSettings>>();
         pricingOptions.Value.Returns(new PricingSettings());
         var routerOptions = Substitute.For<IOptions<RouterSettings>>();
         routerOptions.Value.Returns(_routerSettings);
-        _costController = new CostController(pricingOptions, routerOptions, Substitute.For<ILogger<CostController>>());
+        var searchOptions = Substitute.For<IOptions<SearchSettings>>();
+        searchOptions.Value.Returns(new SearchSettings());
+        _costController = new CostController(pricingOptions, routerOptions, searchOptions, Substitute.For<ILogger<CostController>>());
     }
 
     [Given(@"主模型 ""(.*)"" 抛出 InvalidOperationException")]

@@ -1,11 +1,33 @@
 export interface Agent {
   id: string;
   name: string;
-  role: { roleCode: string };
-  modelEndpoint?: { modelId: string };
+  roleCode: string;
+  modelProvider?: string | null;
+  modelName?: string | null;
+  tenantId: string;
+  status?: string;
   systemPrompt: string;
-  status: string;
   createdAt: string;
+}
+
+export interface CreateAgentRequest {
+  name: string;
+  roleCode?: string | null;
+  modelProvider?: string | null;
+  modelName?: string | null;
+  modelApiUrl?: string | null;
+  systemPrompt?: string | null;
+}
+
+// PATCH-style update: all fields optional; backend applies only the supplied ones.
+export interface UpdateAgentRequest {
+  name?: string | null;
+  roleCode?: string | null;
+  modelProvider?: string | null;
+  modelName?: string | null;
+  modelApiUrl?: string | null;
+  systemPrompt?: string | null;
+  status?: string | null;
 }
 
 export interface ApiKey {
@@ -282,4 +304,52 @@ export interface ResearchRequest {
   maxSteps?: number | null;
   modelId?: string | null;
   focusInstructions?: string | null;
+}
+
+// ── F13 多租户凭据配置（模型 + 搜索，BYO-Key + 平台内置）──
+// 与 AgentPlatform.Domain.Enums.CredentialCategory 对齐（序列化为 int）。
+export const CredentialCategory = {
+  Model: 0,
+  Search: 1,
+} as const;
+export type CredentialCategory =
+  (typeof CredentialCategory)[keyof typeof CredentialCategory];
+
+export interface TenantCredentialDto {
+  id: string;
+  name: string;
+  category: CredentialCategory;
+  provider: string;
+  apiKeyMask: string;
+  baseUrl: string | null;
+  modelName: string | null;
+  isEnabled: boolean;
+}
+
+export interface CreateTenantCredentialRequest {
+  category: CredentialCategory;
+  name: string;
+  provider: string;
+  apiKey: string;
+  baseUrl?: string | null;
+  modelName?: string | null;
+  isEnabled?: boolean;
+}
+
+export interface UpdateTenantCredentialRequest {
+  id: string;
+  name: string;
+  category: CredentialCategory;
+  provider: string;
+  apiKey?: string | null;
+  baseUrl?: string | null;
+  modelName?: string | null;
+  isEnabled?: boolean;
+}
+
+export interface PlatformModelDto {
+  modelId: string;
+  provider: string;
+  displayName: string;
+  isTenantOwned: boolean;
 }

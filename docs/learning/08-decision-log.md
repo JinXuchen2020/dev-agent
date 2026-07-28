@@ -362,6 +362,61 @@ Phase 5 安全加固完成后，需要补齐全库健康检查。已有两道门
 
 ---
 
+## 8.12 设计文档「锁定决策」可被用户真实使用推翻（2026-07-27 元教训）
+
+| 属性 | 值 |
+|------|-----|
+| **时间** | 2026-07-27 |
+| **背景** | F13 设计文档 `features/model-config.md` §7 把 S1–S6 标记为「已锁定」，其中 S3 = 每租户每类单条 upsert。实现并交付后，用户要求「模型应是列表、可添加多个不同模型」，直接推翻 S3。 |
+
+### 选项
+
+| 方案 | 描述 |
+|------|------|
+| 坚持 S3 单条 | 用户无法添加多个模型，与真实诉求冲突 |
+| 反转 S3 为多条目列表 | 改唯一索引为非唯一、加 `Name` 列、控制器改 CRUD；契合用户心智 |
+
+### 选择：反转 S3（用户拍板）
+
+**理由：** 设计文档的 §7「决策」是可修订假设，不是铁律。feature-dev 高风险闸口的价值是「先设计后落地、降低返工」，不是「冻结需求」。用户实战反馈是最高优先信号。
+
+### 后续影响
+
+- `features/` 下所有「决策」节都应标注「待用户拍板 / 可修订」；
+- 实现前若用户推翻，直接改文档 + 改实现，不必走特殊流程；
+- 需求反转不计入「质量门缺陷」，属正常需求演进。
+
+---
+
+## 8.13 列表端点 take 校验与 handler clamp 不一致（2026-07-27 踩坑）
+
+| 属性 | 值 |
+|------|-----|
+| **时间** | 2026-07-27 |
+| **现象** | Dashboard 整页 ErrorState；浏览器 Network 显示 `GET /api/v1/workflows?take=0` → 400 |
+
+### 根因
+
+`WorkflowsController` / `ExecutionLogsController` 在控制器层 `if (take < 1) return BadRequest`，但 handler 内部有 `Math.Clamp(take, 1, 100)` 本可兜底 0；控制器校验早于 handler，把 `take=0`（前端只取 `totalCount` 的本意）直接拒掉。Dashboard 用 `error = a.error || w.error || s.error || f.error` 的 OR 逻辑 → 3 个 `take=0` 请求全 400 → 整页错误态。
+
+### 选项
+
+| 方案 | 描述 |
+|------|------|
+| 方案 A（已应用） | 前端 `take:0 → take:1` 绕过，后端契约不变（handler 的 `totalCount` 由独立 `COUNT` 得出，与 take 无关） |
+| 方案 B（未做） | 后端列表端点支持 `take=0` = count-only（返回 `items:[]` + `totalCount`），语义自洽；属契约变更 |
+
+### 选择：方案 A（用户拍板，不做 B）
+
+**理由：** 零契约风险、立即恢复 Dashboard；`totalCount` 本就与 take 解耦。
+
+### 后续影响
+
+- 任何「只取计数」的前端需求，优先用 `take=1` 而非 `take=0`；
+- 若要做 count-only 语义，须同步改 `Workflows` / `ExecutionLogs` / `AgentConfigurations` 三处控制器 + handler 的 clamp 逻辑 + 补单测。
+
+---
+
 ## 8.10 决策演化时间线
 
 ```
@@ -401,6 +456,19 @@ Phase 5 安全加固完成后，需要补齐全库健康检查。已有两道门
 ├── .quality-gate.json codebaseOptimizer: not_run → PASSED
 ├── 分支 codebase-optimizer/2026-07-22 已推送 GitHub
 └── 143/143 测试通过，0错误 0警告
+
+2026-07-27 (F13 多租户凭据完成 + 衍生决策 + Dashboard bug 修复 + F14–F19 设计)
+├── F13 多租户凭据配置完成（feat/f13-multi-tenant-credentials，commit 224754f）：TenantCredentialSetting 聚合 + 每租户模型/搜索 BYO-Key + 平台内置回退 + 租户键控配额(PerTenantDailyBudget/PerTenantDailySearchQuota) + AES-256-GCM 加密
+├── F13 §7 S3 决策被用户实战推翻：每租户每类「单条 upsert」→「多条目列表」（用户要求可添加多个不同模型）；唯一索引改非唯一、加 Name 列、控制器改 CRUD(GET数组/POST/PUT{id}/DELETE{id})
+├── 元教训：设计文档「锁定决策」非铁律，用户真实使用可推翻（见 §8.12）
+├── Dashboard 400 bug：列表端点控制器 take<1→400 校验早于 handler Math.Clamp(take,1,100)；前端 Dashboard 故意 take=0 取计数→整页 ErrorState；前端绕行 take=1（方案 A，不改动后端契约，见 §8.13）
+├── F14 供应商模型发现（设计，P0）：填 Key+BaseUrl 拉取 OpenAI 兼容 /models；D1 编辑模式仅用表单现填 Key，不做后端解密存量密钥探测
+├── F15 多语言 i18n（设计，P1）：i18next + react-i18next，zh-CN/en-US，顶栏切换 + Antd/dayjs locale 同步
+├── F16 列表改卡片（设计，P2）：新增 EntityCardGrid 通用组件替代各页 <Table>
+├── F17 AgentConfiguration 实例化（方案 A，设计，P2）：补前端 CRUD + GET /agent-configurations/{id}/template + 消除与「我的凭据」重复 tab + AppLayout RBAC 收敛
+├── F18 Dashboard 图表（设计，P1）：新增 GET /api/v1/analytics/summary，6 KPI + C1–C6 图，对标 Dify/LangSmith/Flowise/n8n/Coze
+├── F19 Agent Roles 内建+合并（设计，P1）：AgentRoleDefinition 加 IsBuiltIn；合并 AgentType 值对象与 AgentRoleDefinition 两套分类为「以 DB 为准」统一目录；前端删硬编码 BUILT_IN_ROLES
+└── 架构发现：AgentConfiguration 是「版本化 YAML 定义孤岛」——运行时零引用（全仓 AgentConfigurationId = 0 处）；AgentType(architect/developer/...) 与 AgentRoleDefinition(architecture/development/...) 两套 code 完全不互通
 ```
 
 ---

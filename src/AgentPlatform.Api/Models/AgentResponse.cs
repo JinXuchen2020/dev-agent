@@ -11,6 +11,8 @@ namespace AgentPlatform.Api.Models;
 /// <param name="ModelProvider">The name of the model provider backing the agent, if configured.</param>
 /// <param name="ModelName">The specific model name used by the agent, if configured.</param>
 /// <param name="TenantId">The identifier of the tenant that owns the agent.</param>
+/// <param name="Status">The operational status of the agent (e.g. "Active", "Inactive").</param>
+/// <param name="SystemPrompt">The system prompt that defines the agent's behaviour.</param>
 /// <param name="CreatedAt">The UTC timestamp when the agent was created.</param>
 public record AgentResponse(
     Guid Id,
@@ -19,6 +21,8 @@ public record AgentResponse(
     string? ModelProvider,
     string? ModelName,
     Guid TenantId,
+    string Status,
+    string SystemPrompt,
     DateTime CreatedAt)
 {
     /// <summary>
@@ -33,5 +37,7 @@ public record AgentResponse(
         agent.ModelEndpoint.Provider,
         agent.ModelEndpoint.ModelName,
         agent.TenantId,
+        agent.Status.ToString(),
+        agent.SystemPrompt,
         agent.CreatedAt);
 }
