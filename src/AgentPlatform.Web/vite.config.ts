@@ -5,6 +5,11 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    // E: 盘（外部/网络挂载）上 Vite 默认 fs 事件监听常漏掉文件改动，导致 HMR 不触发、
+    // 服务器缓存旧 transform（现象：改了源码浏览器刷新仍是旧内容）。改为轮询保证可靠。
+    watch: {
+      usePolling: true,
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:5000',
