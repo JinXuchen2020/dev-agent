@@ -1,5 +1,30 @@
 # 变更日志
 
+## v2.7 (2026-07-28)
+
+### F14 · 供应商模型发现（填 Key + Base URL 后拉取可访问模型清单）完成（feature-builder 全栈实跑，🔴高风险）
+
+用户在「我的凭据」/Agent 配置页填 API Key + Base URL + 选 Provider 后，点「拉取模型」即可从该 provider 账户（OpenAI 兼容 `GET /v1/models`）拉回所有可访问模型，以下拉供选择，免去手填模型名易错的问题。
+
+**核心改动：**
+- **后端发现服务**：新增 `IProviderModelDiscovery`（Application.Abstractions 接口）+ `ProviderModelInfo` record + `ProviderModelDiscoveryException`（领域友好异常，携带可直接回传客户端的 400 中文原因，绝不泄露密钥）+ `ProviderModelDiscovery`（Infrastructure.Models，真实 `HttpClient` 出站，复用 `SerpApiSearchProvider` 的 `IHttpClientFactory` 模式，无 stub）。
+- **端点**：`TenantCredentialsController` 新增 `POST discover-models`（RBAC `Admin,Operator`，只读探测、无落库、无密钥出 API 体）；`DiscoverModelsRequest`（provider / baseUrl / apiKey）。默认 base：OpenAI/DeepSeek 内置、Custom/VLLM 须显式填。
+- **DI 注册**：`IProviderModelDiscovery` 注册 Scoped 单实现，控制器注入消费；无 EF 迁移。
+- **前端契约**：`types/index.ts` 加 `ProviderModelInfo`、`api.ts` 加 `discoverProviderModels`；`CredentialForm` 模型类 `Model Name` 改 `AutoComplete`（允许自定义）+「拉取模型」按钮（loading / 错误提示 / edit 模式留空 Key 禁用并用 `Tooltip` 提示先填 Key）。
+
+**质量与测试：**
+- 三道质量门禁全 PASS（`ddd-code-reviewer` / `ddd-phase-quality-gate` / `codebase-optimizer`）；`.quality-gate.json` 推进 `f14-model-discovery`
+- 审查修复 P1：`ProviderModelDiscovery` 原 `response.Content.ReadAsStringAsync` 位于 `try` 之外，若 15s 超时发生在读取响应体阶段会抛未捕获 `OperationCanceledException` → 500，已移入 `try` 并用 `using var response` 全程受请求级超时保护，超时统一映射为友好 400
+- 审查修复 P2：`CredentialForm`「拉取模型」disabled `Button` 用 `title` 提示禁用原因但 antd v5 吞掉 hover 导致提示不可见，已用 `Tooltip` 包裹使其 hover 显示（满足 D1「按钮提示先填 Key」）
+- `dotnet test src/AgentPlatform.sln` **255 passed / 0 failed**（含 F14 新增 11 例 ProviderModelDiscovery 单测，覆盖 URL/解析/401/404/空 data/缺 owned_by 等）；前端 `tsc --noEmit` **0 error** + `vite build` 通过
+- 模型一致性：后端 camelCase 序列化 `{id, ownedBy}`、前端对应 `{id, ownedBy}`
+
+**已知残留（非阻断）：**
+- e2e 浏览器联动（Playwright/Edge）本沙箱未跑，单测已覆盖真实 HTTP 探测路径（StubHttpMessageHandler 验证 GET+Bearer+URL）
+- SSRF 域名白名单不在本范围（D4），Admin 专用可接受
+
+**分支：** `feat/f14-model-discovery`
+
 ## v2.6 (2026-07-27)
 
 ### F13 · 多租户凭据配置（模型 + 搜索，BYO-Key + 平台内置）完成（feature-builder 全栈实跑，🔴高风险）

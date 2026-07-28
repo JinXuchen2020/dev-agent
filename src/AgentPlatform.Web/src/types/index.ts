@@ -353,3 +353,9 @@ export interface PlatformModelDto {
   displayName: string;
   isTenantOwned: boolean;
 }
+
+// F14 供应商模型发现：填 Key + Base URL 后拉取的 provider 账户可访问模型清单项。
+export interface ProviderModelInfo {
+  id: string;
+  ownedBy?: string | null;
+}

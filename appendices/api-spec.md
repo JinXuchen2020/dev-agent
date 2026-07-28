@@ -148,6 +148,7 @@
 | :--- | :--- | :--- | :--- |
 | GET | `/api/v1/tenant/credentials?category=Model\|Search` | 获取当前租户某类凭据；未配置返回 `204`；返回 `TenantCredentialDto`（`apiKeyMask` 掩码，无明文） | Admin,Operator |
 | PUT | `/api/v1/tenant/credentials` | 创建/覆盖更新（upsert，按 `tenantId+category`）；入站明文 `apiKey` 加密后立即丢弃，留空则沿用既有密文；成功后使该租户+类别解析缓存失效 | Admin,Operator |
+| POST | `/api/v1/tenant/credentials/discover-models` | **（F14）** 供应商模型发现：填 Key+Base URL 后从该 provider 账户（`GET {base}/models`，OpenAI 兼容）拉回可访问模型清单；只读探测，密钥不落库不记日志；`baseUrl` 对 OpenAI/DeepSeek 可省略（用内置默认） | Admin,Operator |
 
 ```jsonc
 // PUT /api/v1/tenant/credentials 请求
@@ -162,6 +163,15 @@
 
 // GET /api/v1/tenant/credentials?category=Model 响应（已配置）
 { "category": 0, "provider": "DeepSeek", "apiKeyMask": "••••sk-ABCD1234", "baseUrl": "https://api.deepseek.com", "modelName": "deepseek-chat", "isEnabled": true }
+
+// POST /api/v1/tenant/credentials/discover-models 请求（F14）
+{ "provider": "DeepSeek", "apiKey": "sk-...", "baseUrl": "https://api.deepseek.com" }  // baseUrl 对 OpenAI/DeepSeek 可省略
+
+// 响应 200（ProviderModelInfo[]）
+[ { "id": "deepseek-chat", "ownedBy": "deepseek" }, { "id": "deepseek-reasoner", "ownedBy": "deepseek" } ]
+
+// 失败 400（密钥无效/无权限/端点不支持/超时/传输错误，返回中文原因，不泄露密钥）
+{ "title": "Bad Request", "status": 400, "detail": "API Key 无效或无权访问该 provider 的模型列表" }
 ```
 
 ### I.6 对话 API（SSE 流式）

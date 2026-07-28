@@ -26,6 +26,7 @@ import type {
   CreateTenantCredentialRequest,
   UpdateTenantCredentialRequest,
   PlatformModelDto,
+  ProviderModelInfo,
 } from '../types';
 
 const api = axios.create({
@@ -239,6 +240,17 @@ export const deleteTenantCredential = (id: string) =>
 // 平台模型目录（platform-* + 当前租户 BYO 模型并列），不含密钥。
 export const getPlatformModels = () =>
   api.get<PlatformModelDto[]>('/models').then((r) => r.data);
+
+// F14 供应商模型发现：填 Key + Base URL 后，拉取该 provider 账户下所有可访问模型清单。
+// 密钥仅用于本次一次性探测，不落库、不回显。
+export const discoverProviderModels = (req: {
+  provider: string;
+  apiKey: string;
+  baseUrl?: string | null;
+}) =>
+  api
+    .post<ProviderModelInfo[]>('/tenant/credentials/discover-models', req)
+    .then((r) => r.data ?? []);
 
 // Normalize an unknown thrown value into a human-readable message.
 // Preserves axios-style `response.data.title` / `response.data.message` when present,
