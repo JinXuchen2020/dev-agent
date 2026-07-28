@@ -110,3 +110,40 @@ export const discoverProviderModels = (req: { provider: string; apiKey: string; 
 - 🔴 高风险：新增端点 + 鉴权 + 路由 + 前端契约变更，触发 feature-dev 高风险闸口（先设计后实现，本设计文档即契约）。
 - 出站请求（SSRF 面）：因 Admin 专用 + 用户自有 provider，风险可接受；如需收紧可后续加 provider 域名白名单（不在本 feature 范围）。
 - 部分非标准 OpenAI 兼容端点 `/models` 返回结构略有差异：解析时容错（缺 `owned_by` 容忍、非数组 `data` → 视为空/错误提示）。
+
+## Phase Quality Gate Checklist（F14）
+
+> 由 ddd-phase-quality-gate 嵌入（8 类全扫，P0–P3 = 0 open）。增量顺序：接口/实现/端点 → 编译 0 警告 → F14 单测全绿 → DI 审计 → 层审计 → 前端契约对齐 → 提交。
+
+### 1. Pre-flight Version Audit
+- [x] `IHttpClientFactory` 复用既有 `AddHttpClient()`（DI 已注册），无新 NuGet 依赖引入。
+- [x] `HttpRequestMessage` / `AuthenticationHeaderValue` / `JsonDocument` 均为 .NET 9 BCL API，签名已与代码核对。
+
+### 2. BDD Scenarios First
+- [x] 本 feature 为 UX 衍生（来源 F13 §衍生），验收以 `model-discovery.md §5` 子项为准；后端单测覆盖全部探测路径。
+
+### 3. DDD Layer Rules
+- [x] 接口 `IProviderModelDiscovery` + `ProviderModelInfo` + `ProviderModelDiscoveryException` 位于 `AgentPlatform.Application.Abstractions`。
+- [x] 实现 `ProviderModelDiscovery` 位于 `AgentPlatform.Infrastructure.Models`（`internal sealed`）。
+- [x] 端点 `DiscoverModels` 位于 `AgentPlatform.Api.Controllers.TenantCredentialsController`。
+
+### 4. DI Registration Completeness
+- [x] `IProviderModelDiscovery` 已在 `Infrastructure/DependencyInjection.cs` 注册为 `AddScoped`（与 `IPlatformModelProvider` 同区块）。
+- [x] 控制器 ctor 注入并消费；无未注册接口。
+
+### 5. Configuration-First
+- [x] Provider 默认 Base URL 以静态字典常量集中（`DefaultBaseUrls`），非散落魔法字符串；超时 15s 为明确常量。
+- [x] 不新增 `IOptions<T>`（本服务无外部配置项；密钥来自请求体、不落库）。
+
+### 6. EF Core Mapping Sync
+- [x] 本 feature 无新聚合 / 表 / 迁移（D3 决策：discovery 不落库）。
+
+### 7. Concurrency & Lifecycle
+- [x] `ProviderModelDiscovery` 为 Scoped，无 static 可变状态；`HttpClient` 由工厂提供、`HttpRequestMessage`/`HttpResponseMessage`/`JsonDocument` 均 `using` 释放，`CancellationTokenSource` 链接后释放。
+- [x] 超时与取消正确联动（请求 + 读取响应体全程受 15s 请求级超时保护，映射为友好 400 而非 500）。
+
+### 8. Cross-Cutting Infrastructure
+- [x] 端点 `[Authorize(Roles="Admin,Operator")]`（与凭据控制器一致）；密钥仅一次性探测，不落库、不写日志。
+- [x] 错误统一以 `ProviderModelDiscoveryException` 中文原因经控制器 `BadRequest` 返回；非 2xx / 401/403/404 / 超时 / 传输全覆盖。
+- [x] 前端 `tsc --noEmit` 0 error + `vite build` 通过；前后端字段 `id`/`ownedBy` 对齐。
+

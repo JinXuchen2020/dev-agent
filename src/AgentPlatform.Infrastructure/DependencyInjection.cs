@@ -187,6 +187,9 @@ public static class DependencyInjection
         // 平台模型目录（运营方配置的 RouterSettings.Candidates）。
         services.AddScoped<AgentPlatform.Application.Abstractions.IPlatformModelProvider,
             AgentPlatform.Infrastructure.Credentials.PlatformModelsProvider>();
+        // F14 供应商模型发现（填 Key+BaseUrl 后拉取可访问模型清单，OpenAI 兼容 GET /models）。
+        services.AddScoped<AgentPlatform.Application.Abstractions.IProviderModelDiscovery,
+            AgentPlatform.Infrastructure.Models.ProviderModelDiscovery>();
 
         var cacheProvider = configuration.GetSection("Cache:Provider").Value;
         if (string.Equals(cacheProvider, "Redis", StringComparison.Ordinal))

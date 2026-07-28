@@ -25,6 +25,7 @@ public sealed class TenantCredentialsController : ControllerBase
     private readonly IApiKeyEncryptionService _encryption;
     private readonly ITenantCredentialResolver _resolver;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IProviderModelDiscovery _modelDiscovery;
 
     /// <summary>初始化 <see cref="TenantCredentialsController"/> 的新实例。</summary>
     public TenantCredentialsController(
@@ -32,13 +33,15 @@ public sealed class TenantCredentialsController : ControllerBase
         ITenantCredentialSettingRepository repository,
         IApiKeyEncryptionService encryption,
         ITenantCredentialResolver resolver,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IProviderModelDiscovery modelDiscovery)
     {
         _tenant = tenant;
         _repository = repository;
         _encryption = encryption;
         _resolver = resolver;
         _unitOfWork = unitOfWork;
+        _modelDiscovery = modelDiscovery;
     }
 
     /// <summary>获取当前租户某类凭据设置列表（可能为空数组）。</summary>
@@ -145,6 +148,26 @@ public sealed class TenantCredentialsController : ControllerBase
         _resolver.Invalidate(tenantId, existing.Category);
 
         return NoContent();
+    }
+
+    /// <summary>
+    /// 探测供应商账户下所有可访问模型（OpenAI 兼容 GET /models），供「拉取模型」下拉免去手填模型名。
+    /// <see cref="DiscoverModelsRequest.ApiKey"/> 仅用于本次一次性出站探测，绝不落库、绝不写日志。
+    /// </summary>
+    [HttpPost("discover-models")]
+    public async Task<IActionResult> DiscoverModels(
+        [FromBody] DiscoverModelsRequest request,
+        CancellationToken ct)
+    {
+        try
+        {
+            var models = await _modelDiscovery.DiscoverAsync(request.Provider, request.ApiKey, request.BaseUrl, ct);
+            return Ok(models);
+        }
+        catch (ProviderModelDiscoveryException ex)
+        {
+            return BadRequest(ex.Message);
+        }
     }
 
     private static TenantCredentialDto Map(TenantCredentialSetting s) =>
