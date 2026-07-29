@@ -97,7 +97,7 @@ const AppLayout: React.FC = () => {
             borderBottom: `1px solid ${token.colorBorderSecondary}`,
           }}
         >
-          {sidebarCollapsed ? 'AP' : 'Agent Platform'}
+          {sidebarCollapsed ? 'AP' : t('nav.appTitle')}
         </div>
         <Menu
           mode="inline"

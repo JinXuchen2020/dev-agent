@@ -72,7 +72,7 @@ const LoginPage: React.FC = () => {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ width: 40, height: 40, borderRadius: 10, background: colors.accent }} />
-          <span style={{ fontSize: 20, fontWeight: 700, color: colors.textPrimary }}>AgentPlatform</span>
+          <span style={{ fontSize: 20, fontWeight: 700, color: colors.textPrimary }}>{t('nav.appTitle')}</span>
         </div>
 
         <div style={{ textAlign: 'center' }}>

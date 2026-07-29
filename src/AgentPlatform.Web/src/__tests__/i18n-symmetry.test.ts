@@ -13,10 +13,27 @@ function flatten(obj: Record<string, unknown>, prefix = ''): string[] {
   });
 }
 
+function collectValues(obj: Record<string, unknown>): string[] {
+  return Object.values(obj).flatMap((v) => {
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      return collectValues(v as Record<string, unknown>);
+    }
+    return typeof v === 'string' ? [v] : [];
+  });
+}
+
 describe('i18n resource symmetry (F15)', () => {
   it('zh-CN and en-US have identical flattened key sets', () => {
     const zh = flatten(zhCN as unknown as Record<string, unknown>).sort();
     const en = flatten(enUS as unknown as Record<string, unknown>).sort();
     expect(en).toEqual(zh);
+  });
+
+  // 防回归：默认语言 zh-CN 的用户可见值不得残留英文 "Agent"（应已本地化为「智能体」）。
+  it('zh-CN values contain no untranslated "Agent"', () => {
+    const leaked = collectValues(zhCN as unknown as Record<string, unknown>).filter((v) =>
+      v.includes('Agent'),
+    );
+    expect(leaked).toEqual([]);
   });
 });
