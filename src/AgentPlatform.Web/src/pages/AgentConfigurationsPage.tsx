@@ -1,55 +1,36 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import {
-  Table,
-  Typography,
-  Tag,
-  Spin,
-  Drawer,
-  Descriptions,
-  Button,
-  Tabs,
-} from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import { Typography, Tag, Drawer, Descriptions, Tabs, Pagination, Space } from 'antd';
 import type { AgentConfiguration } from '../types';
 import { getAgentConfigurations } from '../services/api';
 import CredentialManager from '../components/CredentialManager';
 import { CredentialCategory } from '../types';
 import { useTranslation } from 'react-i18next';
+import Card from '../components/Card';
+import EntityCardGrid from '../components/EntityCardGrid';
+import { colors } from '../theme/tokens';
 
 const AgentConfigurationsPage: React.FC = () => {
   const { t } = useTranslation();
-  const columns = (onView: (r: AgentConfiguration) => void): ColumnsType<AgentConfiguration> => [
-    { title: t('common.name'), dataIndex: 'name', key: 'name' },
-    { title: t('pages.configurations.colType'), dataIndex: 'agentType', key: 'agentType' },
-    { title: t('pages.configurations.colVersion'), dataIndex: 'version', key: 'version' },
-    {
-      title: t('common.status'),
-      dataIndex: 'isActive',
-      key: 'isActive',
-      render: (a: boolean) => (a ? <Tag color="green">{t('common.enabled')}</Tag> : <Tag>{t('common.disabled')}</Tag>),
-    },
-    {
-      title: t('pages.configurations.colCreated'),
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      render: (d: string) => new Date(d).toLocaleString(),
-    },
-    {
-      title: t('common.actions'),
-      key: 'action',
-      render: (_, r) => (
-        <Button
-          size="small"
-          onClick={(e) => {
-            e.stopPropagation();
-            onView(r);
-          }}
-        >
-          {t('pages.configurations.view')}
-        </Button>
-      ),
-    },
-  ];
+  const renderConfigCard = (c: AgentConfiguration) => (
+    <Card title={c.name}>
+      <Space direction="vertical" size={6} style={{ width: '100%' }}>
+        <span style={{ color: colors.textMuted, fontSize: 13 }}>
+          {t('pages.configurations.colType')}: {c.agentType}
+        </span>
+        <span style={{ color: colors.textMuted, fontSize: 13 }}>
+          {t('pages.configurations.colVersion')}: {c.version}
+        </span>
+        {c.isActive ? (
+          <Tag color="green">{t('common.enabled')}</Tag>
+        ) : (
+          <Tag>{t('common.disabled')}</Tag>
+        )}
+        <span style={{ color: colors.textMuted, fontSize: 13 }}>
+          {t('pages.configurations.colCreated')}: {new Date(c.createdAt).toLocaleString()}
+        </span>
+      </Space>
+    </Card>
+  );
   const [configs, setConfigs] = useState<AgentConfiguration[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
@@ -84,24 +65,30 @@ const AgentConfigurationsPage: React.FC = () => {
     setDrawerOpen(true);
   };
 
-  const configsTab = loading ? (
-    <Spin />
-  ) : (
-    <Table
-      columns={columns(openDrawer)}
-      dataSource={configs}
-      rowKey="id"
-      pagination={{
-        current: page,
-        pageSize,
-        total,
-        showTotal: (total) => t('common.total', { count: total }),
-      }}
-      onChange={(p) => {
-        setPage(p.current ?? 1);
-        setPageSize(p.pageSize ?? 10);
-      }}
-    />
+  const configsTab = (
+    <>
+      <EntityCardGrid
+        items={configs}
+        loading={loading}
+        rowKey={(c) => c.id}
+        emptyText={t('empty.configurations')}
+        onItemClick={(c) => openDrawer(c)}
+        renderCard={renderConfigCard}
+      />
+      {!loading && total > 0 && (
+        <Pagination
+          style={{ marginTop: 16, textAlign: 'right' }}
+          current={page}
+          pageSize={pageSize}
+          total={total}
+          showTotal={(total) => t('common.total', { count: total })}
+          onChange={(p, ps) => {
+            setPage(p);
+            setPageSize(ps);
+          }}
+        />
+      )}
+    </>
   );
 
   const tabItems = [

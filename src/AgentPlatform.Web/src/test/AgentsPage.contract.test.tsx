@@ -37,26 +37,26 @@ beforeEach(() => {
   vi.mocked(api.getPlatformModels).mockResolvedValue([]);
 });
 
-describe('AgentsPage 列映射契约', () => {
-  it('把 API 返回的真实字段渲染进表格（不出现占位符 "-" 或空白）', async () => {
+describe('AgentsPage 字段映射契约', () => {
+  it('把 API 返回的真实字段渲染进卡片网格（不出现占位符 "-" 或空白）', async () => {
     render(<AgentsPage />);
 
     // 等待列表异步加载完成
     await waitFor(() => expect(screen.getByText('文档摘要助手')).toBeInTheDocument());
 
-    // 角色列：必须出现 roleCode，而不是曾经的 '-'
-    expect(screen.getByText('developer')).toBeInTheDocument();
+    // 角色：卡片以「角色: developer」呈现，正则匹配子串而非曾经的 '-'
+    expect(screen.getByText(/developer/)).toBeInTheDocument();
 
-    // Model 列：必须出现 modelName，而不是曾经的 '-'
-    expect(screen.getByText('gpt-4o')).toBeInTheDocument();
+    // Model：卡片以「模型: gpt-4o」呈现，正则匹配子串而非曾经的 '-'
+    expect(screen.getByText(/gpt-4o/)).toBeInTheDocument();
 
-    // System Prompt 列：必须出现真实内容，而不是曾经的空白
-    expect(screen.getByText('你是一个文档摘要助手')).toBeInTheDocument();
+    // System Prompt：必须出现真实内容，而不是曾经的空白
+    expect(screen.getByText(/你是一个文档摘要助手/)).toBeInTheDocument();
 
-    // 状态列：必须渲染出 status（徽章文字），而不是曾经的 undefined→空
+    // 状态：必须渲染出 status（徽章文字），而不是曾经的 undefined→空
     expect(screen.getByText('Active')).toBeInTheDocument();
 
-    // 创建时间列：必须渲染出时间，而不是曾经的空白
+    // 创建时间：必须渲染出时间，而不是曾经的空白
     expect(screen.getByText(/2026\/7\/1|2026-07-01|7\/1\/2026/)).toBeInTheDocument();
 
     // 关键守卫：全部字段都有数据，不应残留占位符 '-'

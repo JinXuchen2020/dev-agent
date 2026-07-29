@@ -127,8 +127,8 @@
 - 决策（见 `./i18n.md` §5，已锁定 2026-07-28）：D1 后端错误文案 v1 不本地化 / D2 资源用 .ts 对象 / D3 默认 zh-CN / D4 v1 仅 UI 框架级文案（领域数据不做）。
 - 风险：🟡 中风险（几乎全前端页文案抽取，工作量大；key 规范需统一）；缓解：先定 common/nav/login 高频命名空间，按 §3.5 优先级分批小步提交；第三方画布(@xyflow/react)内置菜单 v1 可能仍中文，列已知残留。
 
-### F16 · 列表统一改为卡片（Card）形式展示  [P2]  open  🟡中风险（前端多列表页渲染层改造）
-- 设计文档：`features/card-layout.md`（已建，§5 决策 D1–D4 待锁定）
+### F16 · 列表统一改为卡片（Card）形式展示  [P2]  done  🟡中风险（前端多列表页渲染层改造）
+- 设计文档：`features/card-layout.md`（已建，§5 决策 D1–D4 已锁定 2026-07-28）
 - 目标：用户要求「所有页面的列表都用 card 形式展示」——把各实体列表页的 `<Table>` 替换为响应式卡片网格。新增通用 `components/EntityCardGrid.tsx`（网格 + 加载骨架 + 空态 + 响应式列），各页用 `renderCard(item)` 提供单卡（标题/摘要/状态 Tag/操作菜单），保留搜索/筛选栏与分页、删除 `Popconfirm`。
 - 核心改造：
   - 目标页（v1 改卡片）：`AgentsPage`/`AgentConfigurationsPage`/`WorkflowsPage`/`ConversationsPage`/`KnowledgeBasesPage`/`CredentialManager`(凭据)/`ApiKeysPage`/`ExecutionLogsPage`/`AgentRolesPage`/`ResearchPage`（后者已是 `<List>`，可保持或适配网格）。⚠️ `AgentConfigurationsPage` 与 **F17** 强耦合（F17 会移除凭据 tab + 补 CRUD + 可能卡片化），建议 F16 先于 F17 或两者由 F17 统一收口该页（见 F17 D2）。⚠️ `AgentRolesPage` 与 **F19** 强耦合（F19 会重写该页：补 CRUD + 内建分区 + 引用计数），建议 F16 先于 F19 或两者由 F19 统一收口该页（见 F19 D1/风险）。
@@ -139,8 +139,9 @@
   - 通用组件：loading 骨架 / emptyText 空态 / 响应式列 / onItemClick 齐备。
   - 覆盖度：上述列表页均改卡片，信息等价（标题/摘要/状态/操作不丢）；搜索/筛选/分页保留生效。
   - 质量门：tsc 0 error + vitest 全过（含 `EntityCardGrid` 渲染/空态/响应式单测）+ vite build 通过；`.quality-gate.json` 追加 notes 保 cleared:true。
-- 决策（见 `./card-layout.md` §5，待锁定）：D1 执行日志默认也改卡片（多列压为卡片元信息，或保留表格作例外）/ D2 详情内子表（step entries/文档列表/Steps）v1 保留 Table / D3 与 F15 顺序（建议 F16 即 `t()`）/ D4 卡片密度默认大屏 4 列、日志可降 3 列。
+- 决策（见 `./card-layout.md` §5，已锁定 2026-07-28）：D1 执行日志改卡片（多列压为卡片元信息）/ D2 详情内子表（step entries/文档列表/Steps）v1 保留 Table / D3 与 F15 协同（F16 直接用 `t()`）/ D4 卡片密度默认大屏 4 列、日志降 3 列。
 - 风险：🟡 中风险（几乎所有列表页渲染层，工作量大）；缓解：先落 `EntityCardGrid` 单一基件，再逐页小步替换（每页一提交），优先高频页；信息密度须保关键字段（状态/时间/owner）不丢；与 F15 时序耦合（D3 规避）。
+- **完成记录（2026-07-29）**：feature-builder 纯前端实跑落地。新增 `components/EntityCardGrid.tsx`（网格 + Skeleton 加载骨架 + Empty 空态 + 响应式列 normal lg=6 / compact lg=8 + onItemClick + rowKey + density）+ `components/__tests__/EntityCardGrid.test.tsx` 7 项单测。9 个列表页改造为卡片（Agents/AgentConfigurations configsTab/Workflows/Conversations/KnowledgeBases/CredentialManager/ApiKeys/ExecutionLogs(compact)/AgentRoles 两网格）；ResearchPage 故意排除（任务流非实体列表）、详情内子表按 D2 保留 Table。与 F15 协同卡片文案全 `t()`。三道质量门 PASS（`.quality-gate.json` 推进 `f16-card-layout`）；前端 `tsc --noEmit` **0 error** + `vitest` **38/38**（含新增 7 + AgentsPage 契约更新）+ `vite build` 通过。审查修复 P0：`EntityCardGrid` 整卡 `onItemClick` 与卡内交互子元素点击冒泡冲突 → 安全默认拦截（closest button/a/input/select/textarea/[role=button]/[data-no-card-click]）。质量报告 `docs/quality/f16-card-layout-gate.md`。注意：`AgentConfigurationsPage` 与 F17、`AgentRolesPage` 与 F19 强耦合，F16 不改其写路径，由 F17/F19 收口。
 
 ### F17 · AgentConfiguration 实例化联动（方案 A 细化）  [P2]  open  🟡中风险（前端 CRUD 补全 + 1 新端点 + RBAC 收敛；不触 EF 迁移）
 - 设计文档：`features/agent-config-instantiation.md`（已建，§5 决策 D1–D4 待锁定）

@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Typography,
-  Table,
   Button,
   Space,
   Modal,
@@ -18,6 +17,8 @@ import {
   getErrorMessage,
 } from '../services/api';
 import CredentialForm from './CredentialForm';
+import Card from './Card';
+import EntityCardGrid from './EntityCardGrid';
 import { useTranslation } from 'react-i18next';
 
 const { Paragraph, Text } = Typography;
@@ -63,53 +64,12 @@ const CredentialManager: React.FC<{ category: CredentialCategory }> = ({ categor
       .catch((err: unknown) => message.error(t('errors.deleteFailed') + '：' + getErrorMessage(err)));
   };
 
-  const columns = [
-    {
-      title: t('pages.credentials.nameLabel'),
-      dataIndex: 'name',
-      key: 'name',
-      render: (v: string) => <Text strong>{v}</Text>,
-    },
-    {
-      title: t('pages.credentials.providerLabel'),
-      dataIndex: 'provider',
-      key: 'provider',
-      render: (v: string) => <Tag color="blue">{v}</Tag>,
-    },
-    ...(isModel
-      ? [
-          {
-            title: t('pages.agents.modelLabel'),
-            dataIndex: 'modelName',
-            key: 'modelName',
-            render: (v: string | null) => v ?? <Text type="secondary">—</Text>,
-          },
-        ]
-      : []),
-    {
-      title: t('pages.credentials.keyMask'),
-      dataIndex: 'apiKeyMask',
-      key: 'apiKeyMask',
-      render: (v: string) => <Text code>{v}</Text>,
-    },
-    {
-      title: t('common.status'),
-      dataIndex: 'isEnabled',
-      key: 'isEnabled',
-      render: (v: boolean) =>
-        v ? <Tag color="green">{t('common.enabled')}</Tag> : <Tag color="default">{t('common.disabled')}</Tag>,
-    },
-    {
-      title: t('common.operation'),
-      key: 'actions',
-      render: (_: unknown, record: TenantCredentialDto) => (
-        <Space>
-          <Button
-            size="small"
-            type="link"
-            icon={<EditOutlined />}
-            onClick={() => openEdit(record)}
-          >
+  const renderCredentialCard = (record: TenantCredentialDto) => (
+    <Card
+      title={<Text strong>{record.name}</Text>}
+      extra={
+        <Space size={4}>
+          <Button size="small" type="link" icon={<EditOutlined />} onClick={() => openEdit(record)}>
             {t('common.edit')}
           </Button>
           <Popconfirm
@@ -125,9 +85,21 @@ const CredentialManager: React.FC<{ category: CredentialCategory }> = ({ categor
             </Button>
           </Popconfirm>
         </Space>
-      ),
-    },
-  ];
+      }
+    >
+      <Space direction="vertical" size={6} style={{ width: '100%' }}>
+        <Tag color="blue">{record.provider}</Tag>
+        {isModel &&
+          (record.modelName ? <Text>{record.modelName}</Text> : <Text type="secondary">—</Text>)}
+        <Text code>{record.apiKeyMask}</Text>
+        {record.isEnabled ? (
+          <Tag color="green">{t('common.enabled')}</Tag>
+        ) : (
+          <Tag color="default">{t('common.disabled')}</Tag>
+        )}
+      </Space>
+    </Card>
+  );
 
   return (
     <div>
@@ -141,13 +113,12 @@ const CredentialManager: React.FC<{ category: CredentialCategory }> = ({ categor
           {isModel ? t('pages.credentials.addModel') : t('pages.credentials.addSearch')}
         </Button>
       </div>
-      <Table<TenantCredentialDto>
-        rowKey="id"
+      <EntityCardGrid
+        items={list}
         loading={loading}
-        columns={columns}
-        dataSource={list}
-        pagination={false}
-        locale={{ emptyText: t('empty.credentials') }}
+        rowKey={(c) => c.id}
+        emptyText={t('empty.credentials')}
+        renderCard={renderCredentialCard}
       />
       <Modal
         title={editing ? (isModel ? t('pages.credentials.editModel') : t('pages.credentials.editSearch')) : (isModel ? t('pages.credentials.addModel') : t('pages.credentials.addSearch'))}

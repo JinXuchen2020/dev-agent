@@ -88,13 +88,28 @@ interface EntityCardGridProps<T> {
 - **质量门**：前端 `tsc --noEmit` 0 error（strict）、`vitest` 全过（既有 25 不回归，新增 `EntityCardGrid` 渲染/空态/响应式单测）、`vite build` 通过；`.quality-gate.json` 追加 notes 保 `cleared:true`。
 - **无后端改动**：不新增/修改任何端点或契约。
 
-## §5 决策（待锁定）
-- **D1 · 执行日志（ExecutionLogsPage）是否改卡片**：默认**改**（遵循「所有列表」）——每张卡显示 状态 Tag + Agent + 耗时 + 摘要 + 时间；其多列信息压缩为卡片元信息。若团队认为日志密度更重要，可保留表格作为例外（列为决策点）。
+## §5 决策（已锁定 2026-07-28）
+- **D1 · 执行日志（ExecutionLogsPage）改卡片**：**改**（遵循「所有列表」）。每张卡显示 状态 Tag + 工作流/Agent + 耗时 + Token + 时间 + 摘要；多列信息压缩为卡片元信息。按 D4 日志降至大屏 3 列（`lg=8`）保证可读。
 - **D2 · 详情内子表不在 v1**：ExecutionLogDetail 的 step entries、KnowledgeBaseDetail 的文档列表、WorkflowDetail 的 Steps 属详情子表，v1 保留 `<Table>`，后续再议。
-- **D3 · 与 F15 i18n 顺序**：建议 F16 落地时即采用 `t()` 包裹静态文案（与 F15 资源协同）；若 F15 未先落地，F16 建好所需 key 占位、F15 实现时合并，避免二次抽取。
-- **D4 · 卡片密度**：默认大屏 4 列（`lg=6`）；列表项字段多的实体（日志）可降至 `lg=8`（3 列）以保证可读。
+- **D3 · 与 F15 i18n 顺序**：**F15 已合并（PR #11）**，本 feature 落地时直接用 `useTranslation()` + `t()` 包裹卡片内静态文案（空态/状态词/菜单项），复用 F15 已建命名空间；不建占位 key。
+- **D4 · 卡片密度**：默认大屏 4 列（`lg=6`）；列表项字段多的实体（日志）降至 `lg=8`（3 列）以保证可读。
 
 ## §6 风险
 - 🟡 中风险：涉及几乎所有列表页渲染层，工作量大；若各页自写卡片易碎片化。缓解：先落 `EntityCardGrid` 单一基件，再逐页小步替换（每页一次提交），优先高频页（Agents/Workflows/Conversations/KnowledgeBases）。
 - 信息密度：表格能平铺多列，卡片需摘要 + Tag 取舍；须确保关键字段（状态/时间/owner）不丢。
 - 与 F15 时序耦合：若 F16 先落地且未用 `t()`，F15 需补抽卡片文案（已在 D3 规避）。
+
+## §7 Phase Quality Gate Checklist（三道质量门逐项核验，2026-07-28）
+
+F16 纯前端（无后端契约变更），DDD 门中后端专属类目（DI 注册 / EF Core 映射 / SpecFlow BDD / 分层规则）按 scope 记为 N/A；下列 8 类均逐项核验。
+
+1. **Pre-flight Version Audit**（N/A）→ antd 5 / React 19 / Vite 8 版本已在 `package.json` 锁定，无新增依赖。
+2. **BDD Scenarios First**（N/A .NET）→ 前端以 `AgentsPage.contract.test.tsx` 字段映射契约 + `EntityCardGrid.test.tsx` 7 项单测覆盖，等价旧表格行为。
+3. **DDD Layer Rules**（N/A）→ 无后端层改动。
+4. **DI Registration Completeness**（N/A）→ 无新增后端接口。
+5. **Configuration-First** → 卡片内全部用户可见文案走 `t()`（空态/状态词/列标题），沿用 F15 命名空间（`empty.*` 等键已确认存在），无硬编码用户串。
+6. **EF Core Mapping Sync**（N/A）→ 无聚合/迁移变更。
+7. **Concurrency & Lifecycle** → 列表页 `AbortController` 在 `useEffect` cleanup 中 `abort()`（Workflows/Conversations/ExecutionLogs/Configurations 已核验）；`EntityCardGrid` 无模块级可变状态；`onItemClick` 新增交互子元素冒泡拦截（按钮/链接/输入不误触整卡跳转）。
+8. **Cross-Cutting Infrastructure** → i18n 一致、空态 `Empty`+`emptyText`、加载态 `Skeleton`、响应式列（normal lg=6 / compact lg=8）、`rowKey` 全面覆盖、分页（`Pagination`）在后端分页页保留且筛选切换复位 `page=1`。
+
+**门禁结果**：P0=0 / P1=0 / P2=0 / P3=0（open）。遗留：详情内子表（D2，不在 v1）、ResearchPage 任务流（非实体列表，故意排除）沿用旧形态，符合 §5 决策。Gate Status: **PASS**。

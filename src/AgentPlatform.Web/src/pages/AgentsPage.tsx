@@ -1,23 +1,59 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Table, Typography, Tag, Spin, Button, Modal, Form, Select, Input, App as AntApp, Popconfirm, Space } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import { Typography, Tag, Button, Modal, Form, Select, Input, App as AntApp, Popconfirm, Space } from 'antd';
 import type { Agent, AgentRole, PlatformModelDto, CreateAgentRequest, UpdateAgentRequest } from '../types';
 import { getAgents, getAgentRoles, getPlatformModels, createAgent, updateAgent, deleteAgent } from '../services/api';
 import { useAppStore } from '../stores/appStore';
 import { useTranslation } from 'react-i18next';
+import Card from '../components/Card';
+import EntityCardGrid from '../components/EntityCardGrid';
+import { colors } from '../theme/tokens';
 
-const { Title } = Typography;
+const { Title, Paragraph } = Typography;
 
 const AgentsPage: React.FC = () => {
   const { t } = useTranslation();
-  const columns: ColumnsType<Agent> = [
-    { title: t('common.name'), dataIndex: 'name', key: 'name' },
-    { title: t('pages.agents.roleLabel'), dataIndex: 'roleCode', key: 'roleCode' },
-    { title: t('pages.agents.modelLabel'), dataIndex: 'modelName', key: 'modelName', render: (m: string | null) => m ?? <span style={{ color: '#999' }}>-</span> },
-    { title: t('pages.agents.colSystemPrompt'), dataIndex: 'systemPrompt', key: 'systemPrompt', ellipsis: true },
-    { title: t('common.status'), dataIndex: 'status', key: 'status', render: (s: string) => <Tag color={s === 'Inactive' ? 'default' : 'green'}>{s ?? 'Active'}</Tag> },
-    { title: t('pages.agents.colCreated'), dataIndex: 'createdAt', key: 'createdAt', render: (d: string) => new Date(d).toLocaleString() },
-  ];
+  const renderAgentCard = (agent: Agent) => (
+    <Card
+      title={agent.name}
+      extra={
+        isAdmin ? (
+          <Space size={4}>
+            <Button size="small" onClick={() => openEdit(agent)}>
+              {t('common.edit')}
+            </Button>
+            <Popconfirm
+              title={t('pages.agents.deleteConfirm')}
+              okText={t('common.delete')}
+              cancelText={t('common.cancel')}
+              onConfirm={() => handleDelete(agent)}
+            >
+              <Button size="small" danger>
+                {t('common.delete')}
+              </Button>
+            </Popconfirm>
+          </Space>
+        ) : undefined
+      }
+    >
+      <Space direction="vertical" size={6} style={{ width: '100%' }}>
+        <span style={{ color: colors.textMuted, fontSize: 13 }}>
+          {t('pages.agents.roleLabel')}: {agent.roleCode ?? '-'}
+        </span>
+        <span style={{ color: colors.textMuted, fontSize: 13 }}>
+          {t('pages.agents.modelLabel')}: {agent.modelName ?? '-'}
+        </span>
+        <span style={{ color: colors.textMuted, fontSize: 13 }}>
+          {t('pages.agents.colCreated')}: {new Date(agent.createdAt).toLocaleString()}
+        </span>
+        {agent.systemPrompt && (
+          <Paragraph ellipsis={{ rows: 2 }} style={{ color: colors.textMuted, fontSize: 13, margin: 0 }}>
+            {agent.systemPrompt}
+          </Paragraph>
+        )}
+        <Tag color={agent.status === 'Inactive' ? 'default' : 'green'}>{agent.status ?? 'Active'}</Tag>
+      </Space>
+    </Card>
+  );
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -159,19 +195,6 @@ const AgentsPage: React.FC = () => {
     ];
   }, [models, editing]);
 
-  const actionColumn: ColumnsType<Agent>[number] = {
-    title: t('common.operation'),
-    key: 'actions',
-    render: (_, r) => (
-      <Space>
-        <Button size="small" onClick={() => openEdit(r)}>{t('common.edit')}</Button>
-        <Popconfirm title={t('pages.agents.deleteConfirm')} okText={t('common.delete')} cancelText={t('common.cancel')} onConfirm={() => handleDelete(r)}>
-          <Button size="small" danger>{t('common.delete')}</Button>
-        </Popconfirm>
-      </Space>
-    ),
-  };
-
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -182,16 +205,13 @@ const AgentsPage: React.FC = () => {
           </Button>
         )}
       </div>
-      {loading ? (
-        <Spin />
-      ) : (
-        <Table
-          columns={isAdmin ? [...columns, actionColumn] : columns}
-          dataSource={agents}
-          rowKey="id"
-          pagination={{ pageSize: 10 }}
-        />
-      )}
+      <EntityCardGrid
+        items={agents}
+        loading={loading}
+        rowKey={(a) => a.id}
+        emptyText={t('empty.agents')}
+        renderCard={renderAgentCard}
+      />
         <Modal
           title={editing ? t('pages.agents.editAgent') : t('pages.agents.newAgent')}
           open={modalOpen}

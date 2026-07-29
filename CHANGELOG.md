@@ -1,5 +1,29 @@
 # 变更日志
 
+## v2.9 (2026-07-29)
+
+### F16 · 列表统一改为卡片（Card）形式展示完成（feature-builder 纯前端实跑，🟡中风险）
+
+把 9 个实体列表页的 Antd `<Table>` 统一替换为响应式卡片网格，提升可视性与点击目标，对齐现代 Agent 平台（Dify/Coze）的卡片流。
+
+**核心改动：**
+- 新增通用组件 `components/EntityCardGrid.tsx`：统一「网格 + `Skeleton` 加载骨架 + `Empty` 空态 + 响应式列（normal 大屏 4 列 `lg=6` / compact 大屏 3 列 `lg=8`）+ `onItemClick` + `rowKey` + `density`」。
+- 9 个列表页改造为卡片：`AgentsPage` / `AgentConfigurationsPage`(configsTab) / `WorkflowsPage` / `ConversationsPage` / `KnowledgeBasesPage` / `CredentialManager`(凭据) / `ApiKeysPage` / `ExecutionLogsPage`(compact) / `AgentRolesPage`(内置/自定义两网格)。各页用 `renderCard(item)` 提供单卡（标题/摘要/状态 Tag/操作），保留搜索/筛选栏、空态、加载态、分页（`Pagination` 复用 `skip/take/totalCount`，筛选切换复位 `page=1`）。
+- 与 F15 i18n 协同：卡片内静态文案（空态/状态词/列标题）全走 `t()`，无硬编码用户串。
+
+**质量与测试：**
+- 三道质量门禁全 PASS（`ddd-code-reviewer` / `ddd-phase-quality-gate` / `codebase-optimizer`）；`.quality-gate.json` 推进 `f16-card-layout`
+- 审查修复 P0：`EntityCardGrid` 整卡 `onItemClick` 与卡内交互子元素（按钮/链接/输入）点击冒泡冲突 → 改为安全默认，命中 `button/a/input/select/textarea/[role=button]/[data-no-card-click]` 即拦截整卡跳转，避免「点删除又顺带导航」双重动作
+- 前端 `tsc --noEmit` **0 error** + `vitest` **38/38 green**（含新增 `EntityCardGrid` 7 项单测 + `AgentsPage.contract.test.tsx` 字段映射契约更新）+ `vite build` 通过
+- 模型一致性：无后端契约变更；纯前端渲染层改造
+
+**已知残留（非阻断）：**
+- 详情内子表（`ExecutionLogDetail` step entries / `KnowledgeBaseDetail` 文档列表 / `WorkflowDetail` Steps，按 D2 保留 `<Table>`）
+- `ResearchPage` 任务流（非实体列表，故意排除）沿用旧形态
+- `AgentConfigurationsPage` 与 F17、`AgentRolesPage` 与 F19 强耦合，F16 不改其写路径，由 F17/F19 收口
+
+**分支：** `feat/f16-card-layout`
+
 ## v2.8 (2026-07-28)
 
 ### F15 · 多语言国际化 i18n（中文 + 英文）完成（feature-builder 纯前端实跑，🟡中风险）
