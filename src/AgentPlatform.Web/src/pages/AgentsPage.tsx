@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Typography, Tag, Button, Modal, Form, Select, Input, App as AntApp, Popconfirm, Space } from 'antd';
-import type { Agent, AgentRole, PlatformModelDto, CreateAgentRequest, UpdateAgentRequest } from '../types';
-import { getAgents, getAgentRoles, getPlatformModels, createAgent, updateAgent, deleteAgent } from '../services/api';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Typography, Tag, Button, Modal, Form, Select, Input, App as AntApp, Popconfirm, Space, theme, Empty, Skeleton } from 'antd';
+import type { Agent, AgentRole, PlatformModelDto, CreateAgentRequest, UpdateAgentRequest, AgentConfiguration, ConfigurationAgentTemplate } from '../types';
+import { AgentConfigurationStatus } from '../types';
+import { getAgents, getAgentRoles, getPlatformModels, createAgent, updateAgent, deleteAgent, getAgentConfigurations, getAgentConfigurationTemplate } from '../services/api';
 import { useAppStore } from '../stores/appStore';
 import { useTranslation } from 'react-i18next';
 import Card from '../components/Card';
@@ -69,6 +70,27 @@ const AgentsPage: React.FC = () => {
   const isAdmin = !!userRole && userRole.toLowerCase() === 'admin';
   const [form] = Form.useForm<CreateAgentRequest & { status?: string }>();
 
+  // "基于模板新建" 状态：模板选择弹窗 + 配置列表 + 溯源 id。
+  const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const [templateConfigs, setTemplateConfigs] = useState<AgentConfiguration[]>([]);
+  const [templateLoading, setTemplateLoading] = useState(false);
+  const pendingConfigurationId = useRef<string | null>(null);
+
+  const { token } = theme.useToken();
+
+  const configStatusLabel = (s: AgentConfigurationStatus): { label: string; color: string } => {
+    switch (s) {
+      case AgentConfigurationStatus.Active:
+        return { label: t('pages.configurations.statusActive'), color: 'green' };
+      case AgentConfigurationStatus.Archived:
+        return { label: t('pages.configurations.statusArchived'), color: 'default' };
+      case AgentConfigurationStatus.Deprecated:
+        return { label: t('pages.configurations.statusDeprecated'), color: 'red' };
+      default:
+        return { label: t('pages.configurations.statusDraft'), color: 'gold' };
+    }
+  };
+
   const load = () => {
     setLoading(true);
     getAgents().then(setAgents).finally(() => setLoading(false));
@@ -78,6 +100,7 @@ const AgentsPage: React.FC = () => {
 
   const openCreate = async () => {
     setEditing(null);
+    pendingConfigurationId.current = null;
     setModalOpen(true);
     form.resetFields();
     form.setFieldsValue({ roleCode: 'developer', status: 'Active' });
@@ -118,6 +141,74 @@ const AgentsPage: React.FC = () => {
     }
   };
 
+  const openTemplatePicker = async () => {
+    setTemplateModalOpen(true);
+    setTemplateLoading(true);
+    try {
+      const d = await getAgentConfigurations({ take: 100 }).catch(() => ({
+        items: [] as AgentConfiguration[],
+        totalCount: 0,
+      }));
+      const sorted = [...(d?.items ?? [])].sort((a, b) => {
+        const av = a.status === AgentConfigurationStatus.Active ? 0 : 1;
+        const bv = b.status === AgentConfigurationStatus.Active ? 0 : 1;
+        if (av !== bv) return av - bv;
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      });
+      setTemplateConfigs(sorted);
+    } finally {
+      setTemplateLoading(false);
+    }
+  };
+
+  // 选模板 → 拉取结构化 template → 复用新建表单并预填（保留 status=Active 默认）。
+  const chooseTemplate = async (cfg: AgentConfiguration) => {
+    setTemplateModalOpen(false);
+    setEditing(null);
+    pendingConfigurationId.current = null;
+    setModalOpen(true);
+    form.resetFields();
+    setLoadingCreate(true);
+    try {
+      const [r, m, tpl] = await Promise.all([
+        getAgentRoles().catch(() => [] as AgentRole[]),
+        getPlatformModels().catch(() => [] as PlatformModelDto[]),
+        getAgentConfigurationTemplate(cfg.id).catch(() => null as ConfigurationAgentTemplate | null),
+      ]);
+      setRoles(r ?? []);
+      setModels(m ?? []);
+      const defaults: Partial<CreateAgentRequest & { status?: string }> = {
+        roleCode: 'developer',
+        status: 'Active',
+      };
+      if (tpl) {
+        pendingConfigurationId.current = tpl.configurationId;
+        defaults.name = tpl.name;
+        defaults.roleCode = tpl.roleCode ?? 'developer';
+        defaults.systemPrompt = tpl.systemPrompt ?? '';
+        // 模型下拉接目录 modelId；若模板模型命中目录则 provider 自动解析，否则注入一条合成
+        // 目录项，避免 handleSubmit 的 models.find 解析不到 provider 而静默丢弃模型。
+        if (tpl.modelName) {
+          defaults.modelName = tpl.modelName;
+          if (!m.some((mm) => mm.modelId === tpl.modelName)) {
+            setModels([
+              ...m,
+              {
+                modelId: tpl.modelName,
+                provider: tpl.modelProvider ?? '',
+                displayName: tpl.modelName,
+                isTenantOwned: false,
+              },
+            ]);
+          }
+        }
+      }
+      form.setFieldsValue(defaults);
+    } finally {
+      setLoadingCreate(false);
+    }
+  };
+
   const handleSubmit = async () => {
     const values = await form.validateFields();
     setSubmitting(true);
@@ -146,7 +237,8 @@ const AgentsPage: React.FC = () => {
         await updateAgent(editing.id, payload);
         message.success(t('pages.agents.updated'));
       } else {
-        await createAgent(base);
+        await createAgent({ ...base, configurationId: pendingConfigurationId.current });
+        pendingConfigurationId.current = null;
         message.success(t('pages.agents.created'));
       }
       setModalOpen(false);
@@ -200,9 +292,14 @@ const AgentsPage: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Title level={4} style={{ margin: 0 }}>{t('pages.agents.title')}</Title>
         {isAdmin && (
-          <Button type="primary" onClick={openCreate}>
-            {t('pages.agents.newAgent')}
-          </Button>
+          <Space>
+            <Button type="primary" onClick={openCreate}>
+              {t('pages.agents.newAgent')}
+            </Button>
+            <Button onClick={openTemplatePicker}>
+              {t('pages.agents.fromTemplate')}
+            </Button>
+          </Space>
         )}
       </div>
       <EntityCardGrid
@@ -260,6 +357,52 @@ const AgentsPage: React.FC = () => {
               <Input.TextArea rows={4} placeholder={t('pages.agents.systemPromptPlaceholder')} />
             </Form.Item>
           </Form>
+        </Modal>
+
+        <Modal
+          title={t('pages.agents.templatePicker')}
+          open={templateModalOpen}
+          footer={null}
+          onCancel={() => setTemplateModalOpen(false)}
+          width={640}
+        >
+          <Typography.Paragraph type="secondary">{t('pages.agents.templateHint')}</Typography.Paragraph>
+          {templateLoading ? (
+            <Skeleton active />
+          ) : templateConfigs.length === 0 ? (
+            <Empty description={t('empty.configurations')} />
+          ) : (
+            <div style={{ maxHeight: 420, overflow: 'auto' }}>
+              {templateConfigs.map((c) => (
+                <div
+                  key={c.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '12px 4px',
+                    borderBottom: `1px solid ${token.colorBorderSecondary}`,
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 600 }}>
+                      {c.name}{' '}
+                      <Tag color={configStatusLabel(c.status).color}>
+                        {configStatusLabel(c.status).label}
+                      </Tag>
+                    </div>
+                    <div style={{ color: colors.textMuted, fontSize: 12 }}>
+                      {t('pages.configurations.colVersion')}: {c.version} ·{' '}
+                      {c.agentTypeCode ?? '-'}
+                    </div>
+                  </div>
+                  <Button type="primary" onClick={() => chooseTemplate(c)}>
+                    {t('pages.agents.useTemplate')}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </Modal>
     </div>
   );

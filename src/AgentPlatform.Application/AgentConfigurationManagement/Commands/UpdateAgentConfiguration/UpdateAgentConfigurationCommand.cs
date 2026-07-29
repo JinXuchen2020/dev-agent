@@ -38,7 +38,7 @@ internal sealed class UpdateAgentConfigurationCommandHandler(
 
         // Validate YAML
         if (!yamlParser.Validate(request.YamlContent))
-            throw new ArgumentException("The provided YAML content is not valid YAML.", nameof(request.YamlContent));
+            throw new InvalidYamlException(nameof(request.YamlContent));
 
         // Update content (bumps version)
         config.UpdateContent(request.YamlContent, request.ChangeLog, request.VersionBump);

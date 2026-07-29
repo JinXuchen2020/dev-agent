@@ -99,12 +99,12 @@
 
 ---
 
-## 5 · 决策（待锁定）
+## 5 · 决策（已锁定 2026-07-29）
 
-- **D1 实例化方式**：前端「预填表单」为主、后端 `ConfigurationId` 仅溯源（v1 不强制改 `Agent` 聚合、无 EF 迁移）。备选：后端新增 `POST /agent-configurations/{id}/instantiate` 直接落 Agent（更重，留待 v2）。
-- **D2 与 F16 时序**：F17 的 `AgentConfigurationsPage` 列表渲染须与 F16 卡片化一致——**建议 F16 先行**，F17 在其卡片 UI 上叠加 CRUD + 模板入口；若 F16 未做，F17 自行以卡片呈现并标记，F16 后续跳过该页。
-- **D3 YAML 编辑器**：v1 用 `Input.TextArea`（等宽字体 + 行号可选），不引入 Monaco/CodeMirror（重依赖）；语法高亮列已知残留。
-- **D4 模板字段映射约定**：YAML 采纳约定结构（详见 §3.1 `AgentYamlModel`），文档化在 `AgentConfiguration.cs` 或 README；前端预填以「后端 template 端点返回」为准，不自行解析 YAML。
+- **D1 实例化方式**：前端「预填表单」为主、后端 `ConfigurationId` 仅溯源（v1 不强制改 `Agent` 聚合、无 EF 迁移）。备选：后端新增 `POST /agent-configurations/{id}/instantiate` 直接落 Agent（更重，留待 v2）。✅ 已锁定
+- **D2 与 F16 时序**：F17 的 `AgentConfigurationsPage` 列表渲染须与 F16 卡片化一致——**建议 F16 先行**，F17 在其卡片 UI 上叠加 CRUD + 模板入口；若 F16 未做，F17 自行以卡片呈现并标记，F16 后续跳过该页。✅ 已锁定（F16 已于 2026-07-29 经 PR #12 并入 master，F17 从 master 派生，直接复用 EntityCardGrid 卡片 UI）
+- **D3 YAML 编辑器**：v1 用 `Input.TextArea`（等宽字体 + 行号可选），不引入 Monaco/CodeMirror（重依赖）；语法高亮列已知残留。✅ 已锁定
+- **D4 模板字段映射约定**：YAML 采纳约定结构（详见 §3.1 `AgentYamlModel`），文档化在 `AgentConfiguration.cs` 或 README；前端预填以「后端 template 端点返回」为准，不自行解析 YAML。✅ 已锁定
 
 ---
 

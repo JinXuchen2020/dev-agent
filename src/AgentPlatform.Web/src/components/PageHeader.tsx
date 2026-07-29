@@ -2,7 +2,7 @@ import React from 'react';
 import { colors } from '../theme/tokens';
 
 interface PageHeaderProps {
-  title: string;
+  title: React.ReactNode;
   subtitle?: string;
   actions?: React.ReactNode;
 }

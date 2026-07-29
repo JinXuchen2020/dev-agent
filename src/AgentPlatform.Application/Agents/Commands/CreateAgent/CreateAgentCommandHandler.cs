@@ -10,16 +10,19 @@ internal sealed class CreateAgentCommandHandler : IRequestHandler<CreateAgentCom
 {
     private readonly IAgentRepository _repository;
     private readonly IAuditLogRepository _auditLogRepository;
+    private readonly IAgentConfigurationRepository _configurationRepository;
 
     public CreateAgentCommandHandler(
         IAgentRepository repository,
-        IAuditLogRepository auditLogRepository)
+        IAuditLogRepository auditLogRepository,
+        IAgentConfigurationRepository configurationRepository)
     {
         _repository = repository;
         _auditLogRepository = auditLogRepository;
+        _configurationRepository = configurationRepository;
     }
 
-    public Task<Agent> Handle(CreateAgentCommand request, CancellationToken ct)
+    public async Task<Agent> Handle(CreateAgentCommand request, CancellationToken ct)
     {
         var endpoint = new ModelEndpoint(
             request.ModelProvider,
@@ -39,15 +42,33 @@ internal sealed class CreateAgentCommandHandler : IRequestHandler<CreateAgentCom
 
         _repository.Add(agent);
 
+        var details = $"Created agent '{agent.Name}' with role {agent.Role.RoleCode}";
+
+        // Best-effort provenance tracing (D1): record the source configuration version in the
+        // audit log when one was supplied. Failures here must never block agent creation.
+        if (request.ConfigurationId is { } configurationId)
+        {
+            try
+            {
+                var origin = await _configurationRepository.GetByIdAsync(configurationId, ct);
+                if (origin != null && origin.TenantId == request.TenantId)
+                    details += $" (from configuration '{origin.Name}' v{origin.Version})";
+            }
+            catch
+            {
+                // ignore tracing failures
+            }
+        }
+
         var auditLog = AuditLog.Record(
             tenantId: agent.TenantId,
             action: AuditActionType.CreateAgent,
             entity: "Agent",
             userId: null,
             entityId: agent.Id,
-            details: $"Created agent '{agent.Name}' with role {agent.Role.RoleCode}");
+            details: details);
         _auditLogRepository.Add(auditLog);
 
-        return Task.FromResult(agent);
+        return agent;
     }
 }

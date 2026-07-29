@@ -5,6 +5,9 @@ import type {
   CreateAgentRequest,
   UpdateAgentRequest,
   AgentConfiguration,
+  CreateAgentConfigurationRequest,
+  UpdateAgentConfigurationRequest,
+  ConfigurationAgentTemplate,
   Workflow,
   WorkflowDetail,
   ExecutionLog,
@@ -91,6 +94,21 @@ export const getAgentConfigurations = (opts?: {
     .get<{ items: AgentConfiguration[]; totalCount: number }>('/agent-configurations', { params, signal })
     .then((r) => r.data);
 };
+
+export const getAgentConfiguration = (id: string) =>
+  api.get<AgentConfiguration>(`/agent-configurations/${id}`).then((r) => r.data);
+
+export const getAgentConfigurationTemplate = (id: string) =>
+  api.get<ConfigurationAgentTemplate>(`/agent-configurations/${id}/template`).then((r) => r.data);
+
+export const createAgentConfiguration = (req: CreateAgentConfigurationRequest) =>
+  api.post<AgentConfiguration>('/agent-configurations', req).then((r) => r.data);
+
+export const updateAgentConfiguration = (id: string, req: UpdateAgentConfigurationRequest) =>
+  api.put<AgentConfiguration>(`/agent-configurations/${id}`, req).then((r) => r.data);
+
+export const deleteAgentConfiguration = (id: string) =>
+  api.delete<void>(`/agent-configurations/${id}`).then(() => undefined);
 
 // Workflows
 export const getWorkflows = (opts?: {

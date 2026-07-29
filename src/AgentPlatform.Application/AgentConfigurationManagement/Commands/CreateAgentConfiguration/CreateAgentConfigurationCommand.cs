@@ -33,7 +33,7 @@ internal sealed class CreateAgentConfigurationCommandHandler(
 
         // Validate YAML content is parseable
         if (!yamlParser.Validate(request.YamlContent))
-            throw new ArgumentException("The provided YAML content is not valid YAML.", nameof(request.YamlContent));
+            throw new InvalidYamlException(nameof(request.YamlContent));
 
         var configuration = new AgentConfiguration(
             Guid.NewGuid(),
