@@ -11,6 +11,7 @@ using AgentPlatform.Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel.DataAnnotations;
 
 namespace AgentPlatform.Api.Controllers;
 
@@ -160,29 +161,29 @@ public sealed class AgentConfigurationsController : ControllerBase
 /// Request model for creating a new agent configuration.
 /// </summary>
 public sealed record CreateAgentConfigurationRequest(
-    [property: System.ComponentModel.DataAnnotations.Required]
-    [property: System.ComponentModel.DataAnnotations.StringLength(200, MinimumLength = 1)]
+    [Required]
+    [StringLength(200, MinimumLength = 1)]
     string Name,
-    [property: System.ComponentModel.DataAnnotations.Required]
-    [property: System.ComponentModel.DataAnnotations.StringLength(16000)]
+    [Required]
+    [StringLength(16000)]
     string YamlContent,
-    [property: System.ComponentModel.DataAnnotations.StringLength(1000)]
+    [StringLength(1000)]
     string? Description,
-    [property: System.ComponentModel.DataAnnotations.StringLength(100)]
+    [StringLength(100)]
     string? AgentTypeCode);
 
 /// <summary>
 /// Request model for updating an existing agent configuration.
 /// </summary>
 public sealed record UpdateAgentConfigurationRequest(
-    [property: System.ComponentModel.DataAnnotations.Required]
-    [property: System.ComponentModel.DataAnnotations.StringLength(16000)]
+    [Required]
+    [StringLength(16000)]
     string YamlContent,
-    [property: System.ComponentModel.DataAnnotations.StringLength(2000)]
+    [StringLength(2000)]
     string? ChangeLog,
     VersionBump? VersionBump,
-    [property: System.ComponentModel.DataAnnotations.StringLength(200)]
+    [StringLength(200)]
     string? Name,
-    [property: System.ComponentModel.DataAnnotations.StringLength(1000)]
+    [StringLength(1000)]
     string? Description);
 
