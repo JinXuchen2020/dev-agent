@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Table, Typography, Tag, Space, Spin, Select } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import { Typography, Tag, Space, Select, Pagination } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import type { ExecutionLog } from '../types';
 import { getExecutionLogs } from '../services/api';
 import { mapWorkflowStatus, WORKFLOW_STATUS_FILTER_OPTIONS } from '../status';
 import { useTranslation } from 'react-i18next';
+import Card from '../components/Card';
+import EntityCardGrid from '../components/EntityCardGrid';
+import { colors } from '../theme/tokens';
 
 const { Title } = Typography;
 
@@ -38,36 +40,31 @@ const ExecutionLogsPage: React.FC = () => {
     return () => controller.abort();
   }, [fetchLogs, page, pageSize, statusFilter]);
 
-  const columns: ColumnsType<ExecutionLog> = [
-    { title: t('pages.executionLogs.colWorkflow'), dataIndex: 'workflowName', key: 'workflowName' },
-    {
-      title: t('common.status'),
-      dataIndex: 'status',
-      key: 'status',
-      render: (s: string | number) => {
-        const m = mapWorkflowStatus(s);
-        return <Tag color={m.color}>{m.label}</Tag>;
-      },
-    },
-    { title: t('pages.executionLogs.colTotalSteps'), dataIndex: 'totalSteps', key: 'totalSteps' },
-    {
-      title: t('pages.executionLogs.colProgress'),
-      key: 'progress',
-      render: (_, r) => (
-        <Space>
-          <Tag color="success">{t('pages.executionLogs.done', { count: r.completedSteps })}</Tag>
-          {r.failedSteps > 0 && <Tag color="error">{t('pages.executionLogs.failed', { count: r.failedSteps })}</Tag>}
+  const renderLogCard = (log: ExecutionLog) => {
+    const status = mapWorkflowStatus(log.status);
+    return (
+      <Card title={log.workflowName ?? log.id}>
+        <Space direction="vertical" size={6} style={{ width: '100%' }}>
+          <Tag color={status.color}>{status.label}</Tag>
+          <span style={{ color: colors.textMuted, fontSize: 13 }}>
+            {t('pages.executionLogs.colTotalSteps')}: {log.totalSteps}
+          </span>
+          <Space size={4}>
+            <Tag color="success">{t('pages.executionLogs.done', { count: log.completedSteps })}</Tag>
+            {log.failedSteps > 0 && (
+              <Tag color="error">{t('pages.executionLogs.failed', { count: log.failedSteps })}</Tag>
+            )}
+          </Space>
+          <span style={{ color: colors.textMuted, fontSize: 13 }}>
+            {t('pages.executionLogs.colStarted')}: {new Date(log.startedAt).toLocaleString()}
+          </span>
+          <span style={{ color: colors.textMuted, fontSize: 13 }}>
+            {t('pages.executionLogs.colCompleted')}: {log.completedAt ? new Date(log.completedAt).toLocaleString() : '-'}
+          </span>
         </Space>
-      ),
-    },
-    { title: t('pages.executionLogs.colStarted'), dataIndex: 'startedAt', key: 'startedAt', render: (d: string) => new Date(d).toLocaleString() },
-    {
-      title: t('pages.executionLogs.colCompleted'),
-      dataIndex: 'completedAt',
-      key: 'completedAt',
-      render: (d: string | null) => (d ? new Date(d).toLocaleString() : '-'),
-    },
-  ];
+      </Card>
+    );
+  };
 
   return (
     <div>
@@ -88,19 +85,26 @@ const ExecutionLogsPage: React.FC = () => {
           options={WORKFLOW_STATUS_FILTER_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
         />
       </Space>
-      {loading ? (
-        <Spin />
-      ) : (
-        <Table
-          columns={columns}
-          dataSource={logs}
-          rowKey="id"
-          pagination={{ current: page, pageSize, total, showTotal: (total) => t('common.total', { count: total }) }}
-          onChange={(p) => {
-            setPage(p.current ?? 1);
-            setPageSize(p.pageSize ?? 10);
+      <EntityCardGrid
+        items={logs}
+        loading={loading}
+        density="compact"
+        rowKey={(log) => log.id}
+        emptyText={t('empty.executionLogs')}
+        onItemClick={(log) => navigate(`/execution-logs/${log.id}`)}
+        renderCard={renderLogCard}
+      />
+      {!loading && total > 0 && (
+        <Pagination
+          style={{ marginTop: 16, textAlign: 'right' }}
+          current={page}
+          pageSize={pageSize}
+          total={total}
+          showTotal={(total) => t('common.total', { count: total })}
+          onChange={(p, ps) => {
+            setPage(p);
+            setPageSize(ps);
           }}
-          onRow={(r) => ({ onClick: () => navigate(`/execution-logs/${r.id}`), style: { cursor: 'pointer' } })}
         />
       )}
     </div>

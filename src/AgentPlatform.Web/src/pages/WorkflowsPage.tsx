@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Table, Typography, Tag, Spin, Button, Space, Modal, Input, Select, App } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import { Typography, Tag, Button, Space, Modal, Input, Select, App, Pagination } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import type { Workflow } from '../types';
 import { getWorkflows, runWorkflow, getErrorMessage } from '../services/api';
 import { mapWorkflowStatus, WORKFLOW_STATUS_FILTER_OPTIONS } from '../status';
 import { useTranslation } from 'react-i18next';
+import Card from '../components/Card';
+import EntityCardGrid from '../components/EntityCardGrid';
+import { colors } from '../theme/tokens';
 
 const { Title } = Typography;
 
@@ -63,21 +65,25 @@ const WorkflowsPage: React.FC = () => {
     }
   };
 
-  const columns: ColumnsType<Workflow> = [
-    { title: t('common.name'), dataIndex: 'name', key: 'name' },
-    {
-      title: t('common.status'),
-      dataIndex: 'currentState',
-      key: 'currentState',
-      render: (s: string | number) => {
-        const m = mapWorkflowStatus(s);
-        return <Tag color={m.color}>{m.label}</Tag>;
-      },
-    },
-    { title: t('pages.workflows.colSteps'), dataIndex: 'stepCount', key: 'stepCount' },
-    { title: t('pages.workflows.colCreated'), dataIndex: 'createdAt', key: 'createdAt', render: (d: string) => new Date(d).toLocaleString() },
-    { title: t('pages.workflows.colUpdated'), dataIndex: 'updatedAt', key: 'updatedAt', render: (d: string) => new Date(d).toLocaleString() },
-  ];
+  const renderWorkflowCard = (w: Workflow) => {
+    const status = mapWorkflowStatus(w.currentState);
+    return (
+      <Card title={w.name}>
+        <Space direction="vertical" size={6} style={{ width: '100%' }}>
+          <Tag color={status.color}>{status.label}</Tag>
+          <span style={{ color: colors.textMuted, fontSize: 13 }}>
+            {t('pages.workflows.colSteps')}: {w.stepCount}
+          </span>
+          <span style={{ color: colors.textMuted, fontSize: 13 }}>
+            {t('pages.workflows.colCreated')}: {new Date(w.createdAt).toLocaleString()}
+          </span>
+          <span style={{ color: colors.textMuted, fontSize: 13 }}>
+            {t('pages.workflows.colUpdated')}: {new Date(w.updatedAt).toLocaleString()}
+          </span>
+        </Space>
+      </Card>
+    );
+  };
 
   return (
     <div>
@@ -103,19 +109,25 @@ const WorkflowsPage: React.FC = () => {
           <Button onClick={() => setModalOpen(true)}>{t('pages.workflows.quickRun')}</Button>
         </Space>
       </Space>
-      {loading ? (
-        <Spin />
-      ) : (
-        <Table
-          columns={columns}
-          dataSource={workflows}
-          rowKey="id"
-          pagination={{ current: page, pageSize, total, showTotal: (total) => t('common.total', { count: total }) }}
-          onChange={(p) => {
-            setPage(p.current ?? 1);
-            setPageSize(p.pageSize ?? 10);
+      <EntityCardGrid
+        items={workflows}
+        loading={loading}
+        rowKey={(w) => w.id}
+        emptyText={t('empty.workflows')}
+        onItemClick={(w) => navigate(`/workflows/${w.id}`)}
+        renderCard={renderWorkflowCard}
+      />
+      {!loading && total > 0 && (
+        <Pagination
+          style={{ marginTop: 16, textAlign: 'right' }}
+          current={page}
+          pageSize={pageSize}
+          total={total}
+          showTotal={(total) => t('common.total', { count: total })}
+          onChange={(p, ps) => {
+            setPage(p);
+            setPageSize(ps);
           }}
-          onRow={(r) => ({ onClick: () => navigate(`/workflows/${r.id}`), style: { cursor: 'pointer' } })}
         />
       )}
       <Modal

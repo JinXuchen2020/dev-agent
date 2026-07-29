@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Spin, Button, Alert, Space, App as AntApp } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import { Button, Alert, Space, App as AntApp } from 'antd';
 import type { ApiKey } from '../types';
 import { getApiKeys } from '../services/api';
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
+import EntityCardGrid from '../components/EntityCardGrid';
 import StatusBadge from '../components/StatusBadge';
 import { colors } from '../theme/tokens';
 import { useTranslation } from 'react-i18next';
@@ -19,34 +19,53 @@ const ApiKeysPage: React.FC = () => {
     getApiKeys().then(setKeys).finally(() => setLoading(false));
   }, []);
 
-  const columns: ColumnsType<ApiKey> = [
-    { title: t('pages.apiKeys.name'), dataIndex: 'name', key: 'name', render: (n: string) => <span style={{ color: colors.textPrimary, fontWeight: 500 }}>{n}</span> },
-    {
-      title: t('pages.apiKeys.prefix'),
-      dataIndex: 'prefix',
-      key: 'prefix',
-      render: (p: string) => <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: colors.textSecondary }}>{p}</span>,
-    },
-    { title: t('pages.apiKeys.role'), dataIndex: 'role', key: 'role', width: 120 },
-    { title: t('pages.apiKeys.expiresAt'), dataIndex: 'expiresAt', key: 'expiresAt', render: (d: string) => <span style={{ color: colors.textMuted }}>{d}</span> },
-    { title: t('pages.apiKeys.lastUsed'), dataIndex: 'lastUsedAt', key: 'lastUsedAt', render: (d: string | null) => <span style={{ color: colors.textMuted }}>{d ?? '-'}</span> },
-    { title: t('pages.apiKeys.status'), dataIndex: 'status', key: 'status', width: 120, render: (s: string) => <StatusBadge status={s} label={s === 'active' ? t('pages.apiKeys.statusActive') : s === 'expiring' ? t('pages.apiKeys.statusExpiring') : s === 'revoked' ? t('pages.apiKeys.statusRevoked') : s} /> },
-    {
-      title: t('pages.apiKeys.operation'),
-      key: 'actions',
-      width: 160,
-      render: (_, r) => (
-        <Space>
-          <Button size="small" disabled={r.status === 'revoked'} onClick={() => message.info(t('pages.apiKeys.rotateTodo'))}>
+  const renderApiKeyCard = (k: ApiKey) => (
+    <Card
+      title={<span style={{ color: colors.textPrimary, fontWeight: 500 }}>{k.name}</span>}
+      extra={
+        <Space size={4}>
+          <Button size="small" disabled={k.status === 'revoked'} onClick={() => message.info(t('pages.apiKeys.rotateTodo'))}>
             {t('pages.apiKeys.rotate')}
           </Button>
-          <Button size="small" danger disabled={r.status === 'revoked'} onClick={() => message.info(t('pages.apiKeys.revokeTodo'))}>
+          <Button
+            size="small"
+            danger
+            disabled={k.status === 'revoked'}
+            onClick={() => message.info(t('pages.apiKeys.revokeTodo'))}
+          >
             {t('pages.apiKeys.revoke')}
           </Button>
         </Space>
-      ),
-    },
-  ];
+      }
+    >
+      <Space direction="vertical" size={6} style={{ width: '100%' }}>
+        <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: colors.textSecondary, fontSize: 13 }}>
+          {k.prefix}
+        </span>
+        <span style={{ color: colors.textMuted, fontSize: 13 }}>
+          {t('pages.apiKeys.role')}: {k.role}
+        </span>
+        <span style={{ color: colors.textMuted, fontSize: 13 }}>
+          {t('pages.apiKeys.expiresAt')}: {k.expiresAt}
+        </span>
+        <span style={{ color: colors.textMuted, fontSize: 13 }}>
+          {t('pages.apiKeys.lastUsed')}: {k.lastUsedAt ?? '-'}
+        </span>
+        <StatusBadge
+          status={k.status}
+          label={
+            k.status === 'active'
+              ? t('pages.apiKeys.statusActive')
+              : k.status === 'expiring'
+                ? t('pages.apiKeys.statusExpiring')
+                : k.status === 'revoked'
+                  ? t('pages.apiKeys.statusRevoked')
+                  : k.status
+          }
+        />
+      </Space>
+    </Card>
+  );
 
   return (
     <div>
@@ -63,11 +82,13 @@ const ApiKeysPage: React.FC = () => {
       />
 
       <Card title={t('pages.apiKeys.title')}>
-        {loading ? (
-          <Spin style={{ display: 'block', margin: '60px auto' }} />
-        ) : (
-          <Table columns={columns} dataSource={keys} rowKey="id" pagination={false} />
-        )}
+        <EntityCardGrid
+          items={keys}
+          loading={loading}
+          rowKey={(k) => k.id}
+          emptyText={t('empty.noData')}
+          renderCard={renderApiKeyCard}
+        />
       </Card>
     </div>
   );

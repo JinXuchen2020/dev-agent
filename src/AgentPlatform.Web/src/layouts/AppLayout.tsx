@@ -69,7 +69,7 @@ const AppLayout: React.FC = () => {
   };
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout style={{ height: '100vh', overflow: 'hidden' }}>
       <Sider
         trigger={null}
         collapsible
@@ -132,7 +132,7 @@ const AppLayout: React.FC = () => {
             </Button>
           </Dropdown>
         </Header>
-        <Content style={{ margin: 24, minHeight: 280 }}>
+        <Content style={{ padding: 24, overflow: 'auto' }}>
           <Outlet />
         </Content>
       </Layout>

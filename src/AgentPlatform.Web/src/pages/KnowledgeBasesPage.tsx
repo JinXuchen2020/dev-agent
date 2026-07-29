@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Button, Modal, Form, Input, Spin, Space, Tag, Popconfirm, App as AntApp } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import { Button, Modal, Form, Input, Space, Tag, Popconfirm, App as AntApp } from 'antd';
 import { PlusOutlined, DeleteOutlined, EyeOutlined, BookOutlined } from '@ant-design/icons';
 import type { KnowledgeBase } from '../types';
 import {
@@ -11,6 +10,7 @@ import {
 } from '../services/api';
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
+import EntityCardGrid from '../components/EntityCardGrid';
 import { colors } from '../theme/tokens';
 import { useTranslation } from 'react-i18next';
 
@@ -66,57 +66,45 @@ const KnowledgeBasesPage: React.FC = () => {
     }
   };
 
-  const columns: ColumnsType<KnowledgeBase> = [
-    {
-      title: t('common.name'),
-      dataIndex: 'name',
-      key: 'name',
-      render: (n: string) => <span style={{ color: colors.textPrimary, fontWeight: 500 }}>{n}</span>,
-    },
-    {
-      title: t('pages.knowledgeBases.vectorCollection'),
-      dataIndex: 'collectionName',
-      key: 'collectionName',
-      render: (c: string) => (
-        <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: colors.textSecondary }}>{c}</span>
-      ),
-    },
-    {
-      title: t('pages.knowledgeBases.embeddingLabel'),
-      dataIndex: 'embeddingModel',
-      key: 'embeddingModel',
-      render: (m: string) => <Tag color="blue">{m}</Tag>,
-    },
-    {
-      title: t('pages.knowledgeBases.docCount'),
-      key: 'docCount',
-      width: 90,
-      render: (_, r) => <span style={{ color: colors.textMuted }}>{r.documents.length}</span>,
-    },
-    {
-      title: t('pages.knowledgeBases.createdTime'),
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      render: (d: string) => <span style={{ color: colors.textMuted }}>{d}</span>,
-    },
-    {
-      title: t('common.operation'),
-      key: 'actions',
-      width: 170,
-      render: (_, r) => (
-        <Space>
-          <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/knowledge-bases/${r.id}`)}>
+  const renderKbCard = (kb: KnowledgeBase) => (
+    <Card
+      title={kb.name}
+      extra={
+        <Space size={4}>
+          <Button
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/knowledge-bases/${kb.id}`);
+            }}
+          >
             {t('pages.knowledgeBases.view')}
           </Button>
-          <Popconfirm title={t('pages.knowledgeBases.deleteConfirm')} onConfirm={() => handleDelete(r.id)}>
-            <Button size="small" danger icon={<DeleteOutlined />}>
-              {t('common.delete')}
-            </Button>
-          </Popconfirm>
+          <span onClick={(e) => e.stopPropagation()}>
+            <Popconfirm title={t('pages.knowledgeBases.deleteConfirm')} onConfirm={() => handleDelete(kb.id)}>
+              <Button size="small" danger icon={<DeleteOutlined />}>
+                {t('common.delete')}
+              </Button>
+            </Popconfirm>
+          </span>
         </Space>
-      ),
-    },
-  ];
+      }
+    >
+      <Space direction="vertical" size={6} style={{ width: '100%' }}>
+        <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: colors.textSecondary, fontSize: 13 }}>
+          {kb.collectionName}
+        </span>
+        <Tag color="blue">{kb.embeddingModel}</Tag>
+        <span style={{ color: colors.textMuted, fontSize: 13 }}>
+          {t('pages.knowledgeBases.docCount')}: {kb.documents.length}
+        </span>
+        <span style={{ color: colors.textMuted, fontSize: 13 }}>
+          {t('pages.knowledgeBases.createdTime')}: {kb.createdAt}
+        </span>
+      </Space>
+    </Card>
+  );
 
   return (
     <div>
@@ -131,11 +119,14 @@ const KnowledgeBasesPage: React.FC = () => {
       />
 
       <Card title={<span><BookOutlined style={{ marginRight: 8 }} />{t('pages.knowledgeBases.listTitle')}</span>}>
-        {loading ? (
-          <Spin style={{ display: 'block', margin: '60px auto' }} />
-        ) : (
-          <Table columns={columns} dataSource={list} rowKey="id" pagination={false} locale={{ emptyText: t('pages.knowledgeBases.empty') }} />
-        )}
+        <EntityCardGrid
+          items={list}
+          loading={loading}
+          rowKey={(kb) => kb.id}
+          emptyText={t('pages.knowledgeBases.empty')}
+          onItemClick={(kb) => navigate(`/knowledge-bases/${kb.id}`)}
+          renderCard={renderKbCard}
+        />
       </Card>
 
       <Modal

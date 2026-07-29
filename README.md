@@ -81,7 +81,7 @@ dotnet user-secrets set "OpenAI:Key" "sk-your-key-here"
 
 - **F13 多租户凭据配置** ✅ 已完成（2026-07-27，`feat/f13-multi-tenant-credentials`）
 - **F14 供应商模型发现** ✅ 已完成（2026-07-28，`feat/f14-model-discovery`）
-- **F15 多语言 i18n** ✅ 已完成（2026-07-28，`feat/f15-i18n`）/ **F16 列表改卡片** / **F17 AgentConfiguration 实例化** / **F18 Dashboard 图表** / **F19 Agent Roles 内建+合并** —— 设计就绪、F16–F19 待实现（各 feature 设计文档在 `features/` 目录）
+- **F15 多语言 i18n** ✅ 已完成（2026-07-28，`feat/f15-i18n`）/ **F16 列表改卡片** ✅ 已完成（2026-07-29，`feat/f16-card-layout`）/ **F17 AgentConfiguration 实例化** / **F18 Dashboard 图表** / **F19 Agent Roles 内建+合并** —— 设计就绪、F17–F19 待实现（各 feature 设计文档在 `features/` 目录）
 
 > 约定：新增 feature 须先将设计文档放入 `features/`，再进入实现（见 backlog 红线）。
 

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Spin, Button, App as AntApp, Tag, Input, Space, Select } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import { Button, App as AntApp, Tag, Input, Space, Select } from 'antd';
 import type { Conversation, KnowledgeBase } from '../types';
 import { getConversations, createConversation, getKnowledgeBases } from '../services/api';
 import {
@@ -11,6 +10,7 @@ import {
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
 import StatusBadge from '../components/StatusBadge';
+import EntityCardGrid from '../components/EntityCardGrid';
 import { colors } from '../theme/tokens';
 import { useTranslation } from 'react-i18next';
 
@@ -66,53 +66,29 @@ const ConversationsPage: React.FC = () => {
     }
   };
 
-  const columns: ColumnsType<Conversation> = [
-    {
-      title: t('pages.conversations.id'),
-      dataIndex: 'id',
-      key: 'id',
-      render: (id: string) => (
-        <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: colors.textPrimary }}>
-          {id ? (id.length > 16 ? `${id.slice(0, 16)}…` : id) : '-'}
+  const renderConversationCard = (c: Conversation) => (
+    <Card title={c.agentName ?? c.workflowId ?? c.id}>
+      <Space direction="vertical" size={6} style={{ width: '100%' }}>
+        <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: colors.textPrimary, fontSize: 13 }}>
+          {c.id ? (c.id.length > 16 ? `${c.id.slice(0, 16)}…` : c.id) : '-'}
         </span>
-      ),
-    },
-    {
-      title: t('pages.conversations.agentWorkflow'),
-      key: 'agent',
-      render: (_, r) => r.agentName ?? r.workflowId ?? '-',
-    },
-    {
-      title: t('pages.conversations.knowledgeBase'),
-      key: 'kb',
-      render: (_, r) =>
-        r.collectionName && kbNameByCollection.get(r.collectionName) ? (
-          <Tag color="blue">{kbNameByCollection.get(r.collectionName)}</Tag>
+        {c.collectionName && kbNameByCollection.get(c.collectionName) ? (
+          <Tag color="blue">{kbNameByCollection.get(c.collectionName)}</Tag>
         ) : (
-          <span style={{ color: colors.textMuted }}>-</span>
-        ),
-    },
-    {
-      title: t('pages.conversations.messageCount'),
-      key: 'msgCount',
-      width: 100,
-      render: (_, r) => r.messages?.length ?? 0,
-    },
-    {
-      title: t('pages.conversations.status'),
-      key: 'status',
-      width: 120,
-      render: (_, r) => <StatusBadge status={conversationStatusLabel(r.status, r.updatedAt)} />,
-    },
-    {
-      title: t('pages.conversations.startTime'),
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      render: (d: string) => (
-        <span style={{ color: colors.textMuted }}>{d ? new Date(d).toLocaleString() : '-'}</span>
-      ),
-    },
-  ];
+          <span style={{ color: colors.textMuted, fontSize: 13 }}>-</span>
+        )}
+        <span style={{ color: colors.textMuted, fontSize: 13 }}>
+          {t('pages.conversations.messageCount')}: {c.messages?.length ?? 0}
+        </span>
+        <span style={{ color: colors.textMuted, fontSize: 13 }}>
+          {t('pages.conversations.status')}: <StatusBadge status={conversationStatusLabel(c.status, c.updatedAt)} />
+        </span>
+        <span style={{ color: colors.textMuted, fontSize: 13 }}>
+          {t('pages.conversations.startTime')}: {c.createdAt ? new Date(c.createdAt).toLocaleString() : '-'}
+        </span>
+      </Space>
+    </Card>
+  );
 
   return (
     <div>
@@ -148,21 +124,14 @@ const ConversationsPage: React.FC = () => {
             options={CONVERSATION_STATUS_OPTIONS}
           />
         </Space>
-        {loading ? (
-          <Spin style={{ display: 'block', margin: '60px auto' }} />
-        ) : (
-          <Table
-            columns={columns}
-            dataSource={conversations}
-            rowKey="id"
-            pagination={{ pageSize: 10 }}
-            locale={{ emptyText: t('pages.conversations.empty') }}
-            onRow={(record) => ({
-              onClick: () => navigate(`/conversations/${record.id}`),
-              style: { cursor: 'pointer' },
-            })}
-          />
-        )}
+        <EntityCardGrid
+          items={conversations}
+          loading={loading}
+          rowKey={(c) => c.id}
+          emptyText={t('empty.conversations')}
+          onItemClick={(c) => navigate(`/conversations/${c.id}`)}
+          renderCard={renderConversationCard}
+        />
       </Card>
     </div>
   );
