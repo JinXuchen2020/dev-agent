@@ -7,14 +7,10 @@ import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
 import StatusBadge from '../components/StatusBadge';
 import { colors } from '../theme/tokens';
-
-const statusLabel: Record<string, string> = {
-  active: '启用',
-  expiring: '即将过期',
-  revoked: '已吊销',
-};
+import { useTranslation } from 'react-i18next';
 
 const ApiKeysPage: React.FC = () => {
+  const { t } = useTranslation();
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const { message } = AntApp.useApp();
@@ -24,28 +20,28 @@ const ApiKeysPage: React.FC = () => {
   }, []);
 
   const columns: ColumnsType<ApiKey> = [
-    { title: 'Key 名称', dataIndex: 'name', key: 'name', render: (n: string) => <span style={{ color: colors.textPrimary, fontWeight: 500 }}>{n}</span> },
+    { title: t('pages.apiKeys.name'), dataIndex: 'name', key: 'name', render: (n: string) => <span style={{ color: colors.textPrimary, fontWeight: 500 }}>{n}</span> },
     {
-      title: 'Key 前缀',
+      title: t('pages.apiKeys.prefix'),
       dataIndex: 'prefix',
       key: 'prefix',
       render: (p: string) => <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: colors.textSecondary }}>{p}</span>,
     },
-    { title: '角色', dataIndex: 'role', key: 'role', width: 120 },
-    { title: '过期时间', dataIndex: 'expiresAt', key: 'expiresAt', render: (d: string) => <span style={{ color: colors.textMuted }}>{d}</span> },
-    { title: '最近使用', dataIndex: 'lastUsedAt', key: 'lastUsedAt', render: (d: string | null) => <span style={{ color: colors.textMuted }}>{d ?? '-'}</span> },
-    { title: '状态', dataIndex: 'status', key: 'status', width: 120, render: (s: string) => <StatusBadge status={s} label={statusLabel[s] ?? s} /> },
+    { title: t('pages.apiKeys.role'), dataIndex: 'role', key: 'role', width: 120 },
+    { title: t('pages.apiKeys.expiresAt'), dataIndex: 'expiresAt', key: 'expiresAt', render: (d: string) => <span style={{ color: colors.textMuted }}>{d}</span> },
+    { title: t('pages.apiKeys.lastUsed'), dataIndex: 'lastUsedAt', key: 'lastUsedAt', render: (d: string | null) => <span style={{ color: colors.textMuted }}>{d ?? '-'}</span> },
+    { title: t('pages.apiKeys.status'), dataIndex: 'status', key: 'status', width: 120, render: (s: string) => <StatusBadge status={s} label={s === 'active' ? t('pages.apiKeys.statusActive') : s === 'expiring' ? t('pages.apiKeys.statusExpiring') : s === 'revoked' ? t('pages.apiKeys.statusRevoked') : s} /> },
     {
-      title: '操作',
+      title: t('pages.apiKeys.operation'),
       key: 'actions',
       width: 160,
       render: (_, r) => (
         <Space>
-          <Button size="small" disabled={r.status === 'revoked'} onClick={() => message.info('轮换需后端 API 支持')}>
-            轮换
+          <Button size="small" disabled={r.status === 'revoked'} onClick={() => message.info(t('pages.apiKeys.rotateTodo'))}>
+            {t('pages.apiKeys.rotate')}
           </Button>
-          <Button size="small" danger disabled={r.status === 'revoked'} onClick={() => message.info('吊销需后端 API 支持')}>
-            吊销
+          <Button size="small" danger disabled={r.status === 'revoked'} onClick={() => message.info(t('pages.apiKeys.revokeTodo'))}>
+            {t('pages.apiKeys.revoke')}
           </Button>
         </Space>
       ),
@@ -55,18 +51,18 @@ const ApiKeysPage: React.FC = () => {
   return (
     <div>
       <PageHeader
-        title="API Keys"
-        actions={<Button type="primary">+ 新建 Key</Button>}
+        title={t('pages.apiKeys.title')}
+        actions={<Button type="primary">{t('pages.apiKeys.newKey')}</Button>}
       />
 
       <Alert
         type="info"
         showIcon
         style={{ marginBottom: 20, borderRadius: 8 }}
-        message="后端当前仅提供 X-API-Key 认证方案，尚无密钥管理 REST 端点；以下为演示数据，轮换/吊销待接口就绪后接线。"
+        message={t('pages.apiKeys.demoNote')}
       />
 
-      <Card title="API Key 列表">
+      <Card title={t('pages.apiKeys.title')}>
         {loading ? (
           <Spin style={{ display: 'block', margin: '60px auto' }} />
         ) : (

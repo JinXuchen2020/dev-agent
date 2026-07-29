@@ -12,6 +12,7 @@ import {
 import type { ReactNode } from 'react';
 import { StepType } from '../../types';
 import type { DagNode as DagNodeType } from '../../stores/workflowCanvasStore';
+import { useTranslation } from 'react-i18next';
 
 const TYPE_ICON: Record<StepType, ReactNode> = {
   [StepType.Start]: <PlayCircleOutlined />,
@@ -34,6 +35,7 @@ const STATE_COLOR: Record<string, string> = {
 };
 
 export default function DagNode({ data, selected }: NodeProps<DagNodeType>) {
+  const { t } = useTranslation();
   const accent = STATE_COLOR[data.state ?? ''] ?? '#1677ff';
   const isStart = data.stepType === StepType.Start;
   const isEnd = data.stepType === StepType.End;
@@ -57,13 +59,13 @@ export default function DagNode({ data, selected }: NodeProps<DagNodeType>) {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: accent, fontWeight: 600 }}>
         {TYPE_ICON[data.stepType]}
-        <span style={{ color: '#262626' }}>{data.label || '未命名'}</span>
+        <span style={{ color: '#262626' }}>{data.label || t('canvas.unnamed')}</span>
       </div>
 
       {data.state && (
         <div style={{ marginTop: 4, fontSize: 11, color: accent }}>
           {data.state}
-          {hasResult ? ' · 有结果' : ''}
+          {hasResult ? ` · ${t('canvas.hasResult')}` : ''}
         </div>
       )}
 

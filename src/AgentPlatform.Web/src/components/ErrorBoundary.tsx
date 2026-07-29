@@ -1,4 +1,5 @@
 import React from 'react';
+import { i18n } from '../locales';
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -33,10 +34,10 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
     if (this.state.hasError) {
       return (
         <div style={{ padding: 24, maxWidth: 600, margin: '80px auto', textAlign: 'center' }}>
-          <h2>页面出错了</h2>
+          <h2>{i18n.t('pages.errorBoundary.title')}</h2>
           <p style={{ color: '#888', marginTop: 8 }}>{this.state.message}</p>
           <button style={{ marginTop: 16 }} onClick={this.handleReset}>
-            重试
+            {i18n.t('pages.errorBoundary.retry')}
           </button>
         </div>
       );

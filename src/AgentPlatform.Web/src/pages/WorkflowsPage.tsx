@@ -5,10 +5,12 @@ import { useNavigate } from 'react-router-dom';
 import type { Workflow } from '../types';
 import { getWorkflows, runWorkflow, getErrorMessage } from '../services/api';
 import { mapWorkflowStatus, WORKFLOW_STATUS_FILTER_OPTIONS } from '../status';
+import { useTranslation } from 'react-i18next';
 
 const { Title } = Typography;
 
 const WorkflowsPage: React.FC = () => {
+  const { t } = useTranslation();
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<number | undefined>(undefined);
@@ -42,13 +44,13 @@ const WorkflowsPage: React.FC = () => {
 
   const handleRun = async () => {
     if (!wfName.trim()) {
-      message.warning('请输入工作流名称');
+      message.warning(t('pages.workflows.nameRequired'));
       return;
     }
     setRunning(true);
     try {
       await runWorkflow({ name: wfName.trim(), initialContext: '{}' });
-      message.success('工作流已创建并运行');
+      message.success(t('pages.workflows.created'));
       setModalOpen(false);
       setWfName('');
       setPage(1);
@@ -62,9 +64,9 @@ const WorkflowsPage: React.FC = () => {
   };
 
   const columns: ColumnsType<Workflow> = [
-    { title: 'Name', dataIndex: 'name', key: 'name' },
+    { title: t('common.name'), dataIndex: 'name', key: 'name' },
     {
-      title: 'Status',
+      title: t('common.status'),
       dataIndex: 'currentState',
       key: 'currentState',
       render: (s: string | number) => {
@@ -72,21 +74,21 @@ const WorkflowsPage: React.FC = () => {
         return <Tag color={m.color}>{m.label}</Tag>;
       },
     },
-    { title: 'Steps', dataIndex: 'stepCount', key: 'stepCount' },
-    { title: 'Created', dataIndex: 'createdAt', key: 'createdAt', render: (d: string) => new Date(d).toLocaleString() },
-    { title: 'Updated', dataIndex: 'updatedAt', key: 'updatedAt', render: (d: string) => new Date(d).toLocaleString() },
+    { title: t('pages.workflows.colSteps'), dataIndex: 'stepCount', key: 'stepCount' },
+    { title: t('pages.workflows.colCreated'), dataIndex: 'createdAt', key: 'createdAt', render: (d: string) => new Date(d).toLocaleString() },
+    { title: t('pages.workflows.colUpdated'), dataIndex: 'updatedAt', key: 'updatedAt', render: (d: string) => new Date(d).toLocaleString() },
   ];
 
   return (
     <div>
       <Space style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap' }}>
         <Title level={4} style={{ margin: 0 }}>
-          Workflows
+          {t('pages.workflows.title')}
         </Title>
         <Space>
           <Select<number>
             allowClear
-            placeholder="Filter status"
+            placeholder={t('pages.workflows.filterStatus')}
             style={{ width: 180 }}
             value={statusFilter}
             onChange={(v) => {
@@ -96,9 +98,9 @@ const WorkflowsPage: React.FC = () => {
             options={WORKFLOW_STATUS_FILTER_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
           />
           <Button type="primary" onClick={() => navigate('/workflows/new')}>
-            Design Workflow
+            {t('pages.workflows.newWorkflow')}
           </Button>
-          <Button onClick={() => setModalOpen(true)}>Quick Run</Button>
+          <Button onClick={() => setModalOpen(true)}>{t('pages.workflows.quickRun')}</Button>
         </Space>
       </Space>
       {loading ? (
@@ -108,7 +110,7 @@ const WorkflowsPage: React.FC = () => {
           columns={columns}
           dataSource={workflows}
           rowKey="id"
-          pagination={{ current: page, pageSize, total, showTotal: (t) => `共 ${t} 条` }}
+          pagination={{ current: page, pageSize, total, showTotal: (total) => t('common.total', { count: total }) }}
           onChange={(p) => {
             setPage(p.current ?? 1);
             setPageSize(p.pageSize ?? 10);
@@ -117,15 +119,15 @@ const WorkflowsPage: React.FC = () => {
         />
       )}
       <Modal
-        title="Create Workflow"
+        title={t('pages.workflows.createWorkflow')}
         open={modalOpen}
         confirmLoading={running}
         onOk={handleRun}
         onCancel={() => setModalOpen(false)}
-        okText="Run"
+        okText={t('pages.workflows.run')}
       >
         <Input
-          placeholder="Workflow name"
+          placeholder={t('pages.workflows.namePlaceholder')}
           value={wfName}
           onChange={(e) => setWfName(e.target.value)}
           onPressEnter={handleRun}

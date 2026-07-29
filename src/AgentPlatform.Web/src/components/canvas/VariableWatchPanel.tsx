@@ -1,7 +1,20 @@
 import { Typography, Empty } from 'antd';
-import { useCanvasStore, STEP_TYPE_LABEL } from '../../stores/workflowCanvasStore';
+import { useCanvasStore } from '../../stores/workflowCanvasStore';
+import { StepType } from '../../types';
+import { useTranslation } from 'react-i18next';
 
 export default function VariableWatchPanel() {
+  const { t } = useTranslation();
+  const NODE_TYPE_LABEL: Record<StepType, string> = {
+    [StepType.Start]: t('canvas.nodeType.start'),
+    [StepType.End]: t('canvas.nodeType.end'),
+    [StepType.LLM]: t('canvas.nodeType.llm'),
+    [StepType.Agent]: t('canvas.nodeType.agent'),
+    [StepType.Critic]: t('canvas.nodeType.critic'),
+    [StepType.Knowledge]: t('canvas.nodeType.knowledge'),
+    [StepType.Tool]: t('canvas.nodeType.tool'),
+    [StepType.Code]: t('canvas.nodeType.code'),
+  };
   const nodes = useCanvasStore((s) => s.nodes);
   const watched = nodes.filter((n) => n.data.state || n.data.result);
 
@@ -15,11 +28,11 @@ export default function VariableWatchPanel() {
         padding: 12,
       }}
     >
-      <Typography.Text strong>变量监视</Typography.Text>
+      <Typography.Text strong>{t('canvas.variableWatch')}</Typography.Text>
       {watched.length === 0 ? (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="尚无运行结果"
+          description={t('canvas.noRunResult')}
           style={{ marginTop: 8 }}
         />
       ) : (
@@ -35,7 +48,7 @@ export default function VariableWatchPanel() {
             }}
           >
             <div style={{ fontSize: 12, fontWeight: 600 }}>
-              {n.data.label} <span style={{ color: '#8c8c8c' }}>({STEP_TYPE_LABEL[n.data.stepType]})</span>
+              {n.data.label} <span style={{ color: '#8c8c8c' }}>({NODE_TYPE_LABEL[n.data.stepType]})</span>
               {n.data.state ? <span style={{ marginLeft: 6, color: '#1677ff' }}>{n.data.state}</span> : null}
             </div>
             {n.data.result ? (

@@ -1,5 +1,30 @@
 # 变更日志
 
+## v2.8 (2026-07-28)
+
+### F15 · 多语言国际化 i18n（中文 + 英文）完成（feature-builder 纯前端实跑，🟡中风险）
+
+引入 `i18next` + `react-i18next`，全站 UI 框架级文案支持中/英双语切换，顶栏「中文 / English」一键切换并持久化到 localStorage（默认 zh-CN），Antd `ConfigProvider` 与 `dayjs` 区域随语言联动。
+
+**核心改动：**
+- 新增 `src/locales/`：`index.ts` 初始化（默认 zh-CN、回退 zh-CN、读 `localStorage('app-locale')`）、`zh-CN.ts`、`en-US.ts`、`config.ts`（`SUPPORTED_LOCALES`/`DEFAULT_LOCALE`/`STORAGE_KEY`）。
+- `en-US.ts` 以 `Resources = typeof zhCN` 类型约束保证两套结构镜像；`src/__tests__/i18n-symmetry.test.ts` 运行时扁平 key 对称测试兜底防漏翻。
+- 新增 `components/LanguageSwitcher.tsx`（顶栏右上角 `Segmented`，切 `i18n.changeLanguage` + 持久化 + 触发 Antd/dayjs 区域联动）。
+- `App.tsx` 顶层 `ConfigProvider locale` 与 `dayjs.locale` 随 `i18n` `languageChanged` 事件同步（初始语言由 `resolveInitialLocale` 解析）。
+- 全站页面/组件 UI 文案 `t()` 化：导航菜单、登录页、各页标题与主按钮、表单标签、`Empty`/`ErrorState`/`message.*`、表格列头与状态标签；领域数据（用户填的 agent/workflow 描述、节点配置示例 prompt、`检索失败` 等后端逐字匹配串）按 D4 不翻。
+
+**质量与测试：**
+- 三道质量门禁全 PASS（`ddd-code-reviewer` / `ddd-phase-quality-gate` / `codebase-optimizer`）；`.quality-gate.json` 推进 `f15-i18n`
+- 审查修复：P1 `common.total` 双包缺失导致分页 `showTotal` 泄露原始键串→补键；P2 模块级 `columns` 在组件外调用 `t()` 触发 TS2304→改组件内工厂；P2/P3 多处漏翻硬编码 UI 串→统一 `t()`；P3 `en-US.ts` 重写对齐 + 新增 `config.test.ts` 4 项（locale 解析/持久化）
+- 前端 `tsc --noEmit` **0 error** + `vitest` **30/30 green**（10 测试文件）+ `vite build` 通过
+- 模型一致性：无后端契约变更；纯前端改造
+
+**已知残留（非阻断）：**
+- `codebase-optimizer` P3：36 个未引用 i18n key 已 waiver（antd 重叠词由 `ConfigProvider` 本地化、`errors.*` 预留 D1 后端错误本地化、`empty.*` 预留 Empty 描述）
+- `@xyflow/react` 画布右键菜单等第三方内置中文未纳入 i18n（D4 已知残留，v1 不处理）
+
+**分支：** `feat/f15-i18n`
+
 ## v2.7 (2026-07-28)
 
 ### F14 · 供应商模型发现（填 Key + Base URL 后拉取可访问模型清单）完成（feature-builder 全栈实跑，🔴高风险）

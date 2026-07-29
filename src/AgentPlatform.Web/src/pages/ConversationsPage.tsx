@@ -12,6 +12,7 @@ import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
 import StatusBadge from '../components/StatusBadge';
 import { colors } from '../theme/tokens';
+import { useTranslation } from 'react-i18next';
 
 const CONVERSATION_STATUS_OPTIONS = Object.entries(CONVERSATION_STATUS_META).map(([value, meta]) => ({
   value: Number(value),
@@ -19,6 +20,7 @@ const CONVERSATION_STATUS_OPTIONS = Object.entries(CONVERSATION_STATUS_META).map
 }));
 
 const ConversationsPage: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [kbNameByCollection, setKbNameByCollection] = useState<Map<string, string>>(new Map());
@@ -51,14 +53,14 @@ const ConversationsPage: React.FC = () => {
     setCreating(true);
     try {
       const conv = await createConversation();
-      message.success('已创建新会话');
+      message.success(t('pages.conversations.created'));
       if (conv?.id) navigate(`/conversations/${conv.id}`);
       else {
         const controller = new AbortController();
         getConversations({ signal: controller.signal }).then(setConversations).catch(() => undefined);
       }
     } catch {
-      message.error('创建失败，请确认已登录');
+      message.error(t('pages.conversations.createFailed'));
     } finally {
       setCreating(false);
     }
@@ -66,7 +68,7 @@ const ConversationsPage: React.FC = () => {
 
   const columns: ColumnsType<Conversation> = [
     {
-      title: '会话 ID',
+      title: t('pages.conversations.id'),
       dataIndex: 'id',
       key: 'id',
       render: (id: string) => (
@@ -76,12 +78,12 @@ const ConversationsPage: React.FC = () => {
       ),
     },
     {
-      title: 'Agent / 工作流',
+      title: t('pages.conversations.agentWorkflow'),
       key: 'agent',
       render: (_, r) => r.agentName ?? r.workflowId ?? '-',
     },
     {
-      title: '知识库',
+      title: t('pages.conversations.knowledgeBase'),
       key: 'kb',
       render: (_, r) =>
         r.collectionName && kbNameByCollection.get(r.collectionName) ? (
@@ -91,19 +93,19 @@ const ConversationsPage: React.FC = () => {
         ),
     },
     {
-      title: '消息数',
+      title: t('pages.conversations.messageCount'),
       key: 'msgCount',
       width: 100,
       render: (_, r) => r.messages?.length ?? 0,
     },
     {
-      title: '状态',
+      title: t('pages.conversations.status'),
       key: 'status',
       width: 120,
       render: (_, r) => <StatusBadge status={conversationStatusLabel(r.status, r.updatedAt)} />,
     },
     {
-      title: '开始时间',
+      title: t('pages.conversations.startTime'),
       dataIndex: 'createdAt',
       key: 'createdAt',
       render: (d: string) => (
@@ -115,19 +117,19 @@ const ConversationsPage: React.FC = () => {
   return (
     <div>
       <PageHeader
-        title="Conversations"
+        title={t('pages.conversations.title')}
         actions={
           <Button type="primary" loading={creating} onClick={handleCreate}>
-            + 新建会话
+            {t('pages.conversations.newConversation')}
           </Button>
         }
       />
-      <Card title="会话列表">
+      <Card title={t('pages.conversations.listTitle')}>
         <Space style={{ marginBottom: 16, display: 'flex', flexWrap: 'wrap' }}>
           <Input.Search
             allowClear
-            aria-label="搜索会话"
-            placeholder="搜索 ID / Agent / 工作流 / 知识库"
+            aria-label={t('pages.conversations.searchAria')}
+            placeholder={t('pages.conversations.searchPlaceholder')}
             style={{ width: 320 }}
             value={search}
             onChange={(e) => {
@@ -138,8 +140,8 @@ const ConversationsPage: React.FC = () => {
           />
           <Select<number>
             allowClear
-            aria-label="状态筛选"
-            placeholder="状态筛选"
+            aria-label={t('pages.conversations.statusFilter')}
+            placeholder={t('pages.conversations.statusFilter')}
             style={{ width: 160 }}
             value={statusFilter}
             onChange={(v) => setStatusFilter(v ?? undefined)}
@@ -154,7 +156,7 @@ const ConversationsPage: React.FC = () => {
             dataSource={conversations}
             rowKey="id"
             pagination={{ pageSize: 10 }}
-            locale={{ emptyText: '暂无会话记录' }}
+            locale={{ emptyText: t('pages.conversations.empty') }}
             onRow={(record) => ({
               onClick: () => navigate(`/conversations/${record.id}`),
               style: { cursor: 'pointer' },

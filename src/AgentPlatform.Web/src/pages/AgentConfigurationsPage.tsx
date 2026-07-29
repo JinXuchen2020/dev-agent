@@ -14,41 +14,42 @@ import type { AgentConfiguration } from '../types';
 import { getAgentConfigurations } from '../services/api';
 import CredentialManager from '../components/CredentialManager';
 import { CredentialCategory } from '../types';
-
-const columns = (onView: (r: AgentConfiguration) => void): ColumnsType<AgentConfiguration> => [
-  { title: 'Name', dataIndex: 'name', key: 'name' },
-  { title: 'Type', dataIndex: 'agentType', key: 'agentType' },
-  { title: 'Version', dataIndex: 'version', key: 'version' },
-  {
-    title: 'Active',
-    dataIndex: 'isActive',
-    key: 'isActive',
-    render: (a: boolean) => (a ? <Tag color="green">Active</Tag> : <Tag>Inactive</Tag>),
-  },
-  {
-    title: 'Created',
-    dataIndex: 'createdAt',
-    key: 'createdAt',
-    render: (d: string) => new Date(d).toLocaleString(),
-  },
-  {
-    title: 'Action',
-    key: 'action',
-    render: (_, r) => (
-      <Button
-        size="small"
-        onClick={(e) => {
-          e.stopPropagation();
-          onView(r);
-        }}
-      >
-        View
-      </Button>
-    ),
-  },
-];
+import { useTranslation } from 'react-i18next';
 
 const AgentConfigurationsPage: React.FC = () => {
+  const { t } = useTranslation();
+  const columns = (onView: (r: AgentConfiguration) => void): ColumnsType<AgentConfiguration> => [
+    { title: t('common.name'), dataIndex: 'name', key: 'name' },
+    { title: t('pages.configurations.colType'), dataIndex: 'agentType', key: 'agentType' },
+    { title: t('pages.configurations.colVersion'), dataIndex: 'version', key: 'version' },
+    {
+      title: t('common.status'),
+      dataIndex: 'isActive',
+      key: 'isActive',
+      render: (a: boolean) => (a ? <Tag color="green">{t('common.enabled')}</Tag> : <Tag>{t('common.disabled')}</Tag>),
+    },
+    {
+      title: t('pages.configurations.colCreated'),
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      render: (d: string) => new Date(d).toLocaleString(),
+    },
+    {
+      title: t('common.actions'),
+      key: 'action',
+      render: (_, r) => (
+        <Button
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+            onView(r);
+          }}
+        >
+          {t('pages.configurations.view')}
+        </Button>
+      ),
+    },
+  ];
   const [configs, setConfigs] = useState<AgentConfiguration[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
@@ -94,7 +95,7 @@ const AgentConfigurationsPage: React.FC = () => {
         current: page,
         pageSize,
         total,
-        showTotal: (t) => `共 ${t} 条`,
+        showTotal: (total) => t('common.total', { count: total }),
       }}
       onChange={(p) => {
         setPage(p.current ?? 1);
@@ -104,22 +105,22 @@ const AgentConfigurationsPage: React.FC = () => {
   );
 
   const tabItems = [
-    { key: 'configs', label: 'Agent 配置', children: configsTab },
+    { key: 'configs', label: t('pages.configurations.configsTab'), children: configsTab },
     {
       key: 'creds',
-      label: '凭据设置',
+      label: t('pages.configurations.credentialsTab'),
       children: (
         <Tabs
           defaultActiveKey="model"
           items={[
             {
               key: 'model',
-              label: '模型',
+              label: t('pages.configurations.model'),
               children: <CredentialManager category={CredentialCategory.Model} />,
             },
             {
               key: 'search',
-              label: '搜索',
+              label: t('pages.configurations.search'),
               children: <CredentialManager category={CredentialCategory.Search} />,
             },
           ]}
@@ -130,11 +131,11 @@ const AgentConfigurationsPage: React.FC = () => {
 
   return (
     <div>
-      <Typography.Title level={4}>Agent Configurations</Typography.Title>
+      <Typography.Title level={4}>{t('pages.configurations.title')}</Typography.Title>
       <Tabs defaultActiveKey="configs" items={tabItems} />
 
       <Drawer
-        title="Agent Configuration"
+        title={t('pages.configurations.detail')}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         width={640}
@@ -142,11 +143,13 @@ const AgentConfigurationsPage: React.FC = () => {
         {selected && (
           <>
             <Descriptions column={1} bordered size="small" style={{ marginBottom: 16 }}>
-              <Descriptions.Item label="Name">{selected.name}</Descriptions.Item>
-              <Descriptions.Item label="Type">{selected.agentType}</Descriptions.Item>
-              <Descriptions.Item label="Version">{selected.version}</Descriptions.Item>
-              <Descriptions.Item label="Active">{selected.isActive ? 'Yes' : 'No'}</Descriptions.Item>
-              <Descriptions.Item label="Created">
+              <Descriptions.Item label={t('common.name')}>{selected.name}</Descriptions.Item>
+              <Descriptions.Item label={t('pages.configurations.colType')}>{selected.agentType}</Descriptions.Item>
+              <Descriptions.Item label={t('pages.configurations.colVersion')}>{selected.version}</Descriptions.Item>
+              <Descriptions.Item label={t('common.enabled')}>
+                {selected.isActive ? t('common.yes') : t('common.no')}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('pages.configurations.colCreated')}>
                 {new Date(selected.createdAt).toLocaleString()}
               </Descriptions.Item>
             </Descriptions>

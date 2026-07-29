@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Input, Select, Button, Typography, Form } from 'antd';
 import { DeleteOutlined } from '@ant-design/icons';
-import { useCanvasStore, STEP_TYPE_LABEL } from '../../stores/workflowCanvasStore';
+import { useCanvasStore } from '../../stores/workflowCanvasStore';
 import { getAgents, getKnowledgeBases } from '../../services/api';
 import { StepType } from '../../types';
 import type { Agent, KnowledgeBase } from '../../types';
+import { useTranslation } from 'react-i18next';
 
 const panelStyle: React.CSSProperties = {
   width: 300,
@@ -15,6 +16,17 @@ const panelStyle: React.CSSProperties = {
 };
 
 export default function NodeConfigPanel() {
+  const { t } = useTranslation();
+  const NODE_TYPE_LABEL: Record<StepType, string> = {
+    [StepType.Start]: t('canvas.nodeType.start'),
+    [StepType.End]: t('canvas.nodeType.end'),
+    [StepType.LLM]: t('canvas.nodeType.llm'),
+    [StepType.Agent]: t('canvas.nodeType.agent'),
+    [StepType.Critic]: t('canvas.nodeType.critic'),
+    [StepType.Knowledge]: t('canvas.nodeType.knowledge'),
+    [StepType.Tool]: t('canvas.nodeType.tool'),
+    [StepType.Code]: t('canvas.nodeType.code'),
+  };
   const node = useCanvasStore((s) => s.nodes.find((n) => n.id === s.selectedNodeId));
   const setNodeData = useCanvasStore((s) => s.setNodeData);
   const removeNode = useCanvasStore((s) => s.removeNode);
@@ -41,7 +53,7 @@ export default function NodeConfigPanel() {
   if (!node) {
     return (
       <div style={panelStyle}>
-        <Typography.Text type="secondary">选择一个节点以编辑配置</Typography.Text>
+        <Typography.Text type="secondary">{t('canvas.selectNode')}</Typography.Text>
       </div>
     );
   }
@@ -55,10 +67,10 @@ export default function NodeConfigPanel() {
   return (
     <div style={panelStyle}>
       <Typography.Text strong>
-        {STEP_TYPE_LABEL[type]} 配置
+        {NODE_TYPE_LABEL[type]} {t('canvas.config')}
       </Typography.Text>
       <Form layout="vertical" style={{ marginTop: 12 }}>
-        <Form.Item label="节点名称">
+        <Form.Item label={t('canvas.nodeName')}>
           <Input
             value={label}
             onFocus={snapshot}
@@ -67,7 +79,7 @@ export default function NodeConfigPanel() {
         </Form.Item>
 
         {type === StepType.Start && (
-          <Form.Item label="入口上下文 (initialContext JSON)" tooltip="工作流级别的初始上下文">
+          <Form.Item label={t('canvas.initialContext')} tooltip={t('canvas.initialContextTooltip')}>
             <Input.TextArea
               rows={4}
               value={initialContext}
@@ -79,7 +91,7 @@ export default function NodeConfigPanel() {
         )}
 
         {type === StepType.LLM && (
-          <Form.Item label="System Prompt 模板" tooltip="可插入 {{artifacts}} 占位符">
+          <Form.Item label={t('canvas.systemPromptTemplate')} tooltip={t('canvas.systemPromptTooltip')}>
             <Input.TextArea
               rows={5}
               value={config?.systemPrompt ?? ''}
@@ -91,10 +103,10 @@ export default function NodeConfigPanel() {
         )}
 
         {type === StepType.Agent && (
-          <Form.Item label="分配 Agent">
+          <Form.Item label={t('canvas.assignAgent')}>
             <Select
               allowClear
-              placeholder="选择 Agent"
+              placeholder={t('canvas.agentPlaceholder')}
               value={config?.agentId ?? undefined}
               onFocus={snapshot}
               onChange={(value) =>
@@ -109,36 +121,36 @@ export default function NodeConfigPanel() {
         )}
 
         {type === StepType.Critic && (
-          <Form.Item label="评审标准">
+          <Form.Item label={t('canvas.reviewCriteria')}>
             <Input.TextArea
               rows={4}
               value={config?.criteria ?? ''}
               onFocus={snapshot}
               onChange={(e) => patchConfig({ criteria: e.target.value })}
-              placeholder="检查输出是否满足要求，给出通过/不通过理由"
+              placeholder={t('canvas.reviewPlaceholder')}
             />
           </Form.Item>
         )}
 
         {type === StepType.Knowledge && (
           <>
-            <Form.Item label="知识库" tooltip="从该知识库的向量集合检索">
+            <Form.Item label={t('canvas.knowledgeBase')} tooltip={t('canvas.kbTooltip')}>
               <Select
                 allowClear
-                placeholder="选择知识库"
+                placeholder={t('canvas.kbPlaceholder')}
                 value={config?.knowledgeBaseId ?? undefined}
                 onFocus={snapshot}
                 onChange={(value) => patchConfig({ knowledgeBaseId: value ?? null })}
                 options={knowledgeBases.map((kb) => ({ value: kb.id, label: kb.name }))}
               />
             </Form.Item>
-            <Form.Item label="查询（可选）" tooltip="留空则使用上游节点输出作为查询">
+            <Form.Item label={t('canvas.queryLabel')} tooltip={t('canvas.queryTooltip')}>
               <Input.TextArea
                 rows={3}
                 value={config?.query ?? ''}
                 onFocus={snapshot}
                 onChange={(e) => patchConfig({ query: e.target.value })}
-                placeholder="例如：产品退货政策"
+                placeholder={t('canvas.kbQueryPlaceholder')}
               />
             </Form.Item>
           </>
@@ -147,8 +159,8 @@ export default function NodeConfigPanel() {
         {type === StepType.Tool && (
           <>
             <Form.Item
-              label="工具名称"
-              tooltip="平台已注册工具的定义名称（见 ToolRegistry）"
+              label={t('canvas.toolName')}
+              tooltip={t('canvas.toolNameTooltip')}
             >
               <Input
                 value={config?.toolName ?? ''}
@@ -158,8 +170,8 @@ export default function NodeConfigPanel() {
               />
             </Form.Item>
             <Form.Item
-              label="参数 (JSON)"
-              tooltip="将作为 tools[].function.arguments 透传给工具执行器"
+              label={t('canvas.paramsLabel')}
+              tooltip={t('canvas.paramsTooltip')}
             >
               <Input.TextArea
                 rows={5}
@@ -174,7 +186,7 @@ export default function NodeConfigPanel() {
 
         {type === StepType.Code && (
           <>
-            <Form.Item label="语言">
+            <Form.Item label={t('canvas.languageLabel')}>
               <Select
                 value={config?.language ?? 'python'}
                 onFocus={snapshot}
@@ -187,8 +199,8 @@ export default function NodeConfigPanel() {
               />
             </Form.Item>
             <Form.Item
-              label="代码"
-              tooltip="在进程沙箱中执行，NetworkEnabled=false 时禁用网络"
+              label={t('canvas.codeLabel')}
+              tooltip={t('canvas.codeTooltip')}
             >
               <Input.TextArea
                 rows={8}
@@ -202,7 +214,7 @@ export default function NodeConfigPanel() {
         )}
 
         {type === StepType.End && (
-          <Form.Item label="汇总方式" tooltip="默认拼接所有前驱 artifacts">
+          <Form.Item label={t('canvas.summaryLabel')} tooltip={t('canvas.summaryTooltip')}>
             <Input
               value={config?.summary ?? 'all'}
               onFocus={snapshot}
@@ -212,7 +224,7 @@ export default function NodeConfigPanel() {
         )}
 
         {(node.data.state || node.data.result) && (
-          <Form.Item label="运行时状态">
+          <Form.Item label={t('canvas.runtimeState')}>
             <Typography.Paragraph style={{ marginBottom: 4 }}>
               <b>{node.data.state ?? '—'}</b>
               {node.data.errorDetail ? (
@@ -227,7 +239,7 @@ export default function NodeConfigPanel() {
       </Form>
 
       <Button danger block icon={<DeleteOutlined />} onClick={() => removeNode(node.id)}>
-        删除节点
+        {t('canvas.deleteNode')}
       </Button>
     </div>
   );

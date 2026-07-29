@@ -40,6 +40,7 @@ import NodePalette from '../components/canvas/NodePalette';
 import NodeConfigPanel from '../components/canvas/NodeConfigPanel';
 import VariableWatchPanel from '../components/canvas/VariableWatchPanel';
 import { StepType } from '../types';
+import { useTranslation } from 'react-i18next';
 
 const { Title } = Typography;
 
@@ -55,6 +56,7 @@ const nodeTypes: NodeTypes = {
 };
 
 const CanvasInner: React.FC = () => {
+  const { t } = useTranslation();
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const { message } = AntApp.useApp();
@@ -95,7 +97,7 @@ const CanvasInner: React.FC = () => {
         setName(wf.name);
         loadFromDetail(wf);
       })
-      .catch(() => message.error('加载工作流失败'))
+      .catch(() => message.error(t('errors.loadFailed')))
       .finally(() => setLoading(false));
   }, [id, addNode, loadFromDetail]);
 
@@ -147,11 +149,11 @@ const CanvasInner: React.FC = () => {
 
   const handleSaveDraft = async () => {
     if (!id) {
-      message.error('草稿保存仅对已有工作流可用');
+      message.error(t('pages.workflows.draftEditOnly'));
       return;
     }
-    if (!name.trim()) return message.error('请填写工作流名称');
-    if (!hasStartEnd()) return message.error('DAG 必须包含且仅包含 Start 入口与至少一个 End 出口');
+    if (!name.trim()) return message.error(t('pages.workflows.nameRequired'));
+    if (!hasStartEnd()) return message.error(t('pages.workflows.dagStartEnd'));
     setSaving(true);
     try {
       const payload = toPayload();
@@ -161,18 +163,18 @@ const CanvasInner: React.FC = () => {
         nodes: payload.nodes,
         edges: payload.edges,
       });
-      message.success('已保存草稿');
+      message.success(t('pages.workflows.draftSaved'));
       navigate('/workflows');
     } catch {
-      message.error('保存失败（请检查 DAG 是否合法）');
+      message.error(t('pages.workflows.saveFailed'));
     } finally {
       setSaving(false);
     }
   };
 
   const handleSaveAndRun = async () => {
-    if (!name.trim()) return message.error('请填写工作流名称');
-    if (!hasStartEnd()) return message.error('DAG 必须包含 Start 入口与至少一个 End 出口');
+    if (!name.trim()) return message.error(t('pages.workflows.nameRequired'));
+    if (!hasStartEnd()) return message.error(t('pages.workflows.dagStartEnd'));
     setSaving(true);
     try {
       const payload = toPayload();
@@ -184,7 +186,7 @@ const CanvasInner: React.FC = () => {
           edges: payload.edges,
         });
         await runExistingWorkflow(id);
-        message.success('已保存并运行');
+        message.success(t('pages.workflows.savedAndRun'));
         // refresh states
         const wf = await getWorkflow(id);
         loadFromDetail(wf);
@@ -201,27 +203,27 @@ const CanvasInner: React.FC = () => {
           nodes: payload.nodes,
           edges: payload.edges,
         });
-        message.success('已创建并保存 DAG');
+        message.success(t('pages.workflows.createdDag'));
         navigate(`/workflows/${created.id}/edit`);
       }
     } catch {
-      message.error('保存或运行失败（请检查 DAG 是否合法）');
+      message.error(t('pages.workflows.saveRunFailed'));
     } finally {
       setSaving(false);
     }
   };
 
   const handleRunNode = async () => {
-    if (!id) return message.error('请先保存工作流再单步调试');
-    if (!selectedNodeId) return message.error('请选择一个节点');
+    if (!id) return message.error(t('pages.workflows.saveFirstDebug'));
+    if (!selectedNodeId) return message.error(t('pages.workflows.selectNode'));
     setRunning(true);
     try {
       await runWorkflowNode(id, selectedNodeId);
       const wf = await getWorkflow(id);
       loadFromDetail(wf);
-      message.success('单步调试完成');
+      message.success(t('pages.workflows.stepDone'));
     } catch {
-      message.error('单步运行失败');
+      message.error(t('pages.workflows.stepFailed'));
       const wf = await getWorkflow(id).catch(() => null);
       if (wf) loadFromDetail(wf);
     } finally {
@@ -236,29 +238,29 @@ const CanvasInner: React.FC = () => {
       <Space style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap' }}>
         <Space>
           <Title level={4} style={{ margin: 0 }}>
-            工作流画布 {id ? `(编辑: ${id})` : '(新建)'}
+            {t('pages.workflows.canvasTitle')} {id ? t('pages.workflows.editingSuffix', { id }) : t('pages.workflows.newSuffix')}
           </Title>
           <Input
-            placeholder="工作流名称"
+            placeholder={t('pages.workflows.namePlaceholder')}
             value={name}
             onChange={(e) => setName(e.target.value)}
             style={{ width: 220 }}
           />
         </Space>
         <Space wrap>
-          <Tooltip title="撤销 (Ctrl+Z)">
+          <Tooltip title={t('pages.workflows.undoTip')}>
             <Button icon={<UndoOutlined />} onClick={undo}>
-              撤销
+              {t('pages.workflows.undo')}
             </Button>
           </Tooltip>
-          <Tooltip title="重做 (Ctrl+Y)">
+          <Tooltip title={t('pages.workflows.redoTip')}>
             <Button icon={<RedoOutlined />} onClick={redo}>
-              重做
+              {t('pages.workflows.redo')}
             </Button>
           </Tooltip>
-          <Tooltip title="新增 LLM 节点">
+          <Tooltip title={t('pages.workflows.addNodeTip')}>
             <Button icon={<PlusOutlined />} onClick={() => addNode(StepType.LLM, { x: 320, y: 200 })}>
-              添加节点
+              {t('pages.workflows.addNode')}
             </Button>
           </Tooltip>
           <Button
@@ -267,13 +269,13 @@ const CanvasInner: React.FC = () => {
             loading={running}
             disabled={!id || !selectedNodeId}
           >
-            单步试运行
+            {t('pages.workflows.stepRun')}
           </Button>
           <Button onClick={handleSaveDraft} disabled={!id || saving}>
-            保存草稿
+            {t('pages.workflows.saveDraft')}
           </Button>
           <Button type="primary" icon={<SaveOutlined />} onClick={handleSaveAndRun} loading={saving}>
-            保存并运行
+            {t('pages.workflows.saveAndRun')}
           </Button>
         </Space>
       </Space>

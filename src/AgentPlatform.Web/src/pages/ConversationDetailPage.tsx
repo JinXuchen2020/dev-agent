@@ -25,6 +25,7 @@ import {
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
 import { colors } from '../theme/tokens';
+import { useTranslation } from 'react-i18next';
 
 interface ChatMessage {
   id: string;
@@ -33,6 +34,7 @@ interface ChatMessage {
 }
 
 const ConversationDetailPage: React.FC = () => {
+  const { t } = useTranslation();
   const { id = '' } = useParams<{ id: string }>();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -51,7 +53,7 @@ const ConversationDetailPage: React.FC = () => {
     setError(null);
     Promise.all([
       getConversation(id).catch((e) => {
-        setError('加载会话失败：' + (e?.response?.data?.title ?? e.message));
+        setError(t('pages.conversationDetail.loadFailed') + '：' + (e?.response?.data?.title ?? e.message));
         return null;
       }),
       getKnowledgeBases().catch(() => [] as KnowledgeBase[]),
@@ -101,7 +103,7 @@ const ConversationDetailPage: React.FC = () => {
         { id: `a-${Date.now()}`, role: 'agent', content: res.reply },
       ]);
     } catch (e: unknown) {
-      message.error('发送失败：' + getErrorMessage(e));
+      message.error(t('pages.conversationDetail.sendFailed') + '：' + getErrorMessage(e));
       setMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
     } finally {
       setSending(false);
@@ -113,15 +115,15 @@ const ConversationDetailPage: React.FC = () => {
     try {
       if (kbId) {
         await setConversationKnowledgeBase(id, kbId);
-        message.success('已挂载知识库');
+        message.success(t('pages.conversationDetail.kbAttached'));
       } else {
         await removeConversationKnowledgeBase(id);
-        message.success('已解除知识库');
+        message.success(t('pages.conversationDetail.kbDetached'));
       }
       const updated = await getConversation(id);
       setConversation(updated);
     } catch (e: unknown) {
-      message.error('知识库更新失败：' + getErrorMessage(e));
+      message.error(t('pages.conversationDetail.kbFailed') + '：' + getErrorMessage(e));
     } finally {
       setSavingKb(false);
     }
@@ -130,7 +132,7 @@ const ConversationDetailPage: React.FC = () => {
   if (loading) {
     return (
       <div>
-        <PageHeader title="会话详情" />
+        <PageHeader title={t('pages.conversationDetail.title')} />
         <div style={{ textAlign: 'center', padding: 80 }}>
           <Spin />
         </div>
@@ -141,20 +143,20 @@ const ConversationDetailPage: React.FC = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 160px)' }}>
       <PageHeader
-        title="会话详情"
+        title={t('pages.conversationDetail.title')}
         actions={
           <Space>
-            {linkedKbName && <Tag color="blue">已挂：{linkedKbName}</Tag>}
+            {linkedKbName && <Tag color="blue">{t('pages.conversationDetail.linkedKb')}：{linkedKbName}</Tag>}
             <Select
               style={{ width: 220 }}
-              placeholder="选择模型"
+              placeholder={t('pages.conversationDetail.modelPlaceholder')}
               allowClear
               value={selectedModel}
               onChange={(v) => setSelectedModel(v || undefined)}
               options={[
                 ...(models.filter((m) => !m.isTenantOwned).length
                   ? [{
-                      label: '平台模型',
+                      label: t('pages.conversationDetail.platformModels'),
                       options: models
                         .filter((m) => !m.isTenantOwned)
                         .map((m) => ({ label: m.displayName, value: m.modelId })),
@@ -162,7 +164,7 @@ const ConversationDetailPage: React.FC = () => {
                   : []),
                 ...(models.filter((m) => m.isTenantOwned).length
                   ? [{
-                      label: '我的模型',
+                      label: t('pages.conversationDetail.myModels'),
                       options: models
                         .filter((m) => m.isTenantOwned)
                         .map((m) => ({ label: m.displayName, value: m.modelId })),
@@ -172,7 +174,7 @@ const ConversationDetailPage: React.FC = () => {
             />
             <Select
               style={{ width: 240 }}
-              placeholder="挂载知识库"
+              placeholder={t('pages.conversationDetail.kbPlaceholder')}
               allowClear
               loading={savingKb}
               value={conversation?.knowledgeBaseId || undefined}
@@ -183,14 +185,14 @@ const ConversationDetailPage: React.FC = () => {
         }
       />
       <Card
-        title="对话"
+        title={t('pages.conversationDetail.dialog')}
         style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
         bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
       >
         {error && <Alert type="error" message={error} style={{ marginBottom: 12 }} />}
         <div style={{ flex: 1, overflowY: 'auto', padding: '8px 4px' }}>
           {messages.length === 0 ? (
-            <Empty description="暂无消息，发送一条试试（若已挂知识库，将自动带入检索上下文）" />
+            <Empty description={t('pages.conversationDetail.emptyMessages')} />
           ) : (
             messages.map((m) => (
               <div
@@ -223,8 +225,8 @@ const ConversationDetailPage: React.FC = () => {
           <Input.TextArea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            aria-label="输入消息"
-            placeholder="输入消息，回车发送（Shift+Enter 换行）"
+            aria-label={t('pages.conversationDetail.inputAria')}
+            placeholder={t('pages.conversationDetail.inputPlaceholder')}
             autoSize={{ minRows: 1, maxRows: 4 }}
             onPressEnter={(e) => {
               if (!e.shiftKey) {
@@ -241,7 +243,7 @@ const ConversationDetailPage: React.FC = () => {
             onClick={handleSend}
             disabled={!input.trim()}
           >
-            发送
+            {t('pages.conversationDetail.send')}
           </Button>
         </div>
       </Card>
