@@ -1,5 +1,39 @@
 # 变更日志
 
+## v2.10 (2026-07-29)
+
+### F17 · AgentConfiguration 实例化联动（模板库真正被消费）完成（feature-builder 全栈实跑，🟡中风险）
+
+把「版本化 YAML 定义库孤岛」变为真正被前端消费与实例化的「Agent 定义/模板库」：定义可被读取为结构化模板、可被用来一键新建 Agent、并打通管理端 CRUD。
+
+**核心改动：**
+- **模板读取端点（后端新增）**：`GET /api/v1/agent-configurations/{id}/template` `[Authorize(Roles="Admin")]`，复用既有 `IYamlConfigurationParser`（YamlDotNet，UnderscoredNamingConvention）在服务端把 YAML 解析为结构化 `ConfigurationAgentTemplate`（`agent_role`/`system_prompt`/`model.{provider,name,api_url}` → 对应字段；缺字段留 `null`、畸形 YAML 降级为仅元数据不报错）；handler 显式比对 `TenantId` 做租户隔离（跨租户返回 404 而非 403，避免泄漏存在性）。
+- **D1 溯源（可选）**：`CreateAgentCommand` 新增可选 `Guid? ConfigurationId`，`CreateAgentCommandHandler` 注入 `IAgentConfigurationRepository` best-effort 加载定义，并把「from configuration X vY」写入审计日志；加载失败**绝不**阻断创建（无 EF 迁移）。
+- **前端 AgentConfigurationsPage 完整 CRUD**：新建/编辑 Modal（name / description / agentTypeCode 取自 `getAgentRoles()` / yamlContent TextArea）；每行 `⋯` 编辑 + `Popconfirm` 删除，均 Admin 门控；移除与「我的凭据」重复的凭据 tab；抽屉明细改为拉 `GET {id}` 详情取 `yamlContent`（列表 summary 不含 `yamlContent`）。
+- **AgentsPage「基于模板新建」**：弹窗列定义（Active 优先）→ 选中 `getAgentConfigurationTemplate` 结构化预填创建表单 → `createAgent` 透传 `configurationId`；模板模型不在平台目录时注入合成目录项避免静默丢 provider。
+- **RBAC 收敛**：`AppLayout` 将 Configurations 菜单收敛为 Admin 仅见（与后端 `[Authorize(Roles="Admin")]` 对齐）。
+- **契约对齐**：`api.ts` 补齐 5 个方法、`types/index.ts` 对齐 3 个新类型（`AgentConfiguration` 漂移修正 `agentTypeCode`/`status`/`updatedAt` 对齐后端 camelCase）；`i18n` zh-CN/en-US 严格镜像（对称性测试通过）。
+
+**质量与测试：**
+- 三道质量门禁全 PASS（`ddd-code-reviewer` / `ddd-phase-quality-gate` / `codebase-optimizer`）；`.quality-gate.json` 推进 `f17-agent-config-instantiation`
+- 后端 `dotnet test src/AgentPlatform.sln` **260 passed / 0 failed**（SpecFlow 41 / Arch 6 / Application 90 / Infrastructure 102 / Api 18 / Integration 5；含 F17 新增 `GetConfigurationTemplateQueryHandlerTests` 5 例 + `InvalidYamlExceptionHandlerTests` 2 例）；前端 `tsc --noEmit` **0 error** + `vitest` **38/38 green**（含 i18n 对称 4 项）+ `vite build` 通过
+- 设计偏离：设计文档原拟新增 `AgentConfigurationYamlParser`，经核验 `IYamlConfigurationParser` 已存在，改为复用（无新增解析类）
+
+**HOTFIX（同分支，提交 19766a7）**：修复「新增配置」`POST /api/v1/agent-configurations` 返回 500
+- 根因①：请求记录 `CreateAgentConfigurationRequest` / `UpdateAgentConfigurationRequest` / `CreateAgentRoleRequest` 的校验特性写成 `[property: ...]` 加在记录主构造器位置参数上 → 触发 ASP.NET Core 模型验证 `ThrowIfRecordTypeHasValidationOnProperties` 抛 `InvalidOperationException` → 500（自 Phase 3 起所有经 MVC 绑定的创建接口受影响，F17 前端首次触达才暴露；后端单测走 MediatR 不经 MVC 绑定故一直未发现）。修复=校验特性直接加在位置参数（`[Required]`/`[StringLength]`，去掉 `[property:]`），对齐 `Models/*.cs` 既有正确写法；一并修 `CreateAgentRoleRequest`。
+- 根因②：即便绑定通过，命令处理器对非法 YAML 抛 `ArgumentException` 仍变 500。修复=新建 `InvalidYamlException`（放 Application 层避免反向依赖 Api 致循环引用），处理器改抛它；新增 `InvalidYamlExceptionHandler : IExceptionHandler`（沿用 `UnsupportedContentTypeExceptionHandler` 模式）映射为 **400 Bad Request**。
+- 实证：合法 YAML→200、非法 YAML→400、AgentRole 创建→200；`Api.Tests` 16→18。
+
+**UI 交互修复（同分支，提交 bfe4426）**：
+- AgentConfigurationsPage 编辑时 Drawer 与 Modal 同时打开 → `openCreate`/`openEdit` 开头 `setDrawerOpen(false)`，卡片内操作区 `onClick stopPropagation` 防冒泡到 `onItemClick`→`openDrawer`
+- ConversationDetailPage 缺返回按钮 → 标题左新增 `←` 按钮 `navigate('/conversations')`（loading 态同步）；`PageHeader.title` 类型 `string`→`React.ReactNode`（无破坏性）
+
+**已知残留（非阻断）：**
+- 后端未配真实 LLM key 时，会话消息走 Stub 模拟回复（属预期）
+- 模板端点仅 Admin 可见，与 Configurations 菜单 Admin-only 一致；终端用户经 AgentsPage「基于模板新建」消费，无需直接调端点
+
+**分支：** `feat/f17-agent-config-instantiation`（未 push；含 6cabfbb / 19766a7 / bfe4426 三个提交）
+
 ## v2.9 (2026-07-29)
 
 ### F16 · 列表统一改为卡片（Card）形式展示完成（feature-builder 纯前端实跑，🟡中风险）
