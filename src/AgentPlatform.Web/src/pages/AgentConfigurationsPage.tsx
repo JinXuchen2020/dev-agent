@@ -110,6 +110,7 @@ const AgentConfigurationsPage: React.FC = () => {
   };
 
   const openCreate = async () => {
+    setDrawerOpen(false); // close detail drawer when creating new
     setEditing(null);
     setModalOpen(true);
     form.resetFields();
@@ -123,6 +124,7 @@ const AgentConfigurationsPage: React.FC = () => {
   };
 
   const openEdit = async (c: AgentConfiguration) => {
+    setDrawerOpen(false); // close detail drawer when editing
     setEditing(c);
     setModalOpen(true);
     form.resetFields();
@@ -200,7 +202,7 @@ const AgentConfigurationsPage: React.FC = () => {
       title={c.name}
       extra={
         isAdmin ? (
-          <Space size={0}>
+          <Space size={0} onClick={(e) => e.stopPropagation()}>
             <Dropdown
               menu={{ items: [{ key: 'edit', label: t('common.edit') }], onClick: () => openEdit(c) }}
               trigger={['click']}

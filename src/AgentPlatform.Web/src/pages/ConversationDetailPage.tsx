@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Spin,
   Input,
@@ -11,7 +11,7 @@ import {
   App as AntApp,
   Empty,
 } from 'antd';
-import { SendOutlined } from '@ant-design/icons';
+import { SendOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import type { Conversation, KnowledgeBase, PlatformModelDto } from '../types';
 import {
   getConversation,
@@ -35,6 +35,7 @@ interface ChatMessage {
 
 const ConversationDetailPage: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { id = '' } = useParams<{ id: string }>();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -130,9 +131,22 @@ const ConversationDetailPage: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <div>
-        <PageHeader title={t('pages.conversationDetail.title')} />
+      return (
+        <div>
+          <PageHeader
+            title={
+              <Space>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<ArrowLeftOutlined />}
+                  onClick={() => navigate('/conversations')}
+                  aria-label={t('common.back')}
+                />
+                {t('pages.conversationDetail.title')}
+              </Space>
+            }
+          />
         <div style={{ textAlign: 'center', padding: 80 }}>
           <Spin />
         </div>
@@ -143,7 +157,18 @@ const ConversationDetailPage: React.FC = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 160px)' }}>
       <PageHeader
-        title={t('pages.conversationDetail.title')}
+        title={
+          <Space>
+            <Button
+              type="text"
+              size="small"
+              icon={<ArrowLeftOutlined />}
+              onClick={() => navigate('/conversations')}
+              aria-label={t('common.back')}
+            />
+            {t('pages.conversationDetail.title')}
+          </Space>
+        }
         actions={
           <Space>
             {linkedKbName && <Tag color="blue">{t('pages.conversationDetail.linkedKb')}：{linkedKbName}</Tag>}
