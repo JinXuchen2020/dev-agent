@@ -13,6 +13,7 @@ namespace AgentPlatform.Application.Agents.Commands.CreateAgent;
 /// <param name="ModelApiUrl">The API base URL for the model provider.</param>
 /// <param name="SystemPrompt">The system prompt that defines the agent's behaviour.</param>
 /// <param name="TenantId">The unique identifier of the tenant that owns the agent.</param>
+/// <param name="ConfigurationId">Optional identifier of the source agent configuration definition this agent was instantiated from (used for provenance/audit tracing only).</param>
 public record CreateAgentCommand(
     string Name,
     string RoleCode,
@@ -20,5 +21,6 @@ public record CreateAgentCommand(
     string ModelName,
     string ModelApiUrl,
     string SystemPrompt,
-    Guid TenantId
+    Guid TenantId,
+    Guid? ConfigurationId = null
 ) : ICommand<Agent>;

@@ -4,6 +4,7 @@ using AgentPlatform.Application.AgentConfigurationManagement.Commands.DeleteAgen
 using AgentPlatform.Application.AgentConfigurationManagement.Commands.UpdateAgentConfiguration;
 using AgentPlatform.Application.AgentConfigurationManagement.Queries.GetAgentConfiguration;
 using AgentPlatform.Application.AgentConfigurationManagement.Queries.GetAgentConfigurationsByType;
+using AgentPlatform.Application.AgentConfigurationManagement.Queries.GetConfigurationTemplate;
 using AgentPlatform.Application.AgentConfigurationManagement.Queries.ListAgentConfigurations;
 using AgentPlatform.Domain.Aggregates.AgentConfigurations;
 using AgentPlatform.Domain.Enums;
@@ -133,6 +134,24 @@ public sealed class AgentConfigurationsController : ControllerBase
     {
         var query = new GetAgentConfigurationsByTypeQuery(agentTypeCode);
         var result = await _mediator.Send(query, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Projects an agent configuration into a structured, instantiation-ready template by
+    /// parsing its YAML content on the server. Used by the "create agent from template" flow.
+    /// Cross-tenant ids return <c>404 Not Found</c>; non-Admin callers receive <c>403 Forbidden</c>.
+    /// </summary>
+    [Authorize(Roles = "Admin")]
+    [HttpGet("{id:guid}/template")]
+    public async Task<IActionResult> GetConfigurationTemplate(
+        Guid id,
+        CancellationToken ct)
+    {
+        var query = new GetConfigurationTemplateQuery(id);
+        var result = await _mediator.Send(query, ct);
+        if (result == null)
+            return NotFound();
         return Ok(result);
     }
 }

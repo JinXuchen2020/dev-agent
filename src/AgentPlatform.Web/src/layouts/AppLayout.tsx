@@ -36,6 +36,10 @@ const AppLayout: React.FC = () => {
   const isAdminOrOperator =
     !!userRole && ['admin', 'operator'].includes(userRole.toLowerCase());
 
+  // 配置库（Agent Configuration 定义）的写操作后端为 [Authorize(Roles="Admin")]，
+  // 与 Agents 页同款判定对齐——非 Admin 不显示入口，避免看到无权操作的页面。
+  const isAdmin = !!userRole && userRole.toLowerCase() === 'admin';
+
   const menuItems = [
     { key: '/', icon: <DashboardOutlined />, label: t('nav.dashboard') },
     { key: '/agents', icon: <RobotOutlined />, label: t('nav.agents') },
@@ -52,6 +56,11 @@ const AppLayout: React.FC = () => {
   if (!isAdminOrOperator) {
     // 仅 Admin/Operator 可见「我的凭据」（与后端 RBAC 对齐）。
     const idx = menuItems.findIndex((m) => m.key === '/credentials');
+    if (idx >= 0) menuItems.splice(idx, 1);
+  }
+  if (!isAdmin) {
+    // 仅 Admin 可见「配置」（与后端 [Authorize(Roles="Admin")] 写门禁对齐）。
+    const idx = menuItems.findIndex((m) => m.key === '/agent-configurations');
     if (idx >= 0) menuItems.splice(idx, 1);
   }
 

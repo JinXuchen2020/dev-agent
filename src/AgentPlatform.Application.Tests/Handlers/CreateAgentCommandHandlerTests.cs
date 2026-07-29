@@ -12,11 +12,12 @@ public class CreateAgentCommandHandlerTests
 {
     private readonly IAgentRepository _repository = Substitute.For<IAgentRepository>();
     private readonly IAuditLogRepository _auditLogRepository = Substitute.For<IAuditLogRepository>();
+    private readonly IAgentConfigurationRepository _configurationRepository = Substitute.For<IAgentConfigurationRepository>();
     private readonly CreateAgentCommandHandler _handler;
 
     public CreateAgentCommandHandlerTests()
     {
-        _handler = new CreateAgentCommandHandler(_repository, _auditLogRepository);
+        _handler = new CreateAgentCommandHandler(_repository, _auditLogRepository, _configurationRepository);
     }
 
     [Fact]

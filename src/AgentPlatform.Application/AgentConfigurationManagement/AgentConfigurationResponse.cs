@@ -57,3 +57,41 @@ public sealed record AgentConfigurationListResponse(
     IReadOnlyList<AgentConfigurationSummary> Items,
     int TotalCount
 );
+
+/// <summary>
+/// Structured, instantiation-ready projection of an agent configuration.
+/// Consumed by the "create agent from template" frontend flow so the YAML is
+/// parsed once on the server (single source of truth) rather than re-parsed on the client.
+/// <para>
+/// The backing YAML is expected to follow this convention (parsed fault-tolerantly;
+/// any missing node leaves the corresponding field <c>null</c>):
+/// <code>
+/// agent_role: developer               # -> RoleCode
+/// system_prompt: "You are a helpful assistant."
+/// model:                              # -> ModelProvider / ModelName / ModelApiUrl
+///   provider: openai
+///   name: gpt-4o
+///   api_url: https://api.openai.com/v1
+/// </code>
+/// </para>
+/// </summary>
+/// <param name="ConfigurationId">The identifier of the source configuration definition.</param>
+/// <param name="Name">The configuration display name (used to prefill the agent name).</param>
+/// <param name="Description">The configuration description, if any.</param>
+/// <param name="RoleCode">The role code extracted from the YAML <c>agent_role</c> node.</param>
+/// <param name="ModelProvider">The model provider extracted from the YAML <c>model.provider</c> node.</param>
+/// <param name="ModelName">The model name extracted from the YAML <c>model.name</c> node.</param>
+/// <param name="ModelApiUrl">The model API base URL extracted from the YAML <c>model.api_url</c> node.</param>
+/// <param name="SystemPrompt">The system prompt extracted from the YAML <c>system_prompt</c> node.</param>
+/// <param name="SourceVersion">The semantic version of the source configuration (e.g. "1.2.0").</param>
+public sealed record ConfigurationAgentTemplate(
+    Guid ConfigurationId,
+    string Name,
+    string? Description,
+    string? RoleCode,
+    string? ModelProvider,
+    string? ModelName,
+    string? ModelApiUrl,
+    string? SystemPrompt,
+    string SourceVersion
+);

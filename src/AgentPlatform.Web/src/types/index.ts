@@ -17,6 +17,8 @@ export interface CreateAgentRequest {
   modelName?: string | null;
   modelApiUrl?: string | null;
   systemPrompt?: string | null;
+  /** Optional id of the source agent configuration this agent was instantiated from (provenance only). */
+  configurationId?: string | null;
 }
 
 // PATCH-style update: all fields optional; backend applies only the supplied ones.
@@ -62,14 +64,61 @@ export interface AgentRole {
   isActive: boolean;
 }
 
+// AgentConfigurationStatus mirrors AgentPlatform.Domain.Enums.AgentConfigurationStatus
+// (serialized as int by System.Text.Json). Used to render status tags on the config library.
+export const AgentConfigurationStatus = {
+  Draft: 0,
+  Active: 1,
+  Archived: 2,
+  Deprecated: 3,
+} as const;
+export type AgentConfigurationStatus =
+  (typeof AgentConfigurationStatus)[keyof typeof AgentConfigurationStatus];
+
+// Backend serializes AgentConfigurationSummary / AgentConfigurationResponse with camelCase
+// (agentTypeCode, status, updatedAt), NOT the legacy agentType / isActive / createdAt.
 export interface AgentConfiguration {
   id: string;
   name: string;
-  agentType: string;
+  description?: string | null;
+  agentTypeCode?: string | null;
   version: string;
+  /** AgentConfigurationStatus enum value (0 Draft, 1 Active, 2 Archived, 3 Deprecated). */
+  status: AgentConfigurationStatus;
+  createdAt?: string;
+  updatedAt: string;
+  /** Present only on the detail endpoint (GET /agent-configurations/{id}), not on the list. */
+  yamlContent?: string;
+  tenantId?: string;
+}
+
+export interface CreateAgentConfigurationRequest {
+  name: string;
   yamlContent: string;
-  isActive: boolean;
-  createdAt: string;
+  description?: string | null;
+  agentTypeCode?: string | null;
+}
+
+export interface UpdateAgentConfigurationRequest {
+  yamlContent: string;
+  changeLog?: string | null;
+  /** VersionBump enum: 0 Patch, 1 Minor, 2 Major. */
+  versionBump?: number;
+  name?: string | null;
+  description?: string | null;
+}
+
+// Structured projection returned by GET /agent-configurations/{id}/template.
+export interface ConfigurationAgentTemplate {
+  configurationId: string;
+  name: string;
+  description?: string | null;
+  roleCode?: string | null;
+  modelProvider?: string | null;
+  modelName?: string | null;
+  modelApiUrl?: string | null;
+  systemPrompt?: string | null;
+  sourceVersion: string;
 }
 
 export interface Workflow {

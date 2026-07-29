@@ -61,14 +61,22 @@ public sealed class AesGcmEncryptorTests : IDisposable
         const string plaintext = "This message will be tampered with.";
         var ciphertext = _encryptor.Encrypt(plaintext);
 
-        // Flip a byte in the middle of the hex-encoded ciphertext
+        // Flip a hex digit in the middle of the ciphertext to a *different, always-valid* hex char.
+        // (A naive (char)(c ^ 1) flip can turn 'a' into '`' — invalid hex — which throws FormatException
+        // instead of the expected AuthenticationTagMismatchException, making this test flaky.)
         var chars = ciphertext.ToCharArray();
         var mid = chars.Length / 2;
         chars[mid] = chars[mid] switch
         {
-            '0' => '1',
-            'f' => 'e',
-            _ => (char)(chars[mid] ^ 1)
+            '0' => '1', '1' => '0',
+            '2' => '3', '3' => '2',
+            '4' => '5', '5' => '4',
+            '6' => '7', '7' => '6',
+            '8' => '9', '9' => '8',
+            'a' => 'b', 'b' => 'a',
+            'c' => 'd', 'd' => 'c',
+            'e' => 'f', 'f' => 'e',
+            _ => chars[mid]
         };
         var tampered = new string(chars);
 
