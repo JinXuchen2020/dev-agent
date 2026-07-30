@@ -174,7 +174,7 @@
 - 决策（见 `./dashboard-charts.md` §7，待锁定）：D1 v1 仅 Token 图不做 $ 成本图（缺单价表）/ D2 图表标签用 `t()`（与 F15 协同）/ D3 可见性沿用已认证可读（非仅 Admin）/ D4 图表库默认 `@ant-design/plots`(recharts 备选)。
 - 风险：🟡 中风险（新端点 + 图表库包体 + 应用层时间聚合）；缓解：聚合在应用层、量大再下沉 SQL；recharts 备选降包体；与 F16 不冲突（Dashboard 非表格页）、与 F15 协同即可。
 
-### F19 · Agent Roles 内建标记 + 页面补全 + 分类合并（统一角色目录，DB 为准）  [P1]  open  🟡中风险（角色分类值对象 + 聚合加列 + EF 迁移 + 新增 PUT 端点 + 前端页重写）
+### F19 · Agent Roles 内建标记 + 页面补全 + 分类合并（统一角色目录，DB 为准）  [P1]  done  🟡中风险（角色分类值对象 + 聚合加列 + EF 迁移 + 新增 PUT 端点 + 前端页重写）
 - 设计文档：`features/agent-roles-builtin.md`（已建，§5 决策 D1–D4 已随用户拍板锁定）
 - 目标：① 修 bug——系统架构/产品经理等平台默认角色被错标"自定义"（前端 `BUILT_IN_ROLES` 硬编码 code 与 DB `AgentRoleDefinition` code 整套对不上 + 聚合无内建标记）；② 补全 `AgentRolesPage`（新建/编辑/删除 + 被引用计数，后端 CRUD 已就绪但缺 `PUT`）；③ 合并两套分裂分类（`AgentType` 硬编码值对象 vs `AgentRoleDefinition` DB 表）为**一套以数据库为准的统一角色目录**。来源：2026-07-27 用户对 `AgentRolesPage` 的分析反馈（"系统架构等应是内建"+"页面功能不全"），并明确"两条分类合并成一套统一角色目录，以数据库为准"。
 - 核心改造：
@@ -193,6 +193,7 @@
   - 质量门：build 0/0、`dotnet test` 全绿（含 parity + 引用计数单测）、前端 tsc 0 + vitest 全过 + vite build；`.quality-gate.json` 追加 notes 保 cleared:true。
 - 决策（见 `./agent-roles-builtin.md` §5，已锁定）：D1 合并策略=DB 为准 + AgentType 降镜像 + parity 测试（不动 Agent 聚合）；D2 内建集合 7 个（含新增 reviewer、沿用 requirement）；D3 补 PUT、内建 code 锁不可删；D4 AgentConfiguration.AgentTypeCode v1 不强制、仅文档建议。
 - 风险：🟡 中风险（聚合加列 + 迁移 + 新端点 + 前端重写）；缓解：EF 铁律（迁移 + `#pragma warning disable IDE0161`）；`AgentType.Predefined` code 改动需同步改 SpecFlow `AgentTypeMigration`（`"architect"`→`"architecture"` 等）；与 F16 强耦合（见下方 F16 协同）。
+- **完成记录（2026-07-29）**：feature-builder 全栈实跑落地（分支 `feat/f19-agent-roles-unified`）。后端：`AgentRoleDefinition` 增 `IsBuiltIn`(bool) + EF 迁移 `AddAgentRoleIsBuiltIn`（`defaultValue:false`）；`DatabaseInitializer` 幂等对齐 7 内建（缺失插入/已存非内建 `MarkAsBuiltIn`）+ **legacy→new RoleCode 幂等映射**（architect/developer/tester/pm/tech-writer→新码，修正设计 §3.1「数据连续」错误假设、防存量 Agent 游离）；`AgentType` 降为 `BuiltInRoleCatalog` 镜像 + 架构 parity 测试 3 例强制 DB 为准；`IAgentRepository.CountByRoleAsync` + `AgentRoleSummary.AgentCount` 引用计数；新增 `PUT /api/v1/agent-roles/{roleCode}` + `UpdateAgentRoleDefinitionCommand/Handler`；`DeleteAgentRoleCommand` 重写枚举结局（Deleted/NotFound/BuiltInConflict/InUseConflict，409 拦截内建/被引用）。前端：`AgentRolesPage` 删 `BUILT_IN_ROLES` 硬编码、按 `IsBuiltIn` 分区、新建/编辑/删除模态 + RBAC + `agentCount` 展示；`AgentsPage` 默认 `roleCode`→`development`；`types`/`api`/`locales` 对齐（i18n 对称 4 例 zh-CN 去字面 "Agent"）。**审查修复 P2×2**：`AgentsController` 默认 `RoleCode ?? "developer"`→`"development"`；`DatabaseInitializer` 补 legacy 映射。**三道质量门 PASS**（`.quality-gate.json` 推进 `f19-agent-roles-unified`，`cleared:true`）；后端 `dotnet build` **0/0** + 全方案 `dotnet test` **287/287**（SpecFlow 41 / Arch 9 / App 103 / Api 27 / Integration 5 / Infra 102，含 F19 新增 parity 3 + handler 7 + Api 集成 7）；前端 `tsc --noEmit` **0 error** + `vitest` **38/38** + `vite build` 通过。质量报告 `docs/quality/f19-agent-roles-gate.md`，结构清单嵌入 `features/agent-roles-builtin.md` §7。注意：设计 §3.1 原「存量 Agent code 已与新目录一致、无需迁移」假设不成立（旧码 architect/developer/tester/pm/tech-writer 整体不符），已由 `DatabaseInitializer` remap 兜底。
 
 ### F7 · 工作流平台化（program，可拆子史诗）  [P2/P3]  open  ⚠️高风险
 - 设计文档：`features/workflow-platformization.md`（待建，含子史诗拆分；来源 `./competitive-roadmap.md` 对标 Dify/n8n/LangGraph/Coze/Flowise）

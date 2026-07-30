@@ -103,7 +103,7 @@ const AgentsPage: React.FC = () => {
     pendingConfigurationId.current = null;
     setModalOpen(true);
     form.resetFields();
-    form.setFieldsValue({ roleCode: 'developer', status: 'Active' });
+    form.setFieldsValue({ roleCode: 'development', status: 'Active' });
     setLoadingCreate(true);
     try {
       const [r, m] = await Promise.all([
@@ -178,13 +178,13 @@ const AgentsPage: React.FC = () => {
       setRoles(r ?? []);
       setModels(m ?? []);
       const defaults: Partial<CreateAgentRequest & { status?: string }> = {
-        roleCode: 'developer',
+        roleCode: 'development',
         status: 'Active',
       };
       if (tpl) {
         pendingConfigurationId.current = tpl.configurationId;
         defaults.name = tpl.name;
-        defaults.roleCode = tpl.roleCode ?? 'developer';
+        defaults.roleCode = tpl.roleCode ?? 'development';
         defaults.systemPrompt = tpl.systemPrompt ?? '';
         // 模型下拉接目录 modelId；若模板模型命中目录则 provider 自动解析，否则注入一条合成
         // 目录项，避免 handleSubmit 的 models.find 解析不到 provider 而静默丢弃模型。

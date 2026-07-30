@@ -60,8 +60,8 @@ export interface AgentRole {
   roleCode: string;
   description: string;
   systemPrompt: string;
-  capabilities?: string[];
-  isActive: boolean;
+  isBuiltIn: boolean;
+  agentCount: number;
 }
 
 // AgentConfigurationStatus mirrors AgentPlatform.Domain.Enums.AgentConfigurationStatus

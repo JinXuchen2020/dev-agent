@@ -137,6 +137,7 @@ build/
 # Test artifacts / DB backups
 test-results/
 playwright-report/
+qa-report.json
 *.db.bak
 
 # SQLite WAL/SHM runtime artifacts

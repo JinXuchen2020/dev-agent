@@ -32,6 +32,15 @@ public interface IAgentRepository
     Task<IReadOnlyList<Agent>> GetByRoleAsync(string roleCode, CancellationToken ct = default);
 
     /// <summary>
+    /// Counts the agents belonging to a specific tenant that have the specified role code.
+    /// </summary>
+    /// <param name="tenantId">The tenant identifier to filter by.</param>
+    /// <param name="roleCode">The role code to filter by.</param>
+    /// <param name="ct">A cancellation token to cancel the asynchronous operation.</param>
+    /// <returns>The number of matching agents for the tenant.</returns>
+    Task<int> CountByRoleAsync(Guid tenantId, string roleCode, CancellationToken ct = default);
+
+    /// <summary>
     /// Adds a new agent to the repository.
     /// </summary>
     /// <param name="agent">The agent aggregate to add.</param>

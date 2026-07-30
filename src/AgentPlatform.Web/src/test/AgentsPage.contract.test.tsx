@@ -12,7 +12,7 @@ const SAMPLE: Agent[] = [
   {
     id: 'a1',
     name: '文档摘要助手',
-    roleCode: 'developer',
+    roleCode: 'development',
     modelProvider: 'openai',
     modelName: 'gpt-4o',
     tenantId: '00000000-0000-0000-0000-000000000001',
@@ -44,8 +44,8 @@ describe('AgentsPage 字段映射契约', () => {
     // 等待列表异步加载完成
     await waitFor(() => expect(screen.getByText('文档摘要助手')).toBeInTheDocument());
 
-    // 角色：卡片以「角色: developer」呈现，正则匹配子串而非曾经的 '-'
-    expect(screen.getByText(/developer/)).toBeInTheDocument();
+    // 角色：卡片以「角色: development」呈现，正则匹配子串而非曾经的 '-'
+    expect(screen.getByText(/development/)).toBeInTheDocument();
 
     // Model：卡片以「模型: gpt-4o」呈现，正则匹配子串而非曾经的 '-'
     expect(screen.getByText(/gpt-4o/)).toBeInTheDocument();

@@ -57,7 +57,7 @@ public sealed class AgentsController : ControllerBase
     {
         var command = new CreateAgentCommand(
             request.Name,
-            request.RoleCode ?? "developer",
+            request.RoleCode ?? "development",
             request.ModelProvider ?? _defaults.ModelProvider,
             request.ModelName ?? _defaults.ModelName,
             request.ModelApiUrl ?? _defaults.ModelApiUrl,

@@ -1,7 +1,9 @@
 using AgentPlatform.Application.AgentRoleManagement.Commands.CreateAgentRole;
 using AgentPlatform.Application.AgentRoleManagement.Commands.DeleteAgentRole;
+using AgentPlatform.Application.AgentRoleManagement.Commands.UpdateAgentRoleDefinition;
 using AgentPlatform.Application.AgentRoleManagement.Queries.GetAgentRole;
 using AgentPlatform.Application.AgentRoleManagement.Queries.ListAgentRoles;
+using Microsoft.AspNetCore.Http;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -49,7 +51,32 @@ public sealed class AgentRolesController : ControllerBase
     }
 
     /// <summary>
+    /// Updates an existing agent role definition (name / description / system prompt).
+    /// The role code is the immutable key and cannot be changed.
+    /// </summary>
+    [Authorize(Roles = "Admin")]
+    [HttpPut("{roleCode}")]
+    public async Task<IActionResult> UpdateRole(
+        string roleCode,
+        [FromBody] UpdateAgentRoleRequest request,
+        CancellationToken ct)
+    {
+        var command = new UpdateAgentRoleDefinitionCommand(
+            roleCode,
+            request.Name,
+            request.Description,
+            request.SystemPrompt);
+
+        var result = await _mediator.Send(command, ct);
+        if (result is null)
+            return NotFound();
+
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Deletes an existing custom agent role by its role code.
+    /// Built-in roles and roles still referenced by agents are rejected with 409 Conflict.
     /// </summary>
     [Authorize(Roles = "Admin")]
     [HttpDelete("{roleCode}")]
@@ -57,9 +84,24 @@ public sealed class AgentRolesController : ControllerBase
         string roleCode,
         CancellationToken ct)
     {
-        var command = new DeleteAgentRoleCommand(roleCode);
-        var result = await _mediator.Send(command, ct);
-        return result ? NoContent() : NotFound();
+        var outcome = await _mediator.Send(new DeleteAgentRoleCommand(roleCode), ct);
+        return outcome switch
+        {
+            AgentRoleDeletionOutcome.Deleted => NoContent(),
+            AgentRoleDeletionOutcome.NotFound => NotFound(),
+            AgentRoleDeletionOutcome.BuiltInConflict => Conflict(new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "内置角色不可删除",
+                Detail = "该角色为平台内置角色，不可删除。"
+            }),
+            _ => Conflict(new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "角色仍被引用",
+                Detail = "该角色仍被至少一个 Agent 引用，请先解绑相关 Agent 后再删除。"
+            }),
+        };
     }
 
     /// <summary>
@@ -99,6 +141,19 @@ public sealed record CreateAgentRoleRequest(
     [Required]
     [StringLength(100, MinimumLength = 1)]
     string RoleCode,
+    [StringLength(500)]
+    string? Description,
+    [Required]
+    [StringLength(8000)]
+    string SystemPrompt);
+
+/// <summary>
+/// Request model for updating an agent role definition.
+/// </summary>
+public sealed record UpdateAgentRoleRequest(
+    [Required]
+    [StringLength(200, MinimumLength = 1)]
+    string Name,
     [StringLength(500)]
     string? Description,
     [Required]

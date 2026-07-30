@@ -28,7 +28,7 @@
 - `DatabaseInitializer` 种子 **7 个内建角色**（`IsBuiltIn = true`）：
   - `architecture`(系统架构) / `development`(代码实现) / `testing`(质量保证) / `product`(产品经理) / `documentation`(技术文档) / `reviewer`(评审专家) / `requirement`(需求分析)
   - 说明：`reviewer` 是 `AgentType` 第 6 个角色在 DB 无对应项 → 补为内建；`requirement` 沿用 DB 既有内建种子。
-- **数据连续性**：既有 Agent 的 `Agent.Role.RoleCode`（如 `development`）与 DB 内建 code 一致 → 无需迁移 Agent 行，角色不丢。
+- **数据连续性（重要修正）**：既有 Agent 的 `Agent.Role.RoleCode` 用的是**旧 code**（`architect/developer/tester/pm/tech-writer`，见 §2 行 12），与 DB 内建 code（`architecture/development/testing/product/documentation`）**整套不一致** —— 设计早期"数据连续无需迁移"的假设不成立。因此在 `DatabaseInitializer` 中新增**幂等 legacy→new 映射**（architect→architecture / developer→development / tester→testing / pm→product / tech-writer→documentation；reviewer 不变），启动时对存量 Agent 的 `RoleCode` 一次性对齐，**避免存量 Agent 游离于新目录之外**（旧 code 不在 `BuiltInRoleCatalog` → 引用计数与编辑下拉无法匹配，但不会 500，因 `FromCode` 仅在校验用户输入时调用）。该映射位于 `IgnoreQueryFilters()` 全租户扫描，跨租户一并处理。
 
 ### 3.2 统一角色目录（核心：以数据库为准）
 - `AgentRoleDefinition` 表 = **唯一权威角色目录**（内建种子 + 租户自定义）。
@@ -80,3 +80,29 @@
 - 新增 EF 迁移（IsBuiltIn 列 + 种子）→ 必须走 EF 铁律（`dotnet ef migrations add` + 迁移文件 `#pragma warning disable IDE0161`；涉及 `AppDbContextModelSnapshot` 自动更新）。
 - parity 测试需让初始化器内建 code 集合与值对象可比较（从 DI 取 `DatabaseInitializer` 逻辑抽取常量，或两边都引用同一份常量源）。
 - 与 F16（列表改卡片）强耦合：`AgentRolesPage` 在 F16 目标页清单内；建议 F16 与 F19 中**先落其一统一收口该页**（D 时序见 backlog 协同说明）。
+
+## §7 F19 Quality Gate Checklist（结构门 · 2026-07-29）
+
+| # | 类别 | 结果 | 说明 |
+|---|------|------|------|
+| G1 | DI 注册缺口 | PASS | 新增 `UpdateAgentRoleDefinitionCommandHandler` 经 MediatR `RegisterServicesFromAssembly` 自动扫描注册；`IAgentRoleDefinitionRepository.CountByRoleAsync` 已在 `AgentRepository` 实现并 DI 注入。 |
+| G2 | DDD 层违规 | PASS | 命令/查询严格分置于 `Application/AgentRoleManagement/{Commands,Queries}`；`AgentRoleDefinition` 聚合封装 `MarkAsBuiltIn()`/`UpdateMetadata()`；Api 仅编排 `IMediator.Send`，无业务泄漏。 |
+| G3 | EF 映射缺口 | PASS | 新列 `IsBuiltIn` 经 `dotnet ef migrations add AddAgentRoleIsBuiltIn`（含 `defaultValue:false` 防存量行 NULL）；`AppDbContextModelSnapshot` 同步；`Agent.Role`(OwnsOne) `RoleCode` 列已存在。 |
+| G4 | 缺 CancellationToken | PASS | `CountByRoleAsync`/`GetByRoleAsync`/`GetByRoleCodeAsync` 全链路 `ct` 透传；Controller 显式 `CancellationToken ct`。 |
+| G5 | 缺 internal sealed | PASS | 所有 Handler 为 `internal sealed`；聚合根为 `sealed`。 |
+| G6 | 并发风险 | PASS | `AgentRoleDefinition` 非租户隔离（设计如此，内建共享）；写操作经 UoW `SaveChangesAsync` 单次提交；删除前 `GetByRoleAsync` 计数判冲突，无竞态删。 |
+| G7 | 缺 null 守卫 | PASS | `DeleteAgentRoleCommandHandler` null→NotFound；`UpdateAgentRoleDefinitionCommandHandler` null→NotFound(404)；`CreateAgentCommandHandler` `FromCode` 兜底造 `AgentType` 不崩。 |
+| G8 | API 基础设施 | PASS | `PUT`/`DELETE` 均 `[Authorize(Roles="Admin")]`；`PUT` 非 Admin→403、无 token→401（集成测试覆盖）；`DELETE` 内建→409(`ProblemDetails` 中文 title)、未引用→204、不存在→404。 |
+| G9 | 蓝图/设计漂移 | PASS | 实现与 `agent-roles-builtin.md` D1–D4 一致；§3.1 旧 code 假设已修正并补 remap。 |
+| G10 | 缺 XML 注释 | PASS | 新增 `BuiltInRoleCatalog`/`UpdateAgentRoleDefinitionCommand`/`DeleteAgentRoleCommand`(含 `AgentRoleDeletionOutcome` 枚举)/`UpdateAgentRoleRequest` 均中文 XML 注释。 |
+| G11 | Swagger | PASS | 端点沿用 `[ApiController][ApiVersion("1.0")]`，Scalar/Swagger 自动纳管；DTO 无 breaking 形状变更。 |
+| G12 | 死代码 | PASS | 旧 `AgentType.Architect/Developer/...` 全部替换为 `Requirement/Product/...`；无残留 `BUILT_IN_ROLES` 硬编码（前端已删）；无废弃分支。 |
+
+### §7.1 审查修复记录（ddd-code-reviewer）
+- **P2-FIX-1**：`AgentsController.cs:60` 新建 Agent 默认 `RoleCode ?? "developer"` —— `"developer"` 已不在新目录，会造游离 `AgentType`；改为 `"development"`。
+- **P2-FIX-2**：`DatabaseInitializer` 新增 legacy→new `RoleCode` 幂等映射（architect/developer/tester/pm/tech-writer），防存量 Agent 游离（修正 §3.1 错误假设）。
+- **P3-FIX-3**：前端契约测试 `AgentsPage.contract.test.tsx` 旧 fixture `'developer'` → `'development'`（与目录对齐）。
+- **P3-FIX-4**：`AgentType.cs` XML 示例 `"developer"/"architect"` → `"development"/"architecture"`。
+- **P3-OBS（未修，超范围）**：`NegotiationOrchestrator`/`SequentialOrchestrator`/`RoleBasedSelectionStrategy` 仍按 `StepName` 子串发 `architecture`/`code` 等步骤角色码，属工作流步骤角色分类，非 Agent 角色目录，需单独设计决策，留作后续。
+- **P3-OBS（未修，既有设计）**：`AgentRoleDefinition` 非租户隔离，自定义角色全局可见（非 F19 引入，F19 不改租户隔离）。
+

@@ -1,4 +1,5 @@
 using AgentPlatform.Domain.Aggregates.Agents;
+using AgentPlatform.Domain.Aggregates.AgentRoleDefinitions;
 using AgentPlatform.Domain.Repositories;
 using AgentPlatform.Domain.ValueObjects;
 using System.Collections.Concurrent;
@@ -43,7 +44,7 @@ public class AgentTypeMigrationSteps
     {
         // AgentRole enum has been migrated to AgentType value object.
         // Create an agent using the new AgentType system with the same role code.
-        var role = AgentType.Architect;
+        var role = AgentType.Architecture;
         _createdAgent = new Agent(
             Guid.NewGuid(),
             "Legacy Architect",
@@ -98,7 +99,7 @@ public class AgentTypeMigrationSteps
         // Verify the agent (created via new system or "migrated") uses AgentType.
         Assert.NotNull(_createdAgent);
         Assert.IsType<AgentType>(_createdAgent.Role);
-        Assert.Equal("architect", _createdAgent.Role.RoleCode);
+        Assert.Equal(BuiltInRoleCatalog.Architecture, _createdAgent.Role.RoleCode);
     }
 
     [Then("the system should return an empty list")]
@@ -137,6 +138,13 @@ public class AgentTypeMigrationSteps
                 .Where(a => a.Role.RoleCode == roleCode)
                 .ToList() as IReadOnlyList<Agent>;
             return Task.FromResult(agents);
+        }
+
+        public Task<int> CountByRoleAsync(Guid tenantId, string roleCode, CancellationToken ct = default)
+        {
+            var count = _store.Values
+                .Count(a => a.TenantId == tenantId && a.Role.RoleCode == roleCode);
+            return Task.FromResult(count);
         }
 
         public void Add(Agent agent)
