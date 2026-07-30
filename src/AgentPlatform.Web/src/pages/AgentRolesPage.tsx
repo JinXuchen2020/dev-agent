@@ -60,19 +60,29 @@ const AgentRolesPage: React.FC = () => {
   const custom = roles.filter((r) => !r.isBuiltIn);
 
   const openCreate = () => {
-    form.resetFields();
     setEditing('new');
   };
 
   const openEdit = (r: AgentRole) => {
-    form.setFieldsValue({
-      name: r.name,
-      roleCode: r.roleCode,
-      description: r.description,
-      systemPrompt: r.systemPrompt,
-    });
     setEditing(r);
   };
+
+  // Populate form when the target role changes. The Modal has `forceRender`, so
+  // the Form is mounted from page load — setFieldsValue always hits a connected
+  // instance (no reliance on the dialog's first-open lazy mount).
+  useEffect(() => {
+    if (!editing || editing === 'new') {
+      form.resetFields();
+      return;
+    }
+    form.setFieldsValue({
+      name: editing.name,
+      roleCode: editing.roleCode,
+      description: editing.description ?? '',
+      systemPrompt: editing.systemPrompt ?? '',
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing]);
 
   const handleSubmit = async () => {
     const values = await form.validateFields();
@@ -231,6 +241,7 @@ const AgentRolesPage: React.FC = () => {
 
       <Modal
         open={editing !== null}
+        forceRender
         title={
           editing === 'new'
             ? t('pages.agentRoles.createRole')
@@ -239,11 +250,10 @@ const AgentRolesPage: React.FC = () => {
         onCancel={() => setEditing(null)}
         onOk={handleSubmit}
         confirmLoading={submitting}
-        destroyOnClose
         okText={t('common.save')}
         cancelText={t('common.cancel')}
       >
-        <Form form={form} layout="vertical" preserve={false}>
+        <Form form={form} layout="vertical">
           <Form.Item
             name="name"
             label={t('pages.agentRoles.name')}
