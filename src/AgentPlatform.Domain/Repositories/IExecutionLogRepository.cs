@@ -73,4 +73,20 @@ public interface IExecutionLogRepository
     /// </summary>
     /// <param name="log">The execution log with modified state.</param>
     void Update(ExecutionLog log);
+
+    /// <summary>
+    /// Retrieves all execution logs for a tenant within an optional date range (filtered by
+    /// <c>StartedAt</c>), eagerly including step entries. Used by the analytics summary query
+    /// which needs the full (non-paginated) set for in-memory day-bucket aggregation.
+    /// </summary>
+    /// <param name="tenantId">The tenant identifier to filter by.</param>
+    /// <param name="from">Optional inclusive start date (UTC).</param>
+    /// <param name="to">Optional inclusive end date (UTC).</param>
+    /// <param name="ct">A cancellation token.</param>
+    /// <returns>A read-only list of execution logs for the tenant.</returns>
+    Task<IReadOnlyList<ExecutionLog>> GetByTenantAsync(
+        Guid tenantId,
+        DateTime? from = null,
+        DateTime? to = null,
+        CancellationToken ct = default);
 }

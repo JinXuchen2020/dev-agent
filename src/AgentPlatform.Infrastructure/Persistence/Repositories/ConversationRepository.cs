@@ -58,6 +58,23 @@ internal sealed class ConversationRepository : IConversationRepository
             .ToListAsync(ct);
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<Conversation>> GetByTenantAsync(
+        Guid tenantId, DateTime? from, DateTime? to, CancellationToken ct = default)
+    {
+        var query = _context.Conversations
+            .Where(c => c.TenantId == tenantId)
+            .AsQueryable();
+
+        if (from.HasValue)
+            query = query.Where(c => c.CreatedAt >= from.Value);
+
+        if (to.HasValue)
+            query = query.Where(c => c.CreatedAt <= to.Value);
+
+        return await query.OrderByDescending(c => c.CreatedAt).ToListAsync(ct);
+    }
+
     /// <summary>
     /// Adds a new conversation aggregate to the change tracker.
     /// </summary>

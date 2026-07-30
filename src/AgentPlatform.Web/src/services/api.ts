@@ -30,6 +30,7 @@ import type {
   UpdateTenantCredentialRequest,
   PlatformModelDto,
   ProviderModelInfo,
+  DashboardSummary,
 } from '../types';
 
 const api = axios.create({
@@ -269,6 +270,19 @@ export const discoverProviderModels = (req: {
   api
     .post<ProviderModelInfo[]>('/tenant/credentials/discover-models', req)
     .then((r) => r.data ?? []);
+
+// F18 Dashboard analytics（GET /analytics/summary）。
+// 不传 from/to 时后端默认返回最近 14 天；前端范围选择器主动传 from=now-N天, to=now。
+export const getDashboardSummary = (opts?: {
+  from?: string;
+  to?: string;
+  signal?: AbortSignal;
+}) => {
+  const { signal, ...params } = opts ?? {};
+  return api
+    .get<DashboardSummary>('/analytics/summary', { params, signal })
+    .then((r) => r.data);
+};
 
 // Normalize an unknown thrown value into a human-readable message.
 // Preserves axios-style `response.data.title` / `response.data.message` when present,

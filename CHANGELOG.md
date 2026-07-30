@@ -1,6 +1,23 @@
 # 变更日志
 
-## v2.10 (2026-07-29)
+## v2.11 (2026-07-30)
+
+### F18 · Dashboard 图表充实（运行分析看板）完成（feature-builder 全栈实跑，🟡中风险）
+
+把仅 4 个计数卡的 Dashboard 升级为运行分析看板（KPI 卡 + 时间序列/分布图），对标 Dify/LangSmith/Flowise/n8n/Coze。
+
+**核心改动：**
+- **后端新增聚合端点**：`GET /api/v1/analytics/summary` `[Authorize]`（沿用 Dashboard 现有「已认证即可读」可见性，tenant-scoped via `ITenantProvider`）。单一 `DashboardSummaryDto` 一次返回全部图表数据（KPIs：活跃智能体/活跃工作流/总执行数/成功率/总 Token/平均延迟 + 日桶 ExecutionsByDay/TokenByDay/ConversationsByDay/LatencyByDay + TopWorkflows），避免 N 请求。Handler 取区间内租户原始行**应用层按日桶聚合**（v1；留 SQL `GROUP BY` 下沉余地）。含 `from>to`→400、`范围>366 天`→400 输入边界。
+- **仓储扩展**：`IExecutionLogRepository`/`IConversationRepository` 新增日期范围重载（`internal sealed` 实现；`ExecutionLog` 查询 `Include(Entries)` 保证延迟聚合有效），无 EF 迁移（纯查询端点）。
+- **前端图表化**：引入 `recharts@^2.15.4`（设计 D4 文档备选，React 19 兼容更稳、包体更轻）；`DashboardPage` 重写为 `Segmented` 7/14/30 天范围选择器 + 6 KPI 卡 + 6 图（执行趋势堆叠柱/成功率折线/Token 面积/会话量柱/平均延迟折线/Top 工作流横向柱），空态复用 `Empty`、错误复用 `ErrorState`；`api.ts` 加 `getDashboardSummary`、`types/index.ts` 对齐 `DashboardSummary` 系列（camelCase 与后端一致）；`locales` zh-CN/en-US 新增 `pages.dashboard` 图表键严格镜像（对称性测试通过）。
+
+**质量与测试：**
+- 三道质量门禁全 PASS（`ddd-code-reviewer` / `ddd-phase-quality-gate` / `codebase-optimizer`）；`.quality-gate.json` 推进 `f18-dashboard-charts`
+- 后端 `dotnet test src/AgentPlatform.sln` **270 passed / 0 failed**（SpecFlow 41 / Arch 6 / Application 96 / Infrastructure 102 / Api 20 / Integration 5；含 F18 新增 `GetDashboardSummaryQueryHandlerTests` 6 例 + `EndpointContractTests` 集成 2 例）
+- 前端 `tsc --noEmit` **0 error** + `vitest` **38/38 green**（含 i18n 对称 4 项）+ `vite build` 通过
+- 设计偏离：图表库选用 **recharts**（设计默认 `@ant-design/plots` 的文档备选），6 图 + 6 KPI 卡与设计的图表集合完全一致；D2/D3 默认采用标签 `t()` 化 + 已认证即可读
+
+**v2.10 (2026-07-29)**
 
 ### F17 · AgentConfiguration 实例化联动（模板库真正被消费）完成（feature-builder 全栈实跑，🟡中风险）
 

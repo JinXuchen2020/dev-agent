@@ -32,6 +32,22 @@ public interface IConversationRepository
     Task<IReadOnlyList<Conversation>> GetByTenantAsync(Guid tenantId, CancellationToken ct = default);
 
     /// <summary>
+    /// Retrieves all conversations for a tenant within an optional date range (filtered by
+    /// <c>CreatedAt</c>). Used by the analytics summary query for in-memory day-bucket aggregation.
+    /// Messages are not eagerly loaded since only <c>TotalTokenUsage</c> and <c>CreatedAt</c> are needed.
+    /// </summary>
+    /// <param name="tenantId">The tenant identifier to filter by.</param>
+    /// <param name="from">Optional inclusive start date (UTC).</param>
+    /// <param name="to">Optional inclusive end date (UTC).</param>
+    /// <param name="ct">A cancellation token.</param>
+    /// <returns>A read-only list of conversations for the tenant.</returns>
+    Task<IReadOnlyList<Conversation>> GetByTenantAsync(
+        Guid tenantId,
+        DateTime? from,
+        DateTime? to,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Adds a new conversation to the repository.
     /// </summary>
     /// <param name="conversation">The conversation aggregate to add.</param>

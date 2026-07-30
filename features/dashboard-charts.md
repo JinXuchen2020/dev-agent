@@ -135,3 +135,42 @@
 - 时间聚合在应用层做，超大数据租户可能慢 → 已留 SQL `GROUP BY` 下沉余地。
 - 新图表库增加前端包体（@ant-design/plots ~ 较大）；recharts 备选。
 - 与 F16 卡片化不冲突（Dashboard 非表格列表页）；与 F15 i18n 协同即可。
+
+---
+
+## F18 Quality Gate Checklist（2026-07-30，三道门全 PASS）
+
+> 嵌入本设计文档的质量闸门清单（ddd-phase-quality-gate 模式）。增量序列：后端 analytics 端点 → 编译 0 警告 → 测试绿 → DI/层审计 → 前端图表 → 编译/单测绿 → 收尾。
+
+### 1. Pre-flight 版本审计
+- [x] 后端无新增 NuGet 包；前端新增 `recharts@^2.15.4`（devDependency，设计文档 D4 明确列出的备选方案）。
+- [x] 前端类型与后端 `DashboardSummaryDto` camelCase 字段逐一对齐（tsc 0 error 验证）。
+
+### 2. BDD 场景先行
+- [x] 设计文档 §5/§6 验收条款先于实现；后端 `GetDashboardSummaryQueryHandlerTests`（6 例）+ 集成契约 `EndpointContractTests.GetAnalyticsSummary_*`（2 例）覆盖。
+
+### 3. DDD 层规则
+- [x] `GetDashboardSummaryQuery/Handler/DashboardSummaryDto` 在 Application 层；`AnalyticsController` 在 Api 层；仓储接口在 Domain、实现在 Infrastructure（internal sealed）。无 Application→Infrastructure 反向依赖。
+
+### 4. DI 注册完整性
+- [x] 无新增接口需 DI 注册（复用既有 `IExecutionLogRepository`/`IConversationRepository`/`IAgentRepository`/`IWorkflowRepository` + 新增重载）；Handler 由 MediatR 程序集扫描解析（集成测试 200 实证）。
+
+### 5. 配置优先
+- [x] 无新增配置项；范围上限/Top-N 提为命名常量（`MaxRangeDays=366`、`TopWorkflowsLimit=8`），非散落魔法数。
+
+### 6. EF Core 映射同步
+- [x] 纯查询端点，无新聚合/VO，无迁移。仓储 `GetByTenantAsync` 已 `Include(Entries)`（延迟聚合依赖），Conversation 查询无需 Include（仅用 `TotalTokenUsage`/`CreatedAt`）。
+
+### 7. 并发与生命周期
+- [x] 新增类无静态/Singleton 可变状态；所有 async 方法携带并透传 `CancellationToken`；tenant 隔离沿用 `ITenantProvider` 既有模式。
+
+### 8. 横切基础设施
+- [x] `[Authorize]` + `ProducesResponseType` + 全局 `IExceptionHandler` 兜底；从>到 400、范围>366 天 400 输入边界；Swagger XML 注释齐全；CORS 沿用项目既有策略（按治理条款本次不额外标记）。
+
+### 审计发现（已闭环）
+- P3×2（魔法数 `Take(8)` / `366` 天上限）→ 提取为命名常量修复，已重建 0/0 + 全方案 270/270 绿。
+- 穷尽分析：无 P0/P1/P2 缺陷。静默崩溃路径（Entries Include、TotalTokenUsage 空性 `= null!` 构造初始化、范围校验兜底）均正确兜住。
+
+### 设计偏离
+- 图表库选用 **recharts**（设计默认 `@ant-design/plots` 的文档备选）：React 19 兼容更稳、包体更轻；6 图 + 6 KPI 卡与设计的图表集合完全一致。
+- 设计 D2/D3 决策默认采用「标签 t() 化」「已认证即可读」，与既有 Dashboard 权限一致。
