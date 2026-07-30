@@ -171,6 +171,7 @@ export const enUS: Resources = {
     },
     workflows: {
       title: 'Workflows',
+      edit: 'Edit',
       newWorkflow: 'New Workflow',
       nameRequired: 'Please enter a workflow name',
       created: 'Workflow created and running',
@@ -205,6 +206,16 @@ export const enUS: Resources = {
       run: 'Run',
       createWorkflow: 'Create Workflow',
       filterStatus: 'Filter status',
+      // Workflow status enum labels (aligned with i18n keys in status.ts)
+      status: {
+        pending: 'Pending',
+        running: 'Running',
+        paused: 'Paused',
+        completed: 'Completed',
+        failed: 'Failed',
+        rolledBack: 'Rolled Back',
+        unknown: 'Unknown',
+      },
       // ── F7 Workflow versioning + import/export ──
       versions: {
         history: 'Version History',

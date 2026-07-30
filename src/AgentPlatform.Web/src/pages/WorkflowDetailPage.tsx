@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Typography, Spin, Descriptions, Tag, Steps, Button, Card, Space } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, EditOutlined } from '@ant-design/icons';
 import { getWorkflow } from '../services/api';
 import type { WorkflowDetail } from '../types';
+import { useTranslation } from 'react-i18next';
+import { useAppStore } from '../stores/appStore';
 
 const { Title } = Typography;
 
@@ -26,6 +28,9 @@ interface SseProgressEvent {
 const WorkflowDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { t } = useTranslation();
+  const userRole = useAppStore((s) => s.userRole);
+  const canManage = !!userRole && (userRole.toLowerCase() === 'admin' || userRole.toLowerCase() === 'operator');
   const [wf, setWf] = useState<WorkflowDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [liveSteps, setLiveSteps] = useState<WorkflowDetail['steps'] | null>(null);
@@ -130,7 +135,12 @@ const WorkflowDetailPage: React.FC = () => {
   return (
     <div>
       <Space style={{ marginBottom: 16 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/workflows')}>Back</Button>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/workflows')}>{t('common.back')}</Button>
+        {canManage && id && (
+          <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/workflows/${id}/edit`)}>
+            {t('pages.workflows.edit')}
+          </Button>
+        )}
       </Space>
       <Card>
         <Descriptions title={<Title level={4}>{wf.name}</Title>} column={2}>

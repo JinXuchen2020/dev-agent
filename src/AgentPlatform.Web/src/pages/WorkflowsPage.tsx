@@ -15,7 +15,7 @@ import {
   Spin,
   Popconfirm,
 } from 'antd';
-import { HistoryOutlined, DownloadOutlined } from '@ant-design/icons';
+import { HistoryOutlined, DownloadOutlined, EditOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import type { Workflow, WorkflowVersionSummary } from '../types';
 import {
@@ -187,7 +187,7 @@ const WorkflowsPage: React.FC = () => {
     return (
       <Card title={w.name}>
         <Space direction="vertical" size={6} style={{ width: '100%' }}>
-          <Tag color={status.color}>{status.label}</Tag>
+          <Tag color={status.color}>{t(status.label)}</Tag>
           <span style={{ color: colors.textMuted, fontSize: 13 }}>
             {t('pages.workflows.colSteps')}: {w.stepCount}
           </span>
@@ -198,6 +198,18 @@ const WorkflowsPage: React.FC = () => {
             {t('pages.workflows.colUpdated')}: {new Date(w.updatedAt).toLocaleString()}
           </span>
           <Space style={{ marginTop: 8 }} wrap>
+            {canManage && (
+              <Button
+                size="small"
+                icon={<EditOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/workflows/${w.id}/edit`);
+                }}
+              >
+                {t('pages.workflows.edit')}
+              </Button>
+            )}
             <Button
               size="small"
               icon={<HistoryOutlined />}
@@ -240,7 +252,7 @@ const WorkflowsPage: React.FC = () => {
               setStatusFilter(v ?? undefined);
               setPage(1);
             }}
-            options={WORKFLOW_STATUS_FILTER_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+            options={WORKFLOW_STATUS_FILTER_OPTIONS.map((o) => ({ value: o.value, label: t(o.label) }))}
           />
           <Button type="primary" onClick={() => navigate('/workflows/new')}>
             {t('pages.workflows.newWorkflow')}

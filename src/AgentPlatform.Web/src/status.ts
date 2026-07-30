@@ -17,14 +17,18 @@ export interface WorkflowStatusMeta {
   color: string;
 }
 
-/** WorkflowState 整数枚举 → 展示元数据 */
+/**
+ * WorkflowState 整数枚举 → 展示元数据。
+ * `label` 存放 i18n key（由页面用 t() 解析），不再硬编码文案，保证多语言化。
+ * 状态文案键集中见 locales 的 `pages.workflows.status.*`。
+ */
 export const WORKFLOW_STATE_META: Record<number, WorkflowStatusMeta> = {
-  0: { label: 'Pending', color: 'default' },
-  1: { label: 'Running', color: 'processing' },
-  2: { label: 'Paused', color: 'warning' },
-  3: { label: 'Completed', color: 'success' },
-  4: { label: 'Failed', color: 'error' },
-  5: { label: 'Rolled Back', color: 'warning' },
+  0: { label: 'pages.workflows.status.pending', color: 'default' },
+  1: { label: 'pages.workflows.status.running', color: 'processing' },
+  2: { label: 'pages.workflows.status.paused', color: 'warning' },
+  3: { label: 'pages.workflows.status.completed', color: 'success' },
+  4: { label: 'pages.workflows.status.failed', color: 'error' },
+  5: { label: 'pages.workflows.status.rolledBack', color: 'warning' },
 };
 
 /**
@@ -33,7 +37,7 @@ export const WORKFLOW_STATE_META: Record<number, WorkflowStatusMeta> = {
  */
 export function mapWorkflowStatus(state: WorkflowStateValue | null | undefined): WorkflowStatusMeta {
   if (state === null || state === undefined || state === '') {
-    return { label: 'Unknown', color: 'default' };
+    return { label: 'pages.workflows.status.unknown', color: 'default' };
   }
   const numericKey = typeof state === 'string' ? Number(state) : state;
   if (!Number.isNaN(numericKey) && WORKFLOW_STATE_META[numericKey]) {
@@ -41,7 +45,7 @@ export function mapWorkflowStatus(state: WorkflowStateValue | null | undefined):
   }
   const lower = String(state).toLowerCase();
   const byLabel = Object.values(WORKFLOW_STATE_META).find((m) => m.label.toLowerCase() === lower);
-  return byLabel ?? { label: String(state), color: 'default' };
+  return byLabel ?? { label: 'pages.workflows.status.unknown', color: 'default' };
 }
 
 /**
@@ -49,12 +53,12 @@ export function mapWorkflowStatus(state: WorkflowStateValue | null | undefined):
  * 大小写不敏感的名称均接受，整数最无歧义，且不再裸传小写字面量。
  */
 export const WORKFLOW_STATUS_FILTER_OPTIONS: { value: number; label: string }[] = [
-  { value: 0, label: 'Pending' },
-  { value: 1, label: 'Running' },
-  { value: 2, label: 'Paused' },
-  { value: 3, label: 'Completed' },
-  { value: 4, label: 'Failed' },
-  { value: 5, label: 'Rolled Back' },
+  { value: 0, label: 'pages.workflows.status.pending' },
+  { value: 1, label: 'pages.workflows.status.running' },
+  { value: 2, label: 'pages.workflows.status.paused' },
+  { value: 3, label: 'pages.workflows.status.completed' },
+  { value: 4, label: 'pages.workflows.status.failed' },
+  { value: 5, label: 'pages.workflows.status.rolledBack' },
 ];
 
 /** ConversationStatus 整数枚举 → 中文标签 + StatusBadge tone */

@@ -167,6 +167,7 @@ export const zhCN = {
     },
     workflows: {
       title: '工作流',
+      edit: '编辑',
       newWorkflow: '新建工作流',
       nameRequired: '请输入工作流名称',
       created: '工作流已创建并运行',
@@ -201,6 +202,16 @@ export const zhCN = {
       run: '运行',
       createWorkflow: '创建工作流',
       filterStatus: '筛选状态',
+      // 工作流状态枚举展示（与 status.ts 的 i18n key 对齐）
+      status: {
+        pending: '待运行',
+        running: '运行中',
+        paused: '已暂停',
+        completed: '已完成',
+        failed: '失败',
+        rolledBack: '已回滚',
+        unknown: '未知',
+      },
       // ── F7 工作流版本管理 + 导入导出 ──
       versions: {
         history: '版本历史',
