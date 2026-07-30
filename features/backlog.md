@@ -195,18 +195,18 @@
 - 风险：🟡 中风险（聚合加列 + 迁移 + 新端点 + 前端重写）；缓解：EF 铁律（迁移 + `#pragma warning disable IDE0161`）；`AgentType.Predefined` code 改动需同步改 SpecFlow `AgentTypeMigration`（`"architect"`→`"architecture"` 等）；与 F16 强耦合（见下方 F16 协同）。
 - **完成记录（2026-07-29）**：feature-builder 全栈实跑落地（分支 `feat/f19-agent-roles-unified`）。后端：`AgentRoleDefinition` 增 `IsBuiltIn`(bool) + EF 迁移 `AddAgentRoleIsBuiltIn`（`defaultValue:false`）；`DatabaseInitializer` 幂等对齐 7 内建（缺失插入/已存非内建 `MarkAsBuiltIn`）+ **legacy→new RoleCode 幂等映射**（architect/developer/tester/pm/tech-writer→新码，修正设计 §3.1「数据连续」错误假设、防存量 Agent 游离）；`AgentType` 降为 `BuiltInRoleCatalog` 镜像 + 架构 parity 测试 3 例强制 DB 为准；`IAgentRepository.CountByRoleAsync` + `AgentRoleSummary.AgentCount` 引用计数；新增 `PUT /api/v1/agent-roles/{roleCode}` + `UpdateAgentRoleDefinitionCommand/Handler`；`DeleteAgentRoleCommand` 重写枚举结局（Deleted/NotFound/BuiltInConflict/InUseConflict，409 拦截内建/被引用）。前端：`AgentRolesPage` 删 `BUILT_IN_ROLES` 硬编码、按 `IsBuiltIn` 分区、新建/编辑/删除模态 + RBAC + `agentCount` 展示；`AgentsPage` 默认 `roleCode`→`development`；`types`/`api`/`locales` 对齐（i18n 对称 4 例 zh-CN 去字面 "Agent"）。**审查修复 P2×2**：`AgentsController` 默认 `RoleCode ?? "developer"`→`"development"`；`DatabaseInitializer` 补 legacy 映射。**三道质量门 PASS**（`.quality-gate.json` 推进 `f19-agent-roles-unified`，`cleared:true`）；后端 `dotnet build` **0/0** + 全方案 `dotnet test` **287/287**（SpecFlow 41 / Arch 9 / App 103 / Api 27 / Integration 5 / Infra 102，含 F19 新增 parity 3 + handler 7 + Api 集成 7）；前端 `tsc --noEmit` **0 error** + `vitest` **38/38** + `vite build` 通过。质量报告 `docs/quality/f19-agent-roles-gate.md`，结构清单嵌入 `features/agent-roles-builtin.md` §7。注意：设计 §3.1 原「存量 Agent code 已与新目录一致、无需迁移」假设不成立（旧码 architect/developer/tester/pm/tech-writer 整体不符），已由 `DatabaseInitializer` remap 兜底。
 
-### F7 · 工作流平台化（program，可拆子史诗）  [P2/P3]  doing  ⚠️高风险（program；子项① done，其余 ②③④⑤⑥⑦⑧ open）
-- 设计文档：`features/workflow-platformization.md`（已建，§0 列出 8 子史诗总览；本轮细化子项①）
-- 目标：把 DAG 画布 MVP 推向生产级平台能力。以下子项各自可独立成 `feature-builder` 任务：
-- **子项① 工作流版本管理 + 导入导出** → `doing`（feature-builder，分支 `feat/f7-workflow-versioning`，设计文档 §1–§7）。范围：版本快照/历史/回滚/删除 + 工作流 JSON 导出/导入 + 多租户隔离 + 审计。纯增量、低风险。已完成 → 回写 `done` 并标剩余子项仍 `open`。
-  - 工作流版本管理 + 导入导出（快照/回滚/JSON）。
-  - 节点全家桶：Code(JS/Py) / HTTP / Tool(接 `ToolDefinition`) / Knowledge Retrieval(选库+topK+重排) / Condition / Loop / Variable / Sub-workflow / Delay / User-Input(HITL 审批门)。
-  - 触发器：Webhook / 定时(cron) / Chat。
-  - 发布为 API / MCP Server（复用现有 API Key；后端已有 MCP `ToolDefinition` 基础）。
-  - 模板市场 / 示例库（5–10 行业模板一键克隆）。
-  - 执行 Trace / 评估视图（节点级耗时/token/IO；数据集回归，对标 LangSmith/Langfuse）。
-  - 工作流调试器（变量监视 + 单步重跑 + 错误分支）。
-  - 企业增强：多工作空间隔离与切换 / 用量仪表盘 / 工作流 diff。
+### F7 · 工作流平台化（program，已分解为 F20–F26）  [P2/P3]  done  （program 框架；子项①已实现，②③④⑤⑥⑦⑧ 已拆为独立史诗 F20–F26）
+- 设计文档：`features/workflow-platformization.md`（已建，§0 列出 8 子史诗总览；子项① 已落地于分支 `feat/f7-workflow-versioning`，commit `df79e6f`）
+- 目标：把 DAG 画布 MVP 推向生产级平台能力。子项① `done`（版本管理+导入导出）；剩余 7 子项已各自独立成 Tier-1 史诗，详见下方 **F20 / F21 / F22 / F23 / F24 / F25 / F26**：
+  - ① 版本管理 + 导入导出 → **F7 子项① 已 done**（见 `docs/quality/f7-workflow-versioning-gate.md`）
+  - ② 节点全家桶 → **F20**
+  - ③ 触发器 → **F21**
+  - ④ 发布为 API / MCP Server → **F22**
+  - ⑤ 模板市场 / 示例库 → **F23**
+  - ⑥ 执行 Trace / 评估视图 → **F24**
+  - ⑦ 工作流调试器 → **F25**
+  - ⑧ 企业增强（多工作空间 / 用量仪表盘 / 工作流 diff）→ **F26**
+- **设计文档骨架均已生成**（features/node-bundle.md / workflow-triggers.md / publish-api-mcp.md / template-market.md / execution-trace-eval.md / workflow-debugger.md / enterprise-enhancements.md）；各 feature 实现前须先锁定其 §6 决策，不应自创需求。
 
 ### F8 · 差异化优势产品化（Negotiation + Critic）  [native]  open
 - 设计文档：`features/negotiation-productization.md`（待建）
@@ -252,6 +252,41 @@
   - 新建/扩展集成测试：用 `WebApplicationFactory` 起后端 + 本地 Mock HTTP 端点，构造含 `StepType.Tool`/`StepType.Code` 的 `WorkflowNode`，经 `WorkflowOrchestrator` 跑全流程，断言 `StepExecutionResult.Outcome` 与 `Output`。
   - 前端联动（可选）：用 Playwright/Cypress 在 Web 实例上拖出 Tool/Code 节点、配置、运行、断言画布节点状态与输出面板。
   - 纳入 CI e2e 阶段；本沙箱无 Docker 仍可跑（python/node 子进程 + 本地 HTTP 端点均可用）。
+
+### F20 · 节点全家桶（Workflow 节点类型扩展）  [P1]  open  ⚠️高风险（破坏性 StepType 枚举扩展 + HITL 审批门 + 运行时 executor）
+- 设计文档：`features/node-bundle.md`（已建骨架，§6 决策待锁定）
+- 目标：补齐 DAG 节点原语——HTTP / Condition / Loop / Variable / SubWorkflow / Delay / UserInput(HITL)，前端调色板+配置面板+后端 executor（Tool/Code/Knowledge 已在 F5 落地）。纯增量节点类型，无新聚合。
+- 风险：🔴 StepType 枚举破坏性扩展（全仓 switch 回归）+ HITL 暂停/恢复 + 表达式引擎选型。实现前须锁定 §6（S1 枚举命名 / S3 HITL 方案 / S2 表达式引擎）。
+
+### F21 · 工作流触发器（Webhook / 定时 / Chat）  [P1]  open  ⚠️高风险（后台调度基础设施 + 匿名 Webhook + Chat 链路耦合）
+- 设计文档：`features/workflow-triggers.md`（已建骨架，§6 决策待锁定）
+- 目标：工作流被动触发——Webhook（POST /webhooks/workflow/{token}）/ 定时（cron + BackgroundService 调度）/ Chat（会话绑定触发）。多租户隔离 + 审计。
+- 风险：🔴 调度基础设施（多实例防重）+ 匿名端点安全 + Chat 耦合。实现前须锁定 §6（S1 调度方案 / S2 Chat 存储）。
+
+### F22 · 发布工作流为 API / MCP Server  [P1]  open  ⚠️高风险（API Key 鉴权复用 + MCP 动态注册 + 外部输入隔离）
+- 设计文档：`features/publish-api-mcp.md`（已建骨架，§6 决策待锁定）
+- 目标：一键发布工作流为 API Key 鉴权的 HTTP 端点 + 暴露为 MCP tool（复用现有 ApiKey / ToolDefinition）。多租户隔离 + 审计。
+- 风险：🔴 现有 API Key 中间件复用 + MCP 动态注册。实现前须锁定 §6（S1 鉴权复用 / S2 MCP 形态）。
+
+### F23 · 模板市场 / 示例库  [P2]  open  🟡中风险（种子数据 + 克隆端点 + 前端画廊）
+- 设计文档：`features/template-market.md`（已建骨架，§6 决策待锁定）
+- 目标：内置 5–10 行业模板，「一键克隆为我的工作流」（复用 F7 ① 快照重建）。平台级共享 + 克隆归当前租户。
+- 风险：🟡 种子图须过 ValidateGraph、克隆后 Agent 绑定缺失降级。实现前须锁定 §6（S1 来源 / S2 存储 / S3 Agent 缺失处理）。
+
+### F24 · 执行 Trace / 评估视图  [P1]  open  🟡中风险（Trace 字段完备性 + 评估批量跑 + 与 F20 兼容）
+- 设计文档：`features/execution-trace-eval.md`（已建骨架，§6 决策待锁定）
+- 目标：节点级 Trace（耗时/token/IO，复用 ExecutionLog.Entries）+ 数据集回归评估（对标 LangSmith/Langfuse）。多租户隔离 + 审计。
+- 风险：🟡 Trace 数据完备性、评估性能。实现前须锁定 §6（S1 Trace 存储 / S2 比对 / S3 运行方式）。
+
+### F25 · 工作流调试器（变量监视 + 单步重跑 + 错误分支）  [P1]  open  ⚠️高风险（执行引擎支持暂停/单步/局部重跑，侵入大）
+- 设计文档：`features/workflow-debugger.md`（已建骨架，§6 决策待锁定）
+- 目标：调试运行模式——变量监视 + 单步执行 + 单节点重跑（override）+ 错误分支恢复。复用 F24 Trace 数据。
+- 风险：🔴 orchestrator 需支持暂停/单步/局部重算下游。实现前须锁定 §6（S1 引擎介入深度 / S3 重跑影响范围）。建议先做变量监视+错误重跑（低风险），单步全链作增强。
+
+### F26 · 企业增强（多工作空间 / 用量仪表盘 / 工作流 diff）  [P2]  open  ⚠️极高风险（多工作空间 = 第二租户维度，全仓破坏性；diff/仪表盘低风险）
+- 设计文档：`features/enterprise-enhancements.md`（已建骨架，§6 决策待锁定）
+- 目标：① 用量仪表盘（复用 F18 扩工作流维度）② 工作流 diff（复用 F7 ① 快照比对两版本）③ 多工作空间隔离切换（二级维度）。
+- 风险：🔴 多工作空间破坏性极大（全部聚合加 WorkspaceId + query filter + TenantProvider 体系）；建议 v1 **仅做用量仪表盘 + diff（低风险纯增量）**，多工作空间独立排期。实现前须锁定 §6（S1 是否含 Workspace / S2 数据模型）。
 
 ---
 
