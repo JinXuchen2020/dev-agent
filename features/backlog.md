@@ -195,9 +195,10 @@
 - 风险：🟡 中风险（聚合加列 + 迁移 + 新端点 + 前端重写）；缓解：EF 铁律（迁移 + `#pragma warning disable IDE0161`）；`AgentType.Predefined` code 改动需同步改 SpecFlow `AgentTypeMigration`（`"architect"`→`"architecture"` 等）；与 F16 强耦合（见下方 F16 协同）。
 - **完成记录（2026-07-29）**：feature-builder 全栈实跑落地（分支 `feat/f19-agent-roles-unified`）。后端：`AgentRoleDefinition` 增 `IsBuiltIn`(bool) + EF 迁移 `AddAgentRoleIsBuiltIn`（`defaultValue:false`）；`DatabaseInitializer` 幂等对齐 7 内建（缺失插入/已存非内建 `MarkAsBuiltIn`）+ **legacy→new RoleCode 幂等映射**（architect/developer/tester/pm/tech-writer→新码，修正设计 §3.1「数据连续」错误假设、防存量 Agent 游离）；`AgentType` 降为 `BuiltInRoleCatalog` 镜像 + 架构 parity 测试 3 例强制 DB 为准；`IAgentRepository.CountByRoleAsync` + `AgentRoleSummary.AgentCount` 引用计数；新增 `PUT /api/v1/agent-roles/{roleCode}` + `UpdateAgentRoleDefinitionCommand/Handler`；`DeleteAgentRoleCommand` 重写枚举结局（Deleted/NotFound/BuiltInConflict/InUseConflict，409 拦截内建/被引用）。前端：`AgentRolesPage` 删 `BUILT_IN_ROLES` 硬编码、按 `IsBuiltIn` 分区、新建/编辑/删除模态 + RBAC + `agentCount` 展示；`AgentsPage` 默认 `roleCode`→`development`；`types`/`api`/`locales` 对齐（i18n 对称 4 例 zh-CN 去字面 "Agent"）。**审查修复 P2×2**：`AgentsController` 默认 `RoleCode ?? "developer"`→`"development"`；`DatabaseInitializer` 补 legacy 映射。**三道质量门 PASS**（`.quality-gate.json` 推进 `f19-agent-roles-unified`，`cleared:true`）；后端 `dotnet build` **0/0** + 全方案 `dotnet test` **287/287**（SpecFlow 41 / Arch 9 / App 103 / Api 27 / Integration 5 / Infra 102，含 F19 新增 parity 3 + handler 7 + Api 集成 7）；前端 `tsc --noEmit` **0 error** + `vitest` **38/38** + `vite build` 通过。质量报告 `docs/quality/f19-agent-roles-gate.md`，结构清单嵌入 `features/agent-roles-builtin.md` §7。注意：设计 §3.1 原「存量 Agent code 已与新目录一致、无需迁移」假设不成立（旧码 architect/developer/tester/pm/tech-writer 整体不符），已由 `DatabaseInitializer` remap 兜底。
 
-### F7 · 工作流平台化（program，可拆子史诗）  [P2/P3]  open  ⚠️高风险
-- 设计文档：`features/workflow-platformization.md`（待建，含子史诗拆分；来源 `./competitive-roadmap.md` 对标 Dify/n8n/LangGraph/Coze/Flowise）
+### F7 · 工作流平台化（program，可拆子史诗）  [P2/P3]  doing  ⚠️高风险（program；子项① done，其余 ②③④⑤⑥⑦⑧ open）
+- 设计文档：`features/workflow-platformization.md`（已建，§0 列出 8 子史诗总览；本轮细化子项①）
 - 目标：把 DAG 画布 MVP 推向生产级平台能力。以下子项各自可独立成 `feature-builder` 任务：
+- **子项① 工作流版本管理 + 导入导出** → `doing`（feature-builder，分支 `feat/f7-workflow-versioning`，设计文档 §1–§7）。范围：版本快照/历史/回滚/删除 + 工作流 JSON 导出/导入 + 多租户隔离 + 审计。纯增量、低风险。已完成 → 回写 `done` 并标剩余子项仍 `open`。
   - 工作流版本管理 + 导入导出（快照/回滚/JSON）。
   - 节点全家桶：Code(JS/Py) / HTTP / Tool(接 `ToolDefinition`) / Knowledge Retrieval(选库+topK+重排) / Condition / Loop / Variable / Sub-workflow / Delay / User-Input(HITL 审批门)。
   - 触发器：Webhook / 定时(cron) / Chat。

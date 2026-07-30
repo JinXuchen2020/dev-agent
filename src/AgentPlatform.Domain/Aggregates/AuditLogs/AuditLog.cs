@@ -79,5 +79,20 @@ public enum AuditActionType
     KeyUsed,
 
     /// <summary>An API key was revoked (e.g. after expiry).</summary>
-    KeyRevoked
+    KeyRevoked,
+
+    /// <summary>A workflow version snapshot was created.</summary>
+    CreateWorkflowVersion,
+
+    /// <summary>A workflow was rolled back to a saved version.</summary>
+    RestoreWorkflowVersion,
+
+    /// <summary>A workflow definition was imported as a new workflow.</summary>
+    ImportWorkflow,
+
+    /// <summary>A workflow definition was exported.</summary>
+    ExportWorkflow,
+
+    /// <summary>A workflow version snapshot was deleted.</summary>
+    DeleteWorkflowVersion
 }

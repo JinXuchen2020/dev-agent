@@ -232,6 +232,71 @@ export interface WorkflowDetail {
   updatedAt: string;
 }
 
+// ── F7 工作流版本管理 + 导入导出 ──
+// 字段名镜像 AgentPlatform.Application.Workflows.Versioning.*（System.Text.Json 默认 camelCase）。
+
+// 版本快照内的单个节点（无运行时 state/result）。
+export interface WorkflowVersionNodeView {
+  id: string;
+  type: StepType;
+  name: string;
+  x: number;
+  y: number;
+  configJson: string | null;
+  assignedAgentId: string | null;
+}
+
+// 版本快照内的单条边。
+export interface WorkflowVersionEdgeView {
+  id: string;
+  source: string;
+  target: string;
+  label: string | null;
+}
+
+export interface WorkflowVersionSummary {
+  id: string;
+  versionNumber: number;
+  name: string;
+  note: string | null;
+  createdAt: string;
+  createdBy: string | null;
+}
+
+export interface WorkflowVersionDetail {
+  id: string;
+  versionNumber: number;
+  name: string;
+  note: string | null;
+  createdAt: string;
+  createdBy: string | null;
+  context: string;
+  nodes: WorkflowVersionNodeView[];
+  edges: WorkflowVersionEdgeView[];
+}
+
+export interface WorkflowVersionList {
+  items: WorkflowVersionSummary[];
+  totalCount: number;
+}
+
+// 导出 = 与导入请求同构（nodes/edges 可直接回灌 importWorkflow）。
+export interface WorkflowExport {
+  id: string;
+  name: string;
+  context: string;
+  nodes: WorkflowNodeRequest[];
+  edges: WorkflowEdgeRequest[];
+  exportedAt: string;
+}
+
+export interface ImportWorkflowRequest {
+  name: string;
+  initialContext: string;
+  nodes?: WorkflowNodeRequest[] | null;
+  edges?: WorkflowEdgeRequest[] | null;
+}
+
 export interface ExecutionLog {
   id: string;
   workflowId: string;

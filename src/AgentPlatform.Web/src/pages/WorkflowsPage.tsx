@@ -1,8 +1,34 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Typography, Tag, Button, Space, Modal, Input, Select, App, Pagination } from 'antd';
+import {
+  Typography,
+  Tag,
+  Button,
+  Space,
+  Modal,
+  Input,
+  Select,
+  App,
+  Pagination,
+  Drawer,
+  List,
+  Empty,
+  Spin,
+  Popconfirm,
+} from 'antd';
+import { HistoryOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import type { Workflow } from '../types';
-import { getWorkflows, runWorkflow, getErrorMessage } from '../services/api';
+import type { Workflow, WorkflowVersionSummary } from '../types';
+import {
+  getWorkflows,
+  runWorkflow,
+  getErrorMessage,
+  getWorkflowVersions,
+  createWorkflowVersion,
+  restoreWorkflowVersion,
+  deleteWorkflowVersion,
+  exportWorkflow,
+} from '../services/api';
+import { useAppStore } from '../stores/appStore';
 import { mapWorkflowStatus, WORKFLOW_STATUS_FILTER_OPTIONS } from '../status';
 import { useTranslation } from 'react-i18next';
 import Card from '../components/Card';
@@ -13,6 +39,10 @@ const { Title } = Typography;
 
 const WorkflowsPage: React.FC = () => {
   const { t } = useTranslation();
+  const { message, modal } = App.useApp();
+  const userRole = useAppStore((s) => s.userRole);
+  const canManage = !!userRole && (userRole.toLowerCase() === 'admin' || userRole.toLowerCase() === 'operator');
+
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<number | undefined>(undefined);
@@ -23,7 +53,15 @@ const WorkflowsPage: React.FC = () => {
   const [wfName, setWfName] = useState('');
   const [running, setRunning] = useState(false);
   const navigate = useNavigate();
-  const { message } = App.useApp();
+
+  // ── Version history drawer state (F7 子项①) ──
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerWfId, setDrawerWfId] = useState<string | null>(null);
+  const [drawerWfName, setDrawerWfName] = useState('');
+  const [versions, setVersions] = useState<WorkflowVersionSummary[]>([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
+  const [saveNote, setSaveNote] = useState('');
+  const [savingVersion, setSavingVersion] = useState(false);
 
   const fetch = useCallback((p: number, ps: number, status: number | undefined, signal?: AbortSignal) => {
     setLoading(true);
@@ -43,6 +81,14 @@ const WorkflowsPage: React.FC = () => {
     fetch(page, pageSize, statusFilter, controller.signal);
     return () => controller.abort();
   }, [fetch, page, pageSize, statusFilter]);
+
+  const loadVersions = useCallback((workflowId: string) => {
+    setVersionsLoading(true);
+    getWorkflowVersions(workflowId, { skip: 0, take: 100 })
+      .then((d) => setVersions(d.items))
+      .catch((err: unknown) => message.error(getErrorMessage(err)))
+      .finally(() => setVersionsLoading(false));
+  }, [message]);
 
   const handleRun = async () => {
     if (!wfName.trim()) {
@@ -65,6 +111,77 @@ const WorkflowsPage: React.FC = () => {
     }
   };
 
+  const openVersions = (w: Workflow) => {
+    setDrawerWfId(w.id);
+    setDrawerWfName(w.name);
+    setSaveNote('');
+    setDrawerOpen(true);
+    loadVersions(w.id);
+  };
+
+  const handleSaveVersion = async () => {
+    if (!drawerWfId) return;
+    setSavingVersion(true);
+    try {
+      const v = await createWorkflowVersion(drawerWfId, saveNote);
+      message.success(t('pages.workflows.versions.saved', { n: v.versionNumber }));
+      setSaveNote('');
+      loadVersions(drawerWfId);
+    } catch (e) {
+      message.error(getErrorMessage(e));
+    } finally {
+      setSavingVersion(false);
+    }
+  };
+
+  const handleRestore = (v: WorkflowVersionSummary) => {
+    if (!drawerWfId) return;
+    modal.confirm({
+      title: t('pages.workflows.versions.restoreConfirm'),
+      onOk: async () => {
+        try {
+          await restoreWorkflowVersion(drawerWfId, v.id);
+          message.success(t('pages.workflows.versions.restored', { n: v.versionNumber }));
+          setDrawerOpen(false);
+          const controller = new AbortController();
+          fetch(page, pageSize, statusFilter, controller.signal);
+        } catch (e) {
+          message.error(getErrorMessage(e));
+        }
+      },
+    });
+  };
+
+  const handleDeleteVersion = async (v: WorkflowVersionSummary) => {
+    if (!drawerWfId) return;
+    try {
+      await deleteWorkflowVersion(drawerWfId, v.id);
+      message.success(t('pages.workflows.versions.deleted'));
+      loadVersions(drawerWfId);
+    } catch (e) {
+      message.error(getErrorMessage(e));
+    }
+  };
+
+  const handleExport = async (w: Workflow) => {
+    try {
+      const exp = await exportWorkflow(w.id);
+      const json = JSON.stringify(exp, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(w.name || 'workflow').replace(/[\\/:*?"<>|]/g, '_')}-export.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      message.success(t('pages.workflows.versions.exported'));
+    } catch (e) {
+      message.error(getErrorMessage(e));
+    }
+  };
+
   const renderWorkflowCard = (w: Workflow) => {
     const status = mapWorkflowStatus(w.currentState);
     return (
@@ -80,6 +197,28 @@ const WorkflowsPage: React.FC = () => {
           <span style={{ color: colors.textMuted, fontSize: 13 }}>
             {t('pages.workflows.colUpdated')}: {new Date(w.updatedAt).toLocaleString()}
           </span>
+          <Space style={{ marginTop: 8 }} wrap>
+            <Button
+              size="small"
+              icon={<HistoryOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                openVersions(w);
+              }}
+            >
+              {t('pages.workflows.versions.history')}
+            </Button>
+            <Button
+              size="small"
+              icon={<DownloadOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleExport(w);
+              }}
+            >
+              {t('pages.workflows.versions.exportJson')}
+            </Button>
+          </Space>
         </Space>
       </Card>
     );
@@ -145,6 +284,84 @@ const WorkflowsPage: React.FC = () => {
           onPressEnter={handleRun}
         />
       </Modal>
+
+      <Drawer
+        title={t('pages.workflows.versions.drawerTitle', { name: drawerWfName })}
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        width={540}
+      >
+        {canManage && (
+          <Space style={{ marginBottom: 16 }} wrap>
+            <Input
+              placeholder={t('pages.workflows.versions.saveNotePlaceholder')}
+              value={saveNote}
+              onChange={(e) => setSaveNote(e.target.value)}
+              style={{ width: 280 }}
+              onPressEnter={handleSaveVersion}
+            />
+            <Button type="primary" loading={savingVersion} onClick={handleSaveVersion}>
+              {t('pages.workflows.versions.saveVersion')}
+            </Button>
+          </Space>
+        )}
+        {versionsLoading ? (
+          <div style={{ textAlign: 'center', padding: 32 }}>
+            <Spin />
+          </div>
+        ) : versions.length === 0 ? (
+          <Empty description={t('pages.workflows.versions.listEmpty')} />
+        ) : (
+          <List
+            dataSource={versions}
+            renderItem={(v) => (
+              <List.Item
+                actions={
+                  canManage
+                    ? [
+                        <Button key="restore" size="small" onClick={() => handleRestore(v)}>
+                          {t('pages.workflows.versions.restore')}
+                        </Button>,
+                        <Popconfirm
+                          key="delete"
+                          title={t('pages.workflows.versions.deleteConfirm')}
+                          onConfirm={() => handleDeleteVersion(v)}
+                          okText={t('common.confirm')}
+                          cancelText={t('common.cancel')}
+                        >
+                          <Button size="small" danger>
+                            {t('pages.workflows.versions.deleteVersion')}
+                          </Button>
+                        </Popconfirm>,
+                      ]
+                    : []
+                }
+              >
+                <List.Item.Meta
+                  title={`v${v.versionNumber} · ${v.name}`}
+                  description={
+                    <Space direction="vertical" size={2}>
+                      {v.note && (
+                        <span>
+                          {t('pages.workflows.versions.colNote')}: {v.note}
+                        </span>
+                      )}
+                      <span>
+                        {t('pages.workflows.versions.colCreatedAt')}: {new Date(v.createdAt).toLocaleString()}
+                      </span>
+                      {v.createdBy && (
+                        <span>
+                          {t('pages.workflows.versions.colCreatedBy')}: {v.createdBy}
+                        </span>
+                      )}
+                    </Space>
+                  }
+                />
+              </List.Item>
+            )}
+          />
+        )}
+      </Drawer>
     </div>
   );
 };
