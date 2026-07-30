@@ -408,3 +408,56 @@ export interface ProviderModelInfo {
   id: string;
   ownedBy?: string | null;
 }
+
+// ── F18 Dashboard analytics（GET /analytics/summary）──
+// 字段名镜像 AgentPlatform.Application.Analytics.Queries.GetDashboardSummary，
+// 后端 System.Text.Json 默认 camelCase 序列化。
+export interface DashboardKpis {
+  activeAgents: number;
+  activeWorkflows: number;
+  totalExecutions: number;
+  /** 成功率（%），已终态执行中 completed / (completed + failed)。 */
+  successRate: number;
+  totalTokens: number;
+  /** 平均单执行步延迟（ms）。 */
+  avgLatencyMs: number;
+}
+
+export interface ExecutionDayBucket {
+  date: string;
+  completed: number;
+  failed: number;
+  running: number;
+  successRate: number;
+}
+
+export interface TokenDayBucket {
+  date: string;
+  totalTokens: number;
+}
+
+export interface ConversationDayBucket {
+  date: string;
+  count: number;
+}
+
+export interface LatencyDayBucket {
+  date: string;
+  avgMs: number;
+}
+
+export interface WorkflowCount {
+  workflowName: string;
+  count: number;
+}
+
+export interface DashboardSummary {
+  from: string;
+  to: string;
+  kpis: DashboardKpis;
+  executionsByDay: ExecutionDayBucket[];
+  tokenByDay: TokenDayBucket[];
+  conversationsByDay: ConversationDayBucket[];
+  latencyByDay: LatencyDayBucket[];
+  topWorkflows: WorkflowCount[];
+}

@@ -172,6 +172,58 @@ public sealed class EndpointContractTests : IClassFixture<ApiContractTestFactory
         Assert.Equal(JsonValueKind.Number, totalCount.ValueKind);
     }
 
+    /// <summary>
+    /// Verifies that GET /api/v1/analytics/summary returns 200 OK, a JSON
+    /// object, and the consolidated dashboard DTO shape (F18).
+    /// </summary>
+    [Fact]
+    public async Task GetAnalyticsSummary_Returns200AndDashboardShape()
+    {
+        // Arrange
+        var client = _factory.CreateAuthenticatedClient();
+        var requestUri = "/api/v1/analytics/summary?from=2026-01-01T00:00:00Z&to=2026-12-31T00:00:00Z";
+
+        // Act
+        var response = await client.GetAsync(requestUri);
+
+        // Assert — status + content type
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.StartsWith("{", body.Trim());
+
+        // Assert — consolidated dashboard DTO shape (mirrors DashboardSummaryDto)
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+        Assert.True(root.TryGetProperty("from", out _));
+        Assert.True(root.TryGetProperty("to", out _));
+        Assert.True(root.TryGetProperty("kpis", out var kpis) && kpis.ValueKind == JsonValueKind.Object);
+        Assert.True(kpis.TryGetProperty("activeAgents", out _) && kpis.TryGetProperty("successRate", out _));
+        Assert.True(root.TryGetProperty("executionsByDay", out var exec) && exec.ValueKind == JsonValueKind.Array);
+        Assert.True(root.TryGetProperty("tokenByDay", out var tok) && tok.ValueKind == JsonValueKind.Array);
+        Assert.True(root.TryGetProperty("conversationsByDay", out var conv) && conv.ValueKind == JsonValueKind.Array);
+        Assert.True(root.TryGetProperty("latencyByDay", out var lat) && lat.ValueKind == JsonValueKind.Array);
+        Assert.True(root.TryGetProperty("topWorkflows", out var top) && top.ValueKind == JsonValueKind.Array);
+    }
+
+    /// <summary>
+    /// Verifies that GET /api/v1/analytics/summary with an inverted date range
+    /// (from &gt; to) returns 400 Bad Request (F18 input boundary).
+    /// </summary>
+    [Fact]
+    public async Task GetAnalyticsSummary_InvertedRange_Returns400()
+    {
+        // Arrange
+        var client = _factory.CreateAuthenticatedClient();
+        var requestUri = "/api/v1/analytics/summary?from=2026-12-31T00:00:00Z&to=2026-01-01T00:00:00Z";
+
+        // Act
+        var response = await client.GetAsync(requestUri);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     // ── Infrastructure endpoints ──────────────────────────────────────
 
     /// <summary>

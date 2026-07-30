@@ -79,6 +79,24 @@ internal sealed class ExecutionLogRepository : IExecutionLogRepository
         _context.Set<ExecutionLog>().Update(log);
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<ExecutionLog>> GetByTenantAsync(
+        Guid tenantId, DateTime? from = null, DateTime? to = null, CancellationToken ct = default)
+    {
+        var query = _context.Set<ExecutionLog>()
+            .Include(x => x.Entries)
+            .Where(x => x.TenantId == tenantId)
+            .AsQueryable();
+
+        if (from.HasValue)
+            query = query.Where(x => x.StartedAt >= from.Value);
+
+        if (to.HasValue)
+            query = query.Where(x => x.StartedAt <= to.Value);
+
+        return await query.OrderByDescending(x => x.StartedAt).ToListAsync(ct);
+    }
+
     /// <summary>
     /// Queries execution log entries (steps) with server-side pagination and optional status filter.
     /// Queries the <c>ExecutionLogEntries</c> table directly without loading the parent aggregate.

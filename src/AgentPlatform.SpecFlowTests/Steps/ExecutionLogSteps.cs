@@ -419,5 +419,20 @@ public class ExecutionLogSteps
         {
             _store[log.Id] = log;
         }
+
+        public Task<IReadOnlyList<ExecutionLog>> GetByTenantAsync(
+            Guid tenantId, DateTime? from = null, DateTime? to = null, CancellationToken ct = default)
+        {
+            var query = _store.Values.Where(l => l.TenantId == tenantId).AsEnumerable();
+
+            if (from.HasValue)
+                query = query.Where(l => l.StartedAt >= from.Value);
+
+            if (to.HasValue)
+                query = query.Where(l => l.StartedAt <= to.Value);
+
+            var logs = query.OrderByDescending(l => l.StartedAt).ToList() as IReadOnlyList<ExecutionLog>;
+            return Task.FromResult(logs);
+        }
     }
 }
