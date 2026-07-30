@@ -112,13 +112,13 @@ namespace AgentPlatform.SpecFlowTests.Features
     this.FeatureBackground();
 #line hidden
 #line 10
-        testRunner.When("a user creates an agent with role code \"architect\"", ((string)(null)), ((TechTalk.SpecFlow.Table)(null)), "When ");
+        testRunner.When("a user creates an agent with role code \"architecture\"", ((string)(null)), ((TechTalk.SpecFlow.Table)(null)), "When ");
 #line hidden
 #line 11
-        testRunner.Then("the agent should have an AgentType with RoleCode \"architect\"", ((string)(null)), ((TechTalk.SpecFlow.Table)(null)), "Then ");
+        testRunner.Then("the agent should have an AgentType with RoleCode \"architecture\"", ((string)(null)), ((TechTalk.SpecFlow.Table)(null)), "Then ");
 #line hidden
 #line 12
-        testRunner.And("the agent\'s role should be retrievable via GetByRoleAsync(\"architect\")", ((string)(null)), ((TechTalk.SpecFlow.Table)(null)), "And ");
+        testRunner.And("the agent\'s role should be retrievable via GetByRoleAsync(\"architecture\")", ((string)(null)), ((TechTalk.SpecFlow.Table)(null)), "And ");
 #line hidden
             }
             this.ScenarioCleanup();
@@ -152,7 +152,7 @@ namespace AgentPlatform.SpecFlowTests.Features
         testRunner.When("the system migrates agent roles", ((string)(null)), ((TechTalk.SpecFlow.Table)(null)), "When ");
 #line hidden
 #line 17
-        testRunner.Then("the agent should have an AgentType with RoleCode \"architect\"", ((string)(null)), ((TechTalk.SpecFlow.Table)(null)), "Then ");
+        testRunner.Then("the agent should have an AgentType with RoleCode \"architecture\"", ((string)(null)), ((TechTalk.SpecFlow.Table)(null)), "Then ");
 #line hidden
 #line 18
         testRunner.And("the old AgentRole enum should no longer be referenced in application code", ((string)(null)), ((TechTalk.SpecFlow.Table)(null)), "And ");

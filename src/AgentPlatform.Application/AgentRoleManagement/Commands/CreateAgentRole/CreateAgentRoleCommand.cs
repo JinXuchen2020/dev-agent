@@ -26,12 +26,14 @@ public sealed record CreateAgentRoleCommand(
 /// <param name="RoleCode">The unique code.</param>
 /// <param name="Description">The description.</param>
 /// <param name="SystemPrompt">The system prompt.</param>
+/// <param name="IsBuiltIn">Whether this is a platform built-in role.</param>
 public sealed record AgentRoleResponse(
     Guid Id,
     string Name,
     string RoleCode,
     string Description,
-    string SystemPrompt
+    string SystemPrompt,
+    bool IsBuiltIn
 );
 
 internal sealed class CreateAgentRoleCommandHandler(
@@ -45,12 +47,14 @@ internal sealed class CreateAgentRoleCommandHandler(
         ArgumentException.ThrowIfNullOrWhiteSpace(request.RoleCode);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.SystemPrompt);
 
+        // Custom roles created through the API are never built-in.
         var definition = new AgentRoleDefinition(
             Guid.NewGuid(),
             request.Name,
             request.RoleCode,
             request.Description,
-            request.SystemPrompt);
+            request.SystemPrompt,
+            isBuiltIn: false);
 
         repository.Add(definition);
 
@@ -59,6 +63,7 @@ internal sealed class CreateAgentRoleCommandHandler(
             definition.Name,
             definition.RoleCode,
             definition.Description,
-            definition.SystemPrompt));
+            definition.SystemPrompt,
+            definition.IsBuiltIn));
     }
 }

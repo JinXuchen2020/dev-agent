@@ -58,6 +58,19 @@ internal sealed class AgentRepository : IAgentRepository
     }
 
     /// <summary>
+    /// Counts the agents belonging to a specific tenant that have the specified role code.
+    /// </summary>
+    /// <param name="tenantId">The tenant identifier to filter by.</param>
+    /// <param name="roleCode">The role code to filter by.</param>
+    /// <param name="ct">A token to monitor for cancellation requests.</param>
+    /// <returns>A task that completes with the count of matching agents for the tenant.</returns>
+    public Task<int> CountByRoleAsync(Guid tenantId, string roleCode, CancellationToken ct = default)
+    {
+        return _context.Agents
+            .CountAsync(a => a.TenantId == tenantId && a.Role.RoleCode == roleCode, ct);
+    }
+
+    /// <summary>
     /// Adds a new agent aggregate to the change tracker.
     /// </summary>
     /// <param name="agent">The agent aggregate to add.</param>

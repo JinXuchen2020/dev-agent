@@ -1,5 +1,6 @@
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Domain.Aggregates.AgentConfigurations;
+using AgentPlatform.Domain.Aggregates.Agents;
 using AgentPlatform.Domain.Aggregates.AgentRoleDefinitions;
 using AgentPlatform.Domain.Aggregates.Users;
 using AgentPlatform.Domain.ValueObjects;
@@ -127,67 +128,67 @@ internal sealed class DatabaseInitializer : IDatabaseInitializer
                 _logger.LogWarning(ex, "Failed to seed default user, but continuing with startup");
             }
 
-            // 检查是否已经有数据
-            var roleCount = await _context.AgentRoleDefinitions.CountAsync(ct);
-            if (roleCount > 0)
+            // 创建 / 对齐种子 Agent 角色定义（内建角色目录，DB 为准）。
+            // 既有数据库可能已在 IsBuiltIn 列存在前被种子化 —— 此处做幂等对齐：
+            //   · 缺失的内建 code → 插入并标记 IsBuiltIn=true
+            //   · 已存在但 IsBuiltIn=false 的内建 code → 补标记（不覆盖既有 Name/Description/SystemPrompt）
+            var builtInSeed = new Dictionary<string, (string Name, string Description, string SystemPrompt)>
             {
-                _logger.LogInformation("Database already contains {Count} agent role definitions, skipping seed", roleCount);
-                return;
-            }
-
-            // 创建种子 Agent 角色定义数据
-            var roles = new List<Domain.Aggregates.AgentRoleDefinitions.AgentRoleDefinition>
-            {
-                new Domain.Aggregates.AgentRoleDefinitions.AgentRoleDefinition(
-                    Guid.NewGuid(),
-                    "需求分析师",
-                    "requirement",
-                    "负责收集、分析和整理业务需求",
-                    "你是一个专业的需求分析师，擅长收集、分析和整理业务需求..."
-                ),
-                new Domain.Aggregates.AgentRoleDefinitions.AgentRoleDefinition(
-                    Guid.NewGuid(),
-                    "产品经理",
-                    "product",
-                    "负责产品规划、功能设计和路线图制定",
-                    "你是一个经验丰富的产品经理，擅长产品规划和功能设计..."
-                ),
-                new Domain.Aggregates.AgentRoleDefinitions.AgentRoleDefinition(
-                    Guid.NewGuid(),
-                    "系统架构",
-                    "architecture",
-                    "负责系统架构设计和技术选型",
-                    "你是一个资深系统架构师，擅长系统架构设计和技术选型..."
-                ),
-                new Domain.Aggregates.AgentRoleDefinitions.AgentRoleDefinition(
-                    Guid.NewGuid(),
-                    "代码实现",
-                    "development",
-                    "负责功能开发和代码实现",
-                    "你是一个经验丰富的开发工程师，擅长功能开发和代码实现..."
-                ),
-                new Domain.Aggregates.AgentRoleDefinitions.AgentRoleDefinition(
-                    Guid.NewGuid(),
-                    "质量保证",
-                    "testing",
-                    "负责功能测试和质量保证",
-                    "你是一个专业的测试工程师，擅长功能测试和质量保证..."
-                ),
-                new Domain.Aggregates.AgentRoleDefinitions.AgentRoleDefinition(
-                    Guid.NewGuid(),
-                    "文档编写",
-                    "documentation",
-                    "负责技术文档和用户文档编写",
-                    "你是一个专业的文档工程师，擅长技术文档和用户文档编写..."
-                )
+                [BuiltInRoleCatalog.Requirement] = ("需求分析师", "负责收集、分析和整理业务需求", "你是一个专业的需求分析师，擅长收集、分析和整理业务需求..."),
+                [BuiltInRoleCatalog.Product] = ("产品经理", "负责产品规划、功能设计和路线图制定", "你是一个经验丰富的产品经理，擅长产品规划和功能设计..."),
+                [BuiltInRoleCatalog.Architecture] = ("系统架构", "负责系统架构设计和技术选型", "你是一个资深系统架构师，擅长系统架构设计和技术选型..."),
+                [BuiltInRoleCatalog.Development] = ("代码实现", "负责功能开发和代码实现", "你是一个经验丰富的开发工程师，擅长功能开发和代码实现..."),
+                [BuiltInRoleCatalog.Testing] = ("质量保证", "负责功能测试和质量保证", "你是一个专业的测试工程师，擅长功能测试和质量保证..."),
+                [BuiltInRoleCatalog.Documentation] = ("文档编写", "负责技术文档和用户文档编写", "你是一个专业的文档工程师，擅长技术文档和用户文档编写..."),
+                [BuiltInRoleCatalog.Reviewer] = ("评审专家", "负责代码与设计评审", "你是一个严谨的评审专家，擅长审查代码质量和架构设计合理性..."),
             };
 
-            await _context.AgentRoleDefinitions.AddRangeAsync(roles, ct);
-            _logger.LogInformation("Added {Count} agent role definitions to context, saving...", roles.Count);
-            
-            // 调用 SaveChangesAsync 保存到数据库
+            var existingRoles = await _context.AgentRoleDefinitions.ToListAsync(ct);
+            foreach (var (code, (name, description, systemPrompt)) in builtInSeed)
+            {
+                var existing = existingRoles.FirstOrDefault(r => r.RoleCode == code);
+                if (existing is null)
+                {
+                    _context.AgentRoleDefinitions.Add(new Domain.Aggregates.AgentRoleDefinitions.AgentRoleDefinition(
+                        Guid.NewGuid(), name, code, description, systemPrompt, isBuiltIn: true));
+                }
+                else if (!existing.IsBuiltIn)
+                {
+                    existing.MarkAsBuiltIn();
+                }
+            }
+
             await _context.SaveChangesAsync(ct);
-            _logger.LogInformation("Successfully seeded {Count} agent role definitions", roles.Count);
+            _logger.LogInformation("Reconciled {Count} built-in agent role definitions", builtInSeed.Count);
+
+            // 兼容历史数据：F19 将内建角色 code 由旧值统一为 BuiltInRoleCatalog 新值
+            // （architect→architecture / developer→development / tester→testing /
+            // pm→product / tech-writer→documentation；reviewer 保持不变）。
+            // 存量 Agent 的 RoleCode 做一次幂等映射，避免其游离于新目录之外
+            // （旧 code 不再出现在 BuiltInRoleCatalog，会导致引用计数与编辑下拉无法匹配）。
+            var legacyToNew = new Dictionary<string, string>
+            {
+                ["architect"] = BuiltInRoleCatalog.Architecture,
+                ["developer"] = BuiltInRoleCatalog.Development,
+                ["tester"] = BuiltInRoleCatalog.Testing,
+                ["pm"] = BuiltInRoleCatalog.Product,
+                ["tech-writer"] = BuiltInRoleCatalog.Documentation,
+            };
+            var legacyCodes = legacyToNew.Keys.ToList();
+            var orphanAgents = await _context.Agents
+                .IgnoreQueryFilters()
+                .Where(a => legacyCodes.Contains(a.Role.RoleCode))
+                .ToListAsync(ct);
+            foreach (var agent in orphanAgents)
+            {
+                var newCode = legacyToNew[agent.Role.RoleCode];
+                var newType = AgentType.FromCode(newCode);
+                if (newType is not null)
+                    agent.UpdateRole(newType);
+            }
+
+            await _context.SaveChangesAsync(ct);
+            _logger.LogInformation("Remapped {Count} legacy agent role codes", orphanAgents.Count);
         }
         catch (Exception ex)
         {

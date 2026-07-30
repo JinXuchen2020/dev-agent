@@ -83,6 +83,28 @@ export const getAgentRoles = () => api.get<AgentRole[]>('/agent-roles').then((r)
 export const getAgentRole = (roleCode: string) =>
   api.get<AgentRole>(`/agent-roles/${roleCode}`).then((r) => r.data);
 
+export interface CreateAgentRoleRequest {
+  name: string;
+  roleCode: string;
+  description?: string;
+  systemPrompt: string;
+}
+
+export interface UpdateAgentRoleRequest {
+  name: string;
+  description?: string;
+  systemPrompt: string;
+}
+
+export const createAgentRole = (req: CreateAgentRoleRequest) =>
+  api.post<AgentRole>('/agent-roles', req).then((r) => r.data);
+
+export const updateAgentRole = (roleCode: string, req: UpdateAgentRoleRequest) =>
+  api.put<AgentRole>(`/agent-roles/${roleCode}`, req).then((r) => r.data);
+
+export const deleteAgentRole = (roleCode: string) =>
+  api.delete<void>(`/agent-roles/${roleCode}`).then(() => undefined);
+
 // Agent Configurations
 export const getAgentConfigurations = (opts?: {
   type?: string;

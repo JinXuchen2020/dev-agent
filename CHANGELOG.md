@@ -1,6 +1,28 @@
 # 变更日志
 
-## v2.11 (2026-07-30)
+## v2.12 (2026-07-29)
+
+### F19 · Agent Roles 内建标记 + 页面补全 + 分类合并（统一角色目录，DB 为准）完成（feature-builder 全栈实跑，🟡中风险）
+
+把分裂的「`AgentType` 硬编码值对象」与「`AgentRoleDefinition` DB 表」两套角色分类合并为**一套以数据库为准的统一角色目录**，修复平台默认角色被错标"自定义"的 bug，并补全 `AgentRolesPage` 的编辑/删除与被引用计数能力。
+
+**核心改动：**
+- **统一目录（DB 为准）**：`AgentRoleDefinition` 表成为唯一权威；`AgentType` 值对象降级为内建目录的类型化镜像（`Predefined` code 与 `BuiltInRoleCatalog` 完全一致）；新增架构 parity 测试（`AgentRoleCatalogParityTests` 3 例）断言两者 code 集合相等，强制"DB 为准"，杜绝再次漂移。
+- **内建标记**：`AgentRoleDefinition` 增 `IsBuiltIn`(bool) + EF 迁移 `AddAgentRoleIsBuiltIn`（`defaultValue:false`，存量行安全）；`DatabaseInitializer` 幂等对齐 7 个内建（缺失→插入、已存非内建→`MarkAsBuiltIn`）。
+- **存量 Agent 数据修复（审查发现）**：设计原假设「存量 Agent `RoleCode` 已与新目录一致」不成立（旧码 architect/developer/tester/pm/tech-writer 整体不符）→ 在 `DatabaseInitializer` 新增 legacy→new 幂等映射（`IgnoreQueryFilters()` 全租户），防存量 Agent 游离于新目录之外。
+- **引用计数**：`IAgentRepository.CountByRoleAsync(tenantId, roleCode)` + `AgentRoleSummary.AgentCount`，列表展示每角色被多少 Agent 引用。
+- **编辑端点**：新增 `PUT /api/v1/agent-roles/{roleCode}` + `UpdateAgentRoleDefinitionCommand/Handler`（内建 `RoleCode` 锁、不可删）。
+- **删除拦截**：`DeleteAgentRoleCommand` 重写为枚举结局（`Deleted`/`NotFound`/`BuiltInConflict`/`InUseConflict`）；内建→409、被引用→409、不存在→404、可用→204。
+- **前端收口**：`AgentRolesPage` 删硬编码 `BUILT_IN_ROLES`、按 `IsBuiltIn` 分区、新建/编辑/删除模态 + RBAC + `agentCount` 展示；`AgentsPage` 默认 `roleCode` 由 `developer` 修正为 `development`；`types`/`api`/`locales` 对齐（i18n 对称 4 例，zh-CN 去字面 "Agent"）。
+
+**质量与测试：**
+- 三道质量门禁全 PASS（`ddd-code-reviewer` / `ddd-phase-quality-gate` / `codebase-optimizer`）；`.quality-gate.json` 推进 `f19-agent-roles-unified`
+- 后端 `dotnet test src/AgentPlatform.sln` **287 passed / 0 failed**（SpecFlow 41 / Arch 9 / Application 103 / Api 27 / Integration 5 / Infrastructure 102；含 F19 新增 parity 3 + handler 7 + Api 集成 7）
+- 前端 `tsc --noEmit` **0 error** + `vitest` **38/38 green** + `vite build` 通过
+- 审查修复 P2×2：`AgentsController` 默认 `RoleCode ?? "developer"`→`"development"`；`DatabaseInitializer` 补 legacy→new 映射
+- 已知环境限制：`qa.mjs` 的 `lint` 闸门因 `package.json` 未声明 `@eslint/js` 等依赖（orphaned `eslint.config.js`）恒失败，非 F19 引入；typecheck/build/unit 三实质闸门全绿
+
+**v2.11 (2026-07-30)**
 
 ### F18 · Dashboard 图表充实（运行分析看板）完成（feature-builder 全栈实跑，🟡中风险）
 

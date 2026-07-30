@@ -293,6 +293,13 @@ public class CustomAgentRoleSteps
             return Task.FromResult(agents);
         }
 
+        public Task<int> CountByRoleAsync(Guid tenantId, string roleCode, CancellationToken ct = default)
+        {
+            var count = _store.Values
+                .Count(a => a.TenantId == tenantId && a.Role.RoleCode == roleCode);
+            return Task.FromResult(count);
+        }
+
         public List<Agent> GetByRoleCodeSync(string roleCode)
         {
             return _store.Values.Where(a => a.Role.RoleCode == roleCode).ToList();

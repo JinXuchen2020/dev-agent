@@ -16,11 +16,15 @@ public sealed record GetAgentRoleQuery(string RoleCode) : IRequest<AgentRoleSumm
 /// <param name="Name">The display name.</param>
 /// <param name="RoleCode">The unique code.</param>
 /// <param name="Description">The description.</param>
+/// <param name="SystemPrompt">The system prompt used by agents assigned to this role.</param>
+/// <param name="IsBuiltIn">Whether this is a platform built-in role (read-only, non-deletable).</param>
 public sealed record AgentRoleSummary(
     Guid Id,
     string Name,
     string RoleCode,
-    string Description);
+    string Description,
+    string SystemPrompt,
+    bool IsBuiltIn);
 
 internal sealed class GetAgentRoleQueryHandler(
     Domain.Repositories.IAgentRoleDefinitionRepository repository)
@@ -39,6 +43,8 @@ internal sealed class GetAgentRoleQueryHandler(
             role.Id,
             role.Name,
             role.RoleCode,
-            role.Description);
+            role.Description,
+            role.SystemPrompt,
+            role.IsBuiltIn);
     }
 }

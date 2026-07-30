@@ -3,7 +3,9 @@ using AgentPlatform.Domain.Abstractions;
 namespace AgentPlatform.Domain.Aggregates.AgentRoleDefinitions;
 
 /// <summary>
-/// Represents a custom (user-defined) agent role definition that extends the built-in <see cref="ValueObjects.AgentType"/> set.
+/// Represents an agent role definition — the single, database-authoritative catalog of agent roles.
+/// Both built-in platform roles (seeded by <c>DatabaseInitializer</c>, <see cref="BuiltInRoleCatalog"/>)
+/// and tenant-defined custom roles live in this table; <see cref="IsBuiltIn"/> distinguishes them.
 /// Each definition specifies the role metadata and the system prompt used when an agent is assigned this role.
 /// </summary>
 public sealed class AgentRoleDefinition : IAggregateRoot
@@ -39,6 +41,12 @@ public sealed class AgentRoleDefinition : IAggregateRoot
     public string SystemPrompt { get; private set; } = null!;
 
     /// <summary>
+    /// Gets a value indicating whether this role is shipped by the platform (built-in)
+    /// rather than created by a tenant. Built-in roles are read-only and cannot be deleted.
+    /// </summary>
+    public bool IsBuiltIn { get; private set; }
+
+    /// <summary>
     /// Gets the UTC timestamp when the role was created.
     /// </summary>
     public DateTime CreatedAt { get; private init; }
@@ -53,12 +61,14 @@ public sealed class AgentRoleDefinition : IAggregateRoot
     /// <param name="roleCode">The unique code identifying this role.</param>
     /// <param name="description">A description of the role's responsibilities.</param>
     /// <param name="systemPrompt">The system prompt used by agents assigned to this role.</param>
+    /// <param name="isBuiltIn">Whether this role is a built-in platform role.</param>
     public AgentRoleDefinition(
         Guid id,
         string name,
         string roleCode,
         string description,
-        string systemPrompt)
+        string systemPrompt,
+        bool isBuiltIn = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(roleCode);
@@ -69,7 +79,32 @@ public sealed class AgentRoleDefinition : IAggregateRoot
         RoleCode = roleCode;
         Description = description ?? string.Empty;
         SystemPrompt = systemPrompt;
+        IsBuiltIn = isBuiltIn;
         CreatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Marks this role definition as a built-in platform role (idempotent).
+    /// Used by the database initializer to reconcile rows that were seeded before the
+    /// <c>IsBuiltIn</c> column existed.
+    /// </summary>
+    public void MarkAsBuiltIn() => IsBuiltIn = true;
+
+    /// <summary>
+    /// Updates the editable metadata of this role definition. The role code is the
+    /// immutable key and is never changed by this method.
+    /// </summary>
+    /// <param name="name">The new display name.</param>
+    /// <param name="description">The new description.</param>
+    /// <param name="systemPrompt">The new system prompt.</param>
+    public void UpdateMetadata(string name, string description, string systemPrompt)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(systemPrompt);
+
+        Name = name;
+        Description = description ?? string.Empty;
+        SystemPrompt = systemPrompt;
     }
 
     /// <summary>
