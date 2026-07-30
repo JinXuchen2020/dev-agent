@@ -208,6 +208,43 @@
   - ⑧ 企业增强（多工作空间 / 用量仪表盘 / 工作流 diff）→ **F26**
 - **设计文档骨架均已生成**（features/node-bundle.md / workflow-triggers.md / publish-api-mcp.md / template-market.md / execution-trace-eval.md / workflow-debugger.md / enterprise-enhancements.md）；各 feature 实现前须先锁定其 §6 决策，不应自创需求。
 
+
+### F20 · 节点全家桶（Workflow 节点类型扩展）  [P1]  open  ⚠️高风险（破坏性 StepType 枚举扩展 + HITL 审批门 + 运行时 executor）
+- 设计文档：`features/node-bundle.md`（已建骨架，§6 决策待锁定）
+- 目标：补齐 DAG 节点原语——HTTP / Condition / Loop / Variable / SubWorkflow / Delay / UserInput(HITL)，前端调色板+配置面板+后端 executor（Tool/Code/Knowledge 已在 F5 落地）。纯增量节点类型，无新聚合。
+- 风险：🔴 StepType 枚举破坏性扩展（全仓 switch 回归）+ HITL 暂停/恢复 + 表达式引擎选型。实现前须锁定 §6（S1 枚举命名 / S3 HITL 方案 / S2 表达式引擎）。
+
+### F21 · 工作流触发器（Webhook / 定时 / Chat）  [P1]  open  ⚠️高风险（后台调度基础设施 + 匿名 Webhook + Chat 链路耦合）
+- 设计文档：`features/workflow-triggers.md`（已建骨架，§6 决策待锁定）
+- 目标：工作流被动触发——Webhook（POST /webhooks/workflow/{token}）/ 定时（cron + BackgroundService 调度）/ Chat（会话绑定触发）。多租户隔离 + 审计。
+- 风险：🔴 调度基础设施（多实例防重）+ 匿名端点安全 + Chat 耦合。实现前须锁定 §6（S1 调度方案 / S2 Chat 存储）。
+
+### F22 · 发布工作流为 API / MCP Server  [P1]  open  ⚠️高风险（API Key 鉴权复用 + MCP 动态注册 + 外部输入隔离）
+- 设计文档：`features/publish-api-mcp.md`（已建骨架，§6 决策待锁定）
+- 目标：一键发布工作流为 API Key 鉴权的 HTTP 端点 + 暴露为 MCP tool（复用现有 ApiKey / ToolDefinition）。多租户隔离 + 审计。
+- 风险：🔴 现有 API Key 中间件复用 + MCP 动态注册。实现前须锁定 §6（S1 鉴权复用 / S2 MCP 形态）。
+
+### F23 · 模板市场 / 示例库  [P2]  open  🟡中风险（种子数据 + 克隆端点 + 前端画廊）
+- 设计文档：`features/template-market.md`（已建骨架，§6 决策待锁定）
+- 目标：内置 5–10 行业模板，「一键克隆为我的工作流」（复用 F7 ① 快照重建）。平台级共享 + 克隆归当前租户。
+- 风险：🟡 种子图须过 ValidateGraph、克隆后 Agent 绑定缺失降级。实现前须锁定 §6（S1 来源 / S2 存储 / S3 Agent 缺失处理）。
+
+### F24 · 执行 Trace / 评估视图  [P1]  open  🟡中风险（Trace 字段完备性 + 评估批量跑 + 与 F20 兼容）
+- 设计文档：`features/execution-trace-eval.md`（已建骨架，§6 决策待锁定）
+- 目标：节点级 Trace（耗时/token/IO，复用 ExecutionLog.Entries）+ 数据集回归评估（对标 LangSmith/Langfuse）。多租户隔离 + 审计。
+- 风险：🟡 Trace 数据完备性、评估性能。实现前须锁定 §6（S1 Trace 存储 / S2 比对 / S3 运行方式）。
+
+### F25 · 工作流调试器（变量监视 + 单步重跑 + 错误分支）  [P1]  open  ⚠️高风险（执行引擎支持暂停/单步/局部重跑，侵入大）
+- 设计文档：`features/workflow-debugger.md`（已建骨架，§6 决策待锁定）
+- 目标：调试运行模式——变量监视 + 单步执行 + 单节点重跑（override）+ 错误分支恢复。复用 F24 Trace 数据。
+- 风险：🔴 orchestrator 需支持暂停/单步/局部重算下游。实现前须锁定 §6（S1 引擎介入深度 / S3 重跑影响范围）。建议先做变量监视+错误重跑（低风险），单步全链作增强。
+
+### F26 · 企业增强（多工作空间 / 用量仪表盘 / 工作流 diff）  [P2]  open  ⚠️极高风险（多工作空间 = 第二租户维度，全仓破坏性；diff/仪表盘低风险）
+- 设计文档：`features/enterprise-enhancements.md`（已建骨架，§6 决策待锁定）
+- 目标：① 用量仪表盘（复用 F18 扩工作流维度）② 工作流 diff（复用 F7 ① 快照比对两版本）③ 多工作空间隔离切换（二级维度）。
+- 风险：🔴 多工作空间破坏性极大（全部聚合加 WorkspaceId + query filter + TenantProvider 体系）；建议 v1 **仅做用量仪表盘 + diff（低风险纯增量）**，多工作空间独立排期。实现前须锁定 §6（S1 是否含 Workspace / S2 数据模型）。
+
+
 ### F8 · 差异化优势产品化（Negotiation + Critic）  [native]  open
 - 设计文档：`features/negotiation-productization.md`（待建）
 - 目标：后端已具备 Negotiation 协商式多智能体 + Critic 收敛原语，待产品化画布「Agent-Team / Negotiation」专属模式（多 Agent 节点 + Critic + 收敛终止条件）。
@@ -252,41 +289,6 @@
   - 新建/扩展集成测试：用 `WebApplicationFactory` 起后端 + 本地 Mock HTTP 端点，构造含 `StepType.Tool`/`StepType.Code` 的 `WorkflowNode`，经 `WorkflowOrchestrator` 跑全流程，断言 `StepExecutionResult.Outcome` 与 `Output`。
   - 前端联动（可选）：用 Playwright/Cypress 在 Web 实例上拖出 Tool/Code 节点、配置、运行、断言画布节点状态与输出面板。
   - 纳入 CI e2e 阶段；本沙箱无 Docker 仍可跑（python/node 子进程 + 本地 HTTP 端点均可用）。
-
-### F20 · 节点全家桶（Workflow 节点类型扩展）  [P1]  open  ⚠️高风险（破坏性 StepType 枚举扩展 + HITL 审批门 + 运行时 executor）
-- 设计文档：`features/node-bundle.md`（已建骨架，§6 决策待锁定）
-- 目标：补齐 DAG 节点原语——HTTP / Condition / Loop / Variable / SubWorkflow / Delay / UserInput(HITL)，前端调色板+配置面板+后端 executor（Tool/Code/Knowledge 已在 F5 落地）。纯增量节点类型，无新聚合。
-- 风险：🔴 StepType 枚举破坏性扩展（全仓 switch 回归）+ HITL 暂停/恢复 + 表达式引擎选型。实现前须锁定 §6（S1 枚举命名 / S3 HITL 方案 / S2 表达式引擎）。
-
-### F21 · 工作流触发器（Webhook / 定时 / Chat）  [P1]  open  ⚠️高风险（后台调度基础设施 + 匿名 Webhook + Chat 链路耦合）
-- 设计文档：`features/workflow-triggers.md`（已建骨架，§6 决策待锁定）
-- 目标：工作流被动触发——Webhook（POST /webhooks/workflow/{token}）/ 定时（cron + BackgroundService 调度）/ Chat（会话绑定触发）。多租户隔离 + 审计。
-- 风险：🔴 调度基础设施（多实例防重）+ 匿名端点安全 + Chat 耦合。实现前须锁定 §6（S1 调度方案 / S2 Chat 存储）。
-
-### F22 · 发布工作流为 API / MCP Server  [P1]  open  ⚠️高风险（API Key 鉴权复用 + MCP 动态注册 + 外部输入隔离）
-- 设计文档：`features/publish-api-mcp.md`（已建骨架，§6 决策待锁定）
-- 目标：一键发布工作流为 API Key 鉴权的 HTTP 端点 + 暴露为 MCP tool（复用现有 ApiKey / ToolDefinition）。多租户隔离 + 审计。
-- 风险：🔴 现有 API Key 中间件复用 + MCP 动态注册。实现前须锁定 §6（S1 鉴权复用 / S2 MCP 形态）。
-
-### F23 · 模板市场 / 示例库  [P2]  open  🟡中风险（种子数据 + 克隆端点 + 前端画廊）
-- 设计文档：`features/template-market.md`（已建骨架，§6 决策待锁定）
-- 目标：内置 5–10 行业模板，「一键克隆为我的工作流」（复用 F7 ① 快照重建）。平台级共享 + 克隆归当前租户。
-- 风险：🟡 种子图须过 ValidateGraph、克隆后 Agent 绑定缺失降级。实现前须锁定 §6（S1 来源 / S2 存储 / S3 Agent 缺失处理）。
-
-### F24 · 执行 Trace / 评估视图  [P1]  open  🟡中风险（Trace 字段完备性 + 评估批量跑 + 与 F20 兼容）
-- 设计文档：`features/execution-trace-eval.md`（已建骨架，§6 决策待锁定）
-- 目标：节点级 Trace（耗时/token/IO，复用 ExecutionLog.Entries）+ 数据集回归评估（对标 LangSmith/Langfuse）。多租户隔离 + 审计。
-- 风险：🟡 Trace 数据完备性、评估性能。实现前须锁定 §6（S1 Trace 存储 / S2 比对 / S3 运行方式）。
-
-### F25 · 工作流调试器（变量监视 + 单步重跑 + 错误分支）  [P1]  open  ⚠️高风险（执行引擎支持暂停/单步/局部重跑，侵入大）
-- 设计文档：`features/workflow-debugger.md`（已建骨架，§6 决策待锁定）
-- 目标：调试运行模式——变量监视 + 单步执行 + 单节点重跑（override）+ 错误分支恢复。复用 F24 Trace 数据。
-- 风险：🔴 orchestrator 需支持暂停/单步/局部重算下游。实现前须锁定 §6（S1 引擎介入深度 / S3 重跑影响范围）。建议先做变量监视+错误重跑（低风险），单步全链作增强。
-
-### F26 · 企业增强（多工作空间 / 用量仪表盘 / 工作流 diff）  [P2]  open  ⚠️极高风险（多工作空间 = 第二租户维度，全仓破坏性；diff/仪表盘低风险）
-- 设计文档：`features/enterprise-enhancements.md`（已建骨架，§6 决策待锁定）
-- 目标：① 用量仪表盘（复用 F18 扩工作流维度）② 工作流 diff（复用 F7 ① 快照比对两版本）③ 多工作空间隔离切换（二级维度）。
-- 风险：🔴 多工作空间破坏性极大（全部聚合加 WorkspaceId + query filter + TenantProvider 体系）；建议 v1 **仅做用量仪表盘 + diff（低风险纯增量）**，多工作空间独立排期。实现前须锁定 §6（S1 是否含 Workspace / S2 数据模型）。
 
 ---
 
