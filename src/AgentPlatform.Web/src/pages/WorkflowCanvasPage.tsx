@@ -18,6 +18,10 @@ import {
   App as AntApp,
   Spin,
   Tooltip,
+  Modal,
+  List,
+  Tag,
+  Empty,
 } from 'antd';
 import {
   SaveOutlined,
@@ -35,8 +39,11 @@ import {
   runWorkflowNode,
   runWorkflow,
   importWorkflow,
+  listWorkflowApprovals,
+  resolveApproval,
   getErrorMessage,
 } from '../services/api';
+import type { ApprovalDto, WorkflowDetail } from '../types';
 import { useCanvasStore } from '../stores/workflowCanvasStore';
 import DagNode from '../components/canvas/DagNode';
 import NodePalette from '../components/canvas/NodePalette';
@@ -57,6 +64,13 @@ const nodeTypes: NodeTypes = {
   knowledge: DagNode,
   tool: DagNode,
   code: DagNode,
+  http: DagNode,
+  condition: DagNode,
+  loop: DagNode,
+  variable: DagNode,
+  subworkflow: DagNode,
+  delay: DagNode,
+  userinput: DagNode,
 };
 
 const CanvasInner: React.FC = () => {
@@ -90,6 +104,24 @@ const CanvasInner: React.FC = () => {
   const fileRef = useRef<HTMLInputElement>(null);
   const seeded = useRef(false);
 
+  // F20 S3 — HITL 审批门：持有完整工作流详情以检测 Paused 态，并维护审批弹窗状态。
+  const [wfState, setWfState] = useState<WorkflowDetail | null>(null);
+  const [approvalModalOpen, setApprovalModalOpen] = useState(false);
+  const [approvals, setApprovals] = useState<ApprovalDto[]>([]);
+  const [approvalLoading, setApprovalLoading] = useState(false);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [approvalInputs, setApprovalInputs] = useState<Record<string, string>>({});
+
+  // 重新拉取工作流详情并同步到画布 + 本地状态（供暂停态判定/弹窗复用）。
+  const refreshWorkflow = useCallback(async () => {
+    if (!id) return null;
+    const wf = await getWorkflow(id);
+    setName(wf.name);
+    loadFromDetail(wf);
+    setWfState(wf);
+    return wf;
+  }, [id, loadFromDetail]);
+
   // Load existing workflow graph.
   useEffect(() => {
     if (!id) {
@@ -100,14 +132,54 @@ const CanvasInner: React.FC = () => {
       return;
     }
     setLoading(true);
-    getWorkflow(id)
-      .then((wf) => {
-        setName(wf.name);
-        loadFromDetail(wf);
-      })
+    refreshWorkflow()
       .catch(() => message.error(t('errors.loadFailed')))
       .finally(() => setLoading(false));
-  }, [id, addNode, loadFromDetail]);
+  }, [id, addNode, loadFromDetail, refreshWorkflow]);
+
+  // F20 S3 — 暂停态（currentState === 2）自动弹出 HITL 审批弹窗并加载待处理审批。
+  const isPaused = Number(wfState?.currentState) === 2;
+
+  const loadApprovals = useCallback(async () => {
+    if (!id) return;
+    setApprovalLoading(true);
+    try {
+      const list = await listWorkflowApprovals(id);
+      setApprovals(list);
+    } catch {
+      message.error(t('canvas.hitlResolveFailed'));
+    } finally {
+      setApprovalLoading(false);
+    }
+  }, [id, message, t]);
+
+  useEffect(() => {
+    if (isPaused) {
+      setApprovalModalOpen(true);
+      void loadApprovals();
+    } else {
+      setApprovalModalOpen(false);
+    }
+  }, [isPaused, loadApprovals]);
+
+  const pendingApprovals = approvals.filter((a) => a.status === 0);
+
+  const handleResolveApproval = async (approval: ApprovalDto, approved: boolean) => {
+    if (!id) return;
+    setResolvingId(approval.id);
+    try {
+      const input = approvalInputs[approval.id] ?? '';
+      const wf = await resolveApproval(id, approval.id, approved, input || null);
+      message.success(t('canvas.hitlResolved'));
+      setWfState(wf);
+      loadFromDetail(wf);
+      await loadApprovals();
+    } catch (err) {
+      message.error(`${t('canvas.hitlResolveFailed')}: ${getErrorMessage(err)}`);
+    } finally {
+      setResolvingId(null);
+    }
+  };
 
   // Undo / redo hotkeys (ignore while typing in fields).
   useEffect(() => {
@@ -195,9 +267,8 @@ const CanvasInner: React.FC = () => {
         });
         await runExistingWorkflow(id);
         message.success(t('pages.workflows.savedAndRun'));
-        // refresh states
-        const wf = await getWorkflow(id);
-        loadFromDetail(wf);
+        // refresh states（含暂停态检测与审批弹窗触发）
+        await refreshWorkflow();
       } else {
         // New workflow: create via linear steps, then persist the graph, then open editor.
         const created = await runWorkflow({
@@ -227,8 +298,7 @@ const CanvasInner: React.FC = () => {
     setRunning(true);
     try {
       await runWorkflowNode(id, selectedNodeId);
-      const wf = await getWorkflow(id);
-      loadFromDetail(wf);
+      await refreshWorkflow();
       message.success(t('pages.workflows.stepDone'));
     } catch (err) {
       message.error(getErrorMessage(err));
@@ -314,6 +384,18 @@ const CanvasInner: React.FC = () => {
           <Button type="primary" icon={<SaveOutlined />} onClick={handleSaveAndRun} loading={saving}>
             {t('pages.workflows.saveAndRun')}
           </Button>
+          {isPaused && (
+            <Button
+              type="primary"
+              danger
+              onClick={() => {
+                setApprovalModalOpen(true);
+                void loadApprovals();
+              }}
+            >
+              {t('canvas.hitlModalTitle')}
+            </Button>
+          )}
           {canManage && (
             <>
               <input
@@ -356,6 +438,62 @@ const CanvasInner: React.FC = () => {
       </div>
 
       <VariableWatchPanel />
+
+      {/* F20 S3 — HITL 暂停态审批弹窗：逐条列出待处理审批门，可输入并批准/拒绝以续跑工作流。 */}
+      <Modal
+        open={approvalModalOpen}
+        title={t('canvas.hitlModalTitle')}
+        footer={null}
+        onCancel={() => setApprovalModalOpen(false)}
+        width={600}
+        destroyOnClose
+      >
+        {approvalLoading ? (
+          <div style={{ textAlign: 'center', padding: 24 }}>
+            <Spin />
+          </div>
+        ) : pendingApprovals.length === 0 ? (
+          <Empty description={t('canvas.hitlModalEmpty')} />
+        ) : (
+          <List
+            dataSource={pendingApprovals}
+            renderItem={(a) => (
+              <List.Item key={a.id}>
+                <div style={{ width: '100%' }}>
+                  <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                    <Tag color="warning">{a.nodeName}</Tag>
+                    <Typography.Text>{a.prompt}</Typography.Text>
+                    <Input.TextArea
+                      rows={3}
+                      placeholder={t('canvas.hitlModalInputPlaceholder')}
+                      value={approvalInputs[a.id] ?? ''}
+                      onChange={(e) =>
+                        setApprovalInputs((prev) => ({ ...prev, [a.id]: e.target.value }))
+                      }
+                    />
+                    <Space>
+                      <Button
+                        type="primary"
+                        loading={resolvingId === a.id}
+                        onClick={() => handleResolveApproval(a, true)}
+                      >
+                        {t('canvas.hitlModalApprove')}
+                      </Button>
+                      <Button
+                        danger
+                        loading={resolvingId === a.id}
+                        onClick={() => handleResolveApproval(a, false)}
+                      >
+                        {t('canvas.hitlModalReject')}
+                      </Button>
+                    </Space>
+                  </Space>
+                </div>
+              </List.Item>
+            )}
+          />
+        )}
+      </Modal>
     </div>
   );
 };

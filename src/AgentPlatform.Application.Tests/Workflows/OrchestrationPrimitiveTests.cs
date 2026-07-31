@@ -2,6 +2,7 @@ using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Domain.Abstractions;
 using AgentPlatform.Domain.Aggregates.Workflows;
 using System.Collections.Generic;
+using System.Linq;
 using AgentPlatform.Domain.Enums;
 using AgentPlatform.Domain.Repositories;
 using AgentPlatform.Infrastructure.Workflows;
@@ -576,5 +577,176 @@ public sealed class OrchestrationPrimitiveTests
             _primitive.RunAsync(workflow, OrchestrationPreset.Sequential));
 
         Assert.Equal(WorkflowState.Paused, workflow.CurrentState);
+    }
+
+    // ──────────────────────────────────────────────
+    // F20：编排器 DAG 引擎 — 条件分支跳过 / 汇合安全 / 循环内联
+    // ──────────────────────────────────────────────
+
+    private static Workflow CreateDag(
+        IReadOnlyList<(Guid TempId, StepType Type, string Name, double X, double Y, string? Config, Guid? AgentId)> nodes,
+        IReadOnlyList<(Guid TempId, Guid SourceTempId, Guid TargetTempId, string? Label)> edges)
+    {
+        var workflow = new Workflow(Guid.NewGuid(), "f20-dag", Guid.NewGuid());
+        workflow.ReplaceGraph(nodes, edges);
+        return workflow;
+    }
+
+    private void SetupExecutors(params IStepExecutor[] executors)
+    {
+        _serviceProvider.GetService(typeof(IEnumerable<IStepExecutor>)).Returns(executors);
+        var scoped = CreateScopedProvider(executors, null, null);
+        var scopeFactory = Substitute.For<IServiceScopeFactory>();
+        scopeFactory.CreateScope().Returns(scoped.scope);
+        _serviceProvider.GetService(typeof(IServiceScopeFactory)).Returns(scopeFactory);
+    }
+
+    /// <summary>
+    /// 构建一个带 Condition 分支的 DAG（Start → Cond →{true:True, false:False}→ End）。
+    /// 返回的 executor 对 Condition 节点回传 <paramref name="branch"/>，其余节点回传 Success。
+    /// </summary>
+    private (Workflow workflow, IStepExecutor executor) BuildConditionDag(string branch)
+    {
+        var s = Guid.NewGuid(); var c = Guid.NewGuid(); var t = Guid.NewGuid();
+        var f = Guid.NewGuid(); var e = Guid.NewGuid();
+        var nodes = new List<(Guid, StepType, string, double, double, string?, Guid?)>
+        {
+            (s, StepType.Start, "Start", 0, 0, null, null),
+            (c, StepType.Condition, "Cond", 0, 0, "{\"expression\":\"1 === 1\"}", null),
+            (t, StepType.LLM, "TrueBranch", 0, 0, null, null),
+            (f, StepType.LLM, "FalseBranch", 0, 0, null, null),
+            (e, StepType.End, "End", 0, 0, null, null),
+        };
+        var edges = new List<(Guid, Guid, Guid, string?)>
+        {
+            (Guid.NewGuid(), s, c, null),
+            (Guid.NewGuid(), c, t, "true"),
+            (Guid.NewGuid(), c, f, "false"),
+            (Guid.NewGuid(), t, e, null),
+            (Guid.NewGuid(), f, e, null),
+        };
+        var workflow = CreateDag(nodes, edges);
+        var executor = CreateStepExecutor((step, ctx) =>
+            step.Type == StepType.Condition
+                ? StepExecutionResult.Success(branch)
+                : StepExecutionResult.Success($"output-{step.Name}"));
+        return (workflow, executor);
+    }
+
+    [Fact]
+    public async Task RunAsync_Sequential_ConditionTrue_ExecutesSelectedBranch_SkipsOther()
+    {
+        var (workflow, executor) = BuildConditionDag("true");
+        _repository.GetByIdAsync(workflow.Id, default).Returns(workflow);
+        SetupExecutors(executor);
+
+        var result = await _primitive.RunAsync(workflow, OrchestrationPreset.Sequential);
+
+        Assert.Equal(WorkflowState.Completed, result.CurrentState);
+        Assert.Equal(WorkflowState.Completed, workflow.Nodes.Single(n => n.Name == "TrueBranch").State);
+        // 非选中分支（false）必须被跳过且保持 Pending，工作流仍应完成。
+        Assert.Equal(WorkflowState.Pending, workflow.Nodes.Single(n => n.Name == "FalseBranch").State);
+    }
+
+    [Fact]
+    public async Task RunAsync_Sequential_ConditionFalse_ExecutesSelectedBranch_SkipsOther()
+    {
+        var (workflow, executor) = BuildConditionDag("false");
+        _repository.GetByIdAsync(workflow.Id, default).Returns(workflow);
+        SetupExecutors(executor);
+
+        var result = await _primitive.RunAsync(workflow, OrchestrationPreset.Sequential);
+
+        Assert.Equal(WorkflowState.Completed, result.CurrentState);
+        Assert.Equal(WorkflowState.Completed, workflow.Nodes.Single(n => n.Name == "FalseBranch").State);
+        Assert.Equal(WorkflowState.Pending, workflow.Nodes.Single(n => n.Name == "TrueBranch").State);
+    }
+
+    // ── 汇合安全：选中分支与跳过分支在 join 节点重新汇合，join 节点不得被误跳 ──
+
+    [Fact]
+    public async Task RunAsync_Sequential_ConditionBranch_JoinNodeStillExecutes()
+    {
+        var s = Guid.NewGuid(); var c = Guid.NewGuid(); var t = Guid.NewGuid();
+        var f = Guid.NewGuid(); var j = Guid.NewGuid(); var e = Guid.NewGuid();
+        var nodes = new List<(Guid, StepType, string, double, double, string?, Guid?)>
+        {
+            (s, StepType.Start, "Start", 0, 0, null, null),
+            (c, StepType.Condition, "Cond", 0, 0, "{\"expression\":\"1 === 1\"}", null),
+            (t, StepType.LLM, "TrueBranch", 0, 0, null, null),
+            (f, StepType.LLM, "FalseBranch", 0, 0, null, null),
+            (j, StepType.LLM, "Join", 0, 0, null, null),
+            (e, StepType.End, "End", 0, 0, null, null),
+        };
+        var edges = new List<(Guid, Guid, Guid, string?)>
+        {
+            (Guid.NewGuid(), s, c, null),
+            (Guid.NewGuid(), c, t, "true"),
+            (Guid.NewGuid(), c, f, "false"),
+            (Guid.NewGuid(), t, j, null),
+            (Guid.NewGuid(), f, j, null),
+            (Guid.NewGuid(), j, e, null),
+        };
+        var workflow = CreateDag(nodes, edges);
+        _repository.GetByIdAsync(workflow.Id, default).Returns(workflow);
+
+        var executor = CreateStepExecutor((step, ctx) =>
+            step.Type == StepType.Condition
+                ? StepExecutionResult.Success("true")
+                : StepExecutionResult.Success($"output-{step.Name}"));
+        SetupExecutors(executor);
+
+        var result = await _primitive.RunAsync(workflow, OrchestrationPreset.Sequential);
+
+        Assert.Equal(WorkflowState.Completed, result.CurrentState);
+        Assert.Equal(WorkflowState.Completed, workflow.Nodes.Single(n => n.Name == "TrueBranch").State);
+        Assert.Equal(WorkflowState.Pending, workflow.Nodes.Single(n => n.Name == "FalseBranch").State);
+        // 汇合点：虽有一条入边来自被跳过的 false 分支，但它也由 true 分支可达，故必须执行。
+        Assert.Equal(WorkflowState.Completed, workflow.Nodes.Single(n => n.Name == "Join").State);
+    }
+
+    // ── 循环内联：Loop 节点的 body 子图对每项迭代一次，itemVariable 注入共享 Blackboard ──
+
+    [Fact]
+    public async Task RunAsync_Sequential_Loop_ExecutesBodyPerItem_WithItemVariable()
+    {
+        var s = Guid.NewGuid(); var loop = Guid.NewGuid(); var body = Guid.NewGuid(); var e = Guid.NewGuid();
+        var nodes = new List<(Guid, StepType, string, double, double, string?, Guid?)>
+        {
+            (s, StepType.Start, "Start", 0, 0, null, null),
+            (loop, StepType.Loop, "Loop", 0, 0,
+                "{\"itemsSource\":\"[\\\"a\\\",\\\"b\\\",\\\"c\\\"]\",\"itemVariable\":\"item\",\"bodyNodeNames\":[\"Body\"]}", null),
+            (body, StepType.LLM, "Body", 0, 0, null, null),
+            (e, StepType.End, "End", 0, 0, null, null),
+        };
+        var edges = new List<(Guid, Guid, Guid, string?)>
+        {
+            (Guid.NewGuid(), s, loop, null),
+            (Guid.NewGuid(), loop, body, null),
+            (Guid.NewGuid(), body, e, null),
+        };
+        var workflow = CreateDag(nodes, edges);
+        _repository.GetByIdAsync(workflow.Id, default).Returns(workflow);
+
+        var capturedItems = new List<string>();
+        var executor = CreateStepExecutor((step, ctx) =>
+        {
+            if (step.Type == StepType.Loop)
+                return StepExecutionResult.Success("loop");
+            // Body 节点：记录注入共享 Blackboard 的 item 变量当前值。
+            capturedItems.Add(ctx.Blackboard.Get("item") ?? "<null>");
+            return StepExecutionResult.Success($"body-{step.Name}");
+        });
+        SetupExecutors(executor);
+
+        var result = await _primitive.RunAsync(workflow, OrchestrationPreset.Sequential);
+
+        Assert.Equal(WorkflowState.Completed, result.CurrentState);
+        // Body 必须对每个 item 迭代一次（3 项），且主线性遍历因 loopBodyIds 跳过它，故不会重复。
+        Assert.Equal(new[] { "a", "b", "c" }, capturedItems);
+        // Loop 节点自身应产生完成结果（含迭代计数）。
+        var loopNode = workflow.Nodes.Single(n => n.Name == "Loop");
+        Assert.Equal(WorkflowState.Completed, loopNode.State);
+        Assert.Contains("3 items", loopNode.Result ?? "");
     }
 }

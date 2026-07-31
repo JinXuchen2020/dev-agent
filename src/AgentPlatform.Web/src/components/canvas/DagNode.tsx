@@ -8,6 +8,13 @@ import {
   BookOutlined,
   ToolOutlined,
   CodeOutlined,
+  GlobalOutlined,
+  BranchesOutlined,
+  RetweetOutlined,
+  TagsOutlined,
+  ApartmentOutlined,
+  ClockCircleOutlined,
+  FormOutlined,
 } from '@ant-design/icons';
 import type { ReactNode } from 'react';
 import { StepType } from '../../types';
@@ -23,6 +30,13 @@ const TYPE_ICON: Record<StepType, ReactNode> = {
   [StepType.Knowledge]: <BookOutlined />,
   [StepType.Tool]: <ToolOutlined />,
   [StepType.Code]: <CodeOutlined />,
+  [StepType.Http]: <GlobalOutlined />,
+  [StepType.Condition]: <BranchesOutlined />,
+  [StepType.Loop]: <RetweetOutlined />,
+  [StepType.Variable]: <TagsOutlined />,
+  [StepType.SubWorkflow]: <ApartmentOutlined />,
+  [StepType.Delay]: <ClockCircleOutlined />,
+  [StepType.UserInput]: <FormOutlined />,
 };
 
 const STATE_COLOR: Record<string, string> = {

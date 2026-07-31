@@ -209,7 +209,7 @@
 - **设计文档骨架均已生成**（features/node-bundle.md / workflow-triggers.md / publish-api-mcp.md / template-market.md / execution-trace-eval.md / workflow-debugger.md / enterprise-enhancements.md）；各 feature 实现前须先锁定其 §6 决策，不应自创需求。
 
 
-### F20 · 节点全家桶（Workflow 节点类型扩展）  [P1]  open  ⚠️高风险（破坏性 StepType 枚举扩展 + HITL 审批门 + 运行时 executor）
+### F20 · 节点全家桶（Workflow 节点类型扩展）  [P1]  doing  ⚠️高风险（破坏性 StepType 枚举扩展 + HITL 审批门 + 运行时 executor + 编排器分支/循环引擎）
 - 设计文档：`features/node-bundle.md`（已建骨架，§6 决策待锁定）
 - 目标：补齐 DAG 节点原语——HTTP / Condition / Loop / Variable / SubWorkflow / Delay / UserInput(HITL)，前端调色板+配置面板+后端 executor（Tool/Code/Knowledge 已在 F5 落地）。纯增量节点类型，无新聚合。
 - 风险：🔴 StepType 枚举破坏性扩展（全仓 switch 回归）+ HITL 暂停/恢复 + 表达式引擎选型。实现前须锁定 §6（S1 枚举命名 / S3 HITL 方案 / S2 表达式引擎）。

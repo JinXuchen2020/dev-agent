@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Application.Diagnostics;
 using AgentPlatform.Application.Routing;
@@ -59,14 +60,68 @@ internal sealed class SequentialOrchestrator
             ? DagExecutionOrder(workflow)
             : workflow.Steps.Cast<IWorkflowExecutable>().ToList();
 
+        // F20：单次运行维护单一共享 Blackboard，使 Variable/Loop 跨节点读写生效。
+        var blackboard = Blackboard.Empty;
+
+        // F20：Loop body 节点仅由各自 Loop 节点内联执行，主线性遍历需跳过（避免脱离循环上下文重复执行）。
+        var loopBodyIds = new HashSet<Guid>();
+        foreach (var n in executionOrder)
+        {
+            if (n.Type == StepType.Loop && n is WorkflowNode ln)
+            {
+                foreach (var name in ParseLoopConfig(ln.ConfigJson).BodyNodeNames)
+                {
+                    var bn = workflow.Nodes.FirstOrDefault(x =>
+                        x.Name == name && x.Type is not (StepType.Start or StepType.End));
+                    if (bn is not null) loopBodyIds.Add(bn.Id);
+                }
+            }
+        }
+
+        // F20：条件分支跳过集合（非选中分支的可达子图，排除与选中分支/join 重叠的节点）。
+        var skip = new HashSet<Guid>();
+
+        // 续跑场景：已完成的 Condition 节点需重算 skip（暂停前的分支决策在内存中已丢失）。
+        foreach (var n in executionOrder)
+        {
+            if (n.Type == StepType.Condition && n.State == WorkflowState.Completed
+                && (string.Equals(n.Result, "true", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(n.Result, "false", StringComparison.OrdinalIgnoreCase)))
+            {
+                ApplyBranchSkip(workflow, n.Id, n.Result!, skip);
+            }
+        }
+
         foreach (var node in executionOrder)
         {
             if (node.State == WorkflowState.Completed)
                 continue;
 
+            // F20：Loop body 节点由 Loop 节点内联驱动，主线性遍历跳过。
+            if (loopBodyIds.Contains(node.Id))
+            {
+                _logger.LogDebug("跳过 Loop body 节点 {NodeName}（由 Loop 节点内联执行）", node.Name);
+                continue;
+            }
+
+            // F20：非选中分支的节点跳过（保持 Pending；工作流完成判定在循环结束后统一处理）。
+            if (skip.Contains(node.Id))
+            {
+                _logger.LogDebug("跳过非选中分支节点 {NodeName}", node.Name);
+                continue;
+            }
+
             ct.ThrowIfCancellationRequested();
 
-            var ctx = await BuildWorkflowContext(workflow, node, executionOrder, ct);
+            // F20：Loop 节点在编排器内联执行 body（共享 Blackboard 注入 itemVariable），
+            // 不经由独立执行器（类比 Start/End 这类结构型节点，仅承载语义、不产生自身 artifact 副作用）。
+            if (node.Type == StepType.Loop && node is WorkflowNode loopNode)
+            {
+                await RunLoopBodyAsync(workflow, loopNode, executionOrder, blackboard, skip, ct);
+                continue;
+            }
+
+            var ctx = await BuildWorkflowContext(workflow, node, executionOrder, blackboard, ct);
             var result = await ExecuteStepWithRetryAsync(workflow, node, ctx, ct);
 
             switch (result.Outcome)
@@ -79,14 +134,9 @@ internal sealed class SequentialOrchestrator
                     await _eventBus.PublishAsync(
                         new StepCompleted(workflow.Id, node.Id, node.Name, node.Order, result.Output, result.Duration), ct);
 
-                    if (node == executionOrder[^1])
-                    {
-                        workflow.Complete();
-                        _repository.Update(workflow);
-                        await _unitOfWork.SaveChangesAsync(ct);
-                        await _eventBus.PublishAsync(
-                            new WorkflowCompleted(workflow.Id, workflow.Name, workflow.Nodes.Count, workflow.TenantId), ct);
-                    }
+                    // F20：Condition 分支——执行成功后按结果计算非选中分支的 skip 集合。
+                    if (node.Type == StepType.Condition)
+                        ApplyBranchSkip(workflow, node.Id, node.Result!, skip);
 
                     // Reflect node state in the legacy Steps projection for explicit DAGs.
                     if (workflow.IsDag) workflow.SyncStepsFromGraph();
@@ -116,6 +166,17 @@ internal sealed class SequentialOrchestrator
                         workflow.Id, node.Name);
                     return;
             }
+        }
+
+        // F20：完成判定——循环结束后若仍 Running（所有非跳过节点均已执行），标记 Completed。
+        // 此前「最后一个节点即完成」的逻辑在分支跳过末端节点时会漏判，故改为循环后统一判定。
+        if (workflow.CurrentState == WorkflowState.Running)
+        {
+            workflow.Complete();
+            _repository.Update(workflow);
+            await _unitOfWork.SaveChangesAsync(ct);
+            await _eventBus.PublishAsync(
+                new WorkflowCompleted(workflow.Id, workflow.Name, workflow.Nodes.Count, workflow.TenantId), ct);
         }
     }
 
@@ -241,10 +302,9 @@ internal sealed class SequentialOrchestrator
     }
 
     private async Task<WorkflowContext> BuildWorkflowContext(
-        Workflow workflow, IWorkflowExecutable? currentStep, IReadOnlyList<IWorkflowExecutable> allSteps, CancellationToken ct)
+        Workflow workflow, IWorkflowExecutable? currentStep, IReadOnlyList<IWorkflowExecutable> allSteps, Blackboard blackboard, CancellationToken ct)
     {
         var artifacts = new Dictionary<string, StepArtifact>();
-        var blackboard = Blackboard.Empty;
 
         foreach (var step in allSteps.Where(s => s.State == WorkflowState.Completed && !string.IsNullOrEmpty(s.Result)))
         {
@@ -356,4 +416,167 @@ internal sealed class SequentialOrchestrator
             return value.StartsWith(pattern[..^1], StringComparison.OrdinalIgnoreCase);
         return string.Equals(pattern, value, StringComparison.Ordinal);
     }
+
+    // ──────────── F20 编排器引擎辅助（分支 / 循环） ────────────
+
+    /// <summary>
+    /// 按 Condition 节点的选中分支结果，将「非选中分支的可达子图」加入 skip 集合，
+    /// 但排除同时可由选中分支到达的 join 节点（避免误跳汇合点）。幂等。
+    /// </summary>
+    private static void ApplyBranchSkip(Workflow workflow, Guid conditionId, string branch, HashSet<Guid> skip)
+    {
+        var outEdges = workflow.Edges.Where(e => e.SourceNodeId == conditionId).ToList();
+        if (outEdges.Count < 2) return;
+
+        var selected = outEdges.FirstOrDefault(e =>
+            string.Equals(e.Label, branch, StringComparison.OrdinalIgnoreCase));
+        var nonSelected = outEdges.FirstOrDefault(e =>
+            !string.Equals(e.Label, branch, StringComparison.OrdinalIgnoreCase));
+        if (selected is null || nonSelected is null) return;
+
+        var reachableNonSelected = ReachableFrom(workflow, nonSelected.TargetNodeId);
+        var reachableSelected = ReachableFrom(workflow, selected.TargetNodeId);
+        foreach (var id in reachableNonSelected)
+            if (!reachableSelected.Contains(id)) skip.Add(id);
+    }
+
+    /// <summary>从 <paramref name="startId"/> 出发、沿有向边可达的全部节点集合（含起点）。</summary>
+    private static HashSet<Guid> ReachableFrom(Workflow workflow, Guid startId)
+    {
+        var reachable = new HashSet<Guid> { startId };
+        var q = new Queue<Guid>();
+        q.Enqueue(startId);
+        while (q.Count > 0)
+        {
+            var cur = q.Dequeue();
+            foreach (var next in workflow.Edges.Where(e => e.SourceNodeId == cur).Select(e => e.TargetNodeId))
+                if (reachable.Add(next)) q.Enqueue(next);
+        }
+        return reachable;
+    }
+
+    /// <summary>
+    /// 内联执行 Loop 节点的 body：对每个 item 将 <c>itemVariable</c> 注入共享 Blackboard，
+    /// 然后顺序执行 body 子图节点（共享可变 Blackboard 携带每轮 item 值）。body 节点在线性主循环中被标 Completed 后跳过，避免重复执行。
+    /// </summary>
+    private async Task RunLoopBodyAsync(
+        Workflow workflow, WorkflowNode loopNode, IReadOnlyList<IWorkflowExecutable> executionOrder,
+        Blackboard blackboard, HashSet<Guid> skip, CancellationToken ct)
+    {
+        var config = ParseLoopConfig(loopNode.ConfigJson);
+        var loopCtx = await BuildWorkflowContext(workflow, loopNode, executionOrder, blackboard, ct);
+        var items = ResolveLoopItems(loopCtx, config.ItemsSource);
+
+        var completedBodySteps = 0;
+        foreach (var item in items)
+        {
+            if (!string.IsNullOrWhiteSpace(config.ItemVariable))
+                blackboard.Set(config.ItemVariable, item);
+
+            foreach (var bodyName in config.BodyNodeNames)
+            {
+                var bodyNode = workflow.Nodes.FirstOrDefault(n =>
+                    n.Name == bodyName && n.Type is not (StepType.Start or StepType.End));
+                if (bodyNode is null || bodyNode == loopNode) continue;
+                if (skip.Contains(bodyNode.Id)) continue;
+                // F20：每个迭代都要重新执行 body（清除上一轮的 Completed 状态与结果），
+                // 使 body 真正按 item 逐项运行，而非仅在首个 item 跑一次。
+                bodyNode.Reset();
+
+                var bodyCtx = await BuildWorkflowContext(workflow, bodyNode, executionOrder, blackboard, ct);
+                var result = await ExecuteStepWithRetryAsync(workflow, bodyNode, bodyCtx, ct);
+
+                switch (result.Outcome)
+                {
+                    case StepOutcome.Success:
+                        bodyNode.SetResult(result.Output ?? "");
+                        workflow.SetState(WorkflowState.Running);
+                        _repository.Update(workflow);
+                        await _unitOfWork.SaveChangesAsync(ct);
+                        await _eventBus.PublishAsync(new StepCompleted(
+                            workflow.Id, bodyNode.Id, bodyNode.Name, bodyNode.Order, result.Output, result.Duration), ct);
+                        completedBodySteps++;
+                        break;
+
+                    case StepOutcome.NeedsIntervention:
+                        workflow.SetState(WorkflowState.Paused);
+                        _repository.Update(workflow);
+                        await _unitOfWork.SaveChangesAsync(ct);
+                        _logger.LogWarning("Loop body 节点 {NodeName} 请求人工干预，工作流暂停", bodyNode.Name);
+                        loopNode.SetResult($"loop: 在迭代 {completedBodySteps} 处因 body 节点 {bodyNode.Name} 暂停");
+                        _repository.Update(workflow);
+                        await _unitOfWork.SaveChangesAsync(ct);
+                        return;
+
+                    default: // FailedRetry / FailedRollback
+                        await _eventBus.PublishAsync(new StepFailed(
+                            workflow.Id, bodyNode.Id, bodyNode.Name, bodyNode.Order,
+                            result.ErrorMessage ?? "Loop body 失败", result.Duration), ct);
+                        await RollbackCompletedStepsAsync(workflow, bodyNode.Order, bodyNode.Name,
+                            result.ErrorMessage ?? "Loop body 失败", ct);
+                        return;
+                }
+            }
+        }
+
+        loopNode.SetResult($"loop completed: {items.Count} items, {completedBodySteps} body-steps");
+        workflow.SetState(WorkflowState.Running);
+        _repository.Update(workflow);
+        await _unitOfWork.SaveChangesAsync(ct);
+        await _eventBus.PublishAsync(new StepCompleted(
+            workflow.Id, loopNode.Id, loopNode.Name, loopNode.Order, loopNode.Result, TimeSpan.Zero), ct);
+    }
+
+    /// <summary>解析 Loop 节点配置（<c>itemsSource</c> / <c>itemVariable</c> / <c>bodyNodeNames</c>）。</summary>
+    private static LoopNodeConfig ParseLoopConfig(string? configJson)
+    {
+        if (string.IsNullOrWhiteSpace(configJson))
+            return new LoopNodeConfig(null, null, []);
+
+        try
+        {
+            using var doc = JsonDocument.Parse(configJson);
+            var root = doc.RootElement;
+            string? itemsSource = root.TryGetProperty("itemsSource", out var s) && s.ValueKind == JsonValueKind.String
+                ? s.GetString() : null;
+            string? itemVariable = root.TryGetProperty("itemVariable", out var v) && v.ValueKind == JsonValueKind.String
+                ? v.GetString() : null;
+            var body = new List<string>();
+            if (root.TryGetProperty("bodyNodeNames", out var b) && b.ValueKind == JsonValueKind.Array)
+                foreach (var el in b.EnumerateArray())
+                    if (el.ValueKind == JsonValueKind.String) body.Add(el.GetString()!);
+            return new LoopNodeConfig(itemsSource, itemVariable, body);
+        }
+        catch (JsonException)
+        {
+            return new LoopNodeConfig(null, null, []);
+        }
+    }
+
+    /// <summary>
+    /// 解析循环项集合：优先取 Blackboard / Artifact 中同名的 JSON 数组，否则将
+    /// <paramref name="itemsSource"/> 作为字面量 JSON 数组解析。返回每项序列化后的字符串。
+    /// </summary>
+    private static IReadOnlyList<string> ResolveLoopItems(WorkflowContext ctx, string? itemsSource)
+    {
+        if (string.IsNullOrWhiteSpace(itemsSource)) return [];
+        var raw = ctx.Blackboard.Get(itemsSource)
+                  ?? (ctx.Artifacts.TryGetValue(itemsSource, out var a) ? a.Content : null)
+                  ?? itemsSource;
+        try
+        {
+            using var doc = JsonDocument.Parse(raw);
+            if (doc.RootElement.ValueKind == JsonValueKind.Array)
+            {
+                var list = new List<string>();
+                foreach (var el in doc.RootElement.EnumerateArray())
+                    list.Add(el.ValueKind == JsonValueKind.String ? el.GetString()! : el.GetRawText());
+                return list;
+            }
+        }
+        catch (JsonException) { }
+        return [];
+    }
+
+    private sealed record LoopNodeConfig(string? ItemsSource, string? ItemVariable, IReadOnlyList<string> BodyNodeNames);
 }

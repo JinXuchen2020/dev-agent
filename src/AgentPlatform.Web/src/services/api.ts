@@ -21,6 +21,7 @@ import type {
   WorkflowVersionDetail,
   WorkflowExport,
   ImportWorkflowRequest,
+  ApprovalDto,
   KnowledgeBase,
   KnowledgeDocument,
   AuthUser,
@@ -165,6 +166,24 @@ export const updateWorkflow = (
 ) => api.put<WorkflowDetail>(`/workflows/${id}`, data).then((r) => r.data);
 export const runExistingWorkflow = (id: string, preset?: string) =>
   api.post<WorkflowDetail>(`/workflows/${id}/run`, preset ? { preset } : {}).then((r) => r.data);
+
+// F20 S3 — HITL 人工审批门：列出某工作流全部审批记录（含待处理），解析（批准/拒绝）单个审批门。
+// 路径不含 execId：审批按 workflowId 归并、由 approvalId 唯一定位（见 WorkflowsController）。
+export const listWorkflowApprovals = (workflowId: string) =>
+  api.get<ApprovalDto[]>(`/workflows/${workflowId}/approvals`).then((r) => r.data ?? []);
+
+export const resolveApproval = (
+  workflowId: string,
+  approvalId: string,
+  approved: boolean,
+  input?: string | null,
+) =>
+  api
+    .post<WorkflowDetail>(`/workflows/${workflowId}/approvals/${approvalId}/resolve`, {
+      approved,
+      input: input ?? null,
+    })
+    .then((r) => r.data);
 
 // P1: run a single node for debugging; returns the node's new state/result.
 export const runWorkflowNode = (id: string, nodeId: string) =>

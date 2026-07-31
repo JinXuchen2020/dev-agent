@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AgentPlatform.Domain.Abstractions;
 using AgentPlatform.Domain.Enums;
 
@@ -406,6 +407,82 @@ public sealed class Workflow : ITenantScoped, IAggregateRoot
             .ToList();
         if (duplicates.Count > 0)
             throw new WorkflowGraphException($"Duplicate node names: {string.Join(", ", duplicates)}.");
+
+        // ── F20 节点类型结构规则 ──
+        foreach (var node in nodes)
+        {
+            switch (node.Type)
+            {
+                case StepType.Condition:
+                    var condOut = edges.Where(e => e.SourceNodeId == node.Id).ToList();
+                    if (condOut.Count < 2)
+                        throw new WorkflowGraphException($"条件节点 '{node.Name}' 必须至少有两个出边（true/false 分支）。");
+                    var hasTrue = condOut.Any(e => string.Equals(e.Label, "true", StringComparison.OrdinalIgnoreCase));
+                    var hasFalse = condOut.Any(e => string.Equals(e.Label, "false", StringComparison.OrdinalIgnoreCase));
+                    if (!hasTrue || !hasFalse)
+                        throw new WorkflowGraphException($"条件节点 '{node.Name}' 的出边必须分别带 'true' 与 'false' 标签。");
+                    break;
+
+                case StepType.Loop:
+                    var loopBody = ParseLoopBodyNames(node.ConfigJson);
+                    if (loopBody.Count == 0)
+                        throw new WorkflowGraphException($"循环节点 '{node.Name}' 必须至少指定一个 body 节点（bodyNodeNames）。");
+                    var missing = loopBody.Where(name =>
+                        !nodes.Any(n => n.Name == name && n.Type is not (StepType.Start or StepType.End))).ToList();
+                    if (missing.Count > 0)
+                        throw new WorkflowGraphException($"循环节点 '{node.Name}' 引用的 body 节点不存在：{string.Join(", ", missing)}。");
+                    break;
+
+                case StepType.SubWorkflow:
+                    if (!TryParseSubWorkflowId(node.ConfigJson, out var subId) || subId == Guid.Empty)
+                        throw new WorkflowGraphException($"子工作流节点 '{node.Name}' 必须配置有效的 workflowId（GUID）。");
+                    break;
+
+                case StepType.UserInput:
+                    // 允许作为末端等待节点（可不带出边）；无强制结构约束。
+                    break;
+            }
+        }
+    }
+
+    /// <summary>从 Loop 节点配置解析 bodyNodeNames（F20 校验用）。</summary>
+    private static IReadOnlyList<string> ParseLoopBodyNames(string? configJson)
+    {
+        if (string.IsNullOrWhiteSpace(configJson)) return [];
+        try
+        {
+            using var doc = JsonDocument.Parse(configJson);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("bodyNodeNames", out var b) && b.ValueKind == JsonValueKind.Array)
+            {
+                var list = new List<string>();
+                foreach (var el in b.EnumerateArray())
+                    if (el.ValueKind == JsonValueKind.String) list.Add(el.GetString()!);
+                return list;
+            }
+        }
+        catch (JsonException) { }
+        return [];
+    }
+
+    /// <summary>从 SubWorkflow 节点配置安全解析 workflowId（F20 校验用）。</summary>
+    private static bool TryParseSubWorkflowId(string? configJson, out Guid id)
+    {
+        id = Guid.Empty;
+        if (string.IsNullOrWhiteSpace(configJson)) return false;
+        try
+        {
+            using var doc = JsonDocument.Parse(configJson);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("workflowId", out var w) && w.ValueKind == JsonValueKind.String
+                && Guid.TryParse(w.GetString(), out var gid))
+            {
+                id = gid;
+                return true;
+            }
+        }
+        catch (JsonException) { }
+        return false;
     }
 
     private List<WorkflowNode>? _chainedNodes;

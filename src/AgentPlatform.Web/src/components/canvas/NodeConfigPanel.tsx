@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Input, Select, Button, Typography, Form } from 'antd';
+import { Input, Select, Button, Typography, Form, InputNumber } from 'antd';
 import { DeleteOutlined } from '@ant-design/icons';
 import { useCanvasStore } from '../../stores/workflowCanvasStore';
 import { getAgents, getKnowledgeBases } from '../../services/api';
@@ -26,6 +26,13 @@ export default function NodeConfigPanel() {
     [StepType.Knowledge]: t('canvas.nodeType.knowledge'),
     [StepType.Tool]: t('canvas.nodeType.tool'),
     [StepType.Code]: t('canvas.nodeType.code'),
+    [StepType.Http]: t('canvas.nodeType.http'),
+    [StepType.Condition]: t('canvas.nodeType.condition'),
+    [StepType.Loop]: t('canvas.nodeType.loop'),
+    [StepType.Variable]: t('canvas.nodeType.variable'),
+    [StepType.SubWorkflow]: t('canvas.nodeType.subWorkflow'),
+    [StepType.Delay]: t('canvas.nodeType.delay'),
+    [StepType.UserInput]: t('canvas.nodeType.userInput'),
   };
   const node = useCanvasStore((s) => s.nodes.find((n) => n.id === s.selectedNodeId));
   const setNodeData = useCanvasStore((s) => s.setNodeData);
@@ -33,6 +40,7 @@ export default function NodeConfigPanel() {
   const snapshot = useCanvasStore((s) => s.snapshot);
   const initialContext = useCanvasStore((s) => s.initialContext);
   const setInitialContext = useCanvasStore((s) => s.setInitialContext);
+  const nodes = useCanvasStore((s) => s.nodes);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
 
@@ -221,6 +229,188 @@ export default function NodeConfigPanel() {
               onChange={(e) => patchConfig({ summary: e.target.value })}
             />
           </Form.Item>
+        )}
+
+        {type === StepType.Http && (
+          <>
+            <Form.Item label={t('canvas.httpMethod')} tooltip={t('canvas.httpMethodTooltip')}>
+              <Select
+                value={config?.method ?? 'GET'}
+                onFocus={snapshot}
+                onChange={(value) => patchConfig({ method: value })}
+                options={['GET', 'POST', 'PUT', 'DELETE'].map((m) => ({ value: m, label: m }))}
+              />
+            </Form.Item>
+            <Form.Item label={t('canvas.httpUrl')} tooltip={t('canvas.httpUrlTooltip')}>
+              <Input
+                value={config?.url ?? ''}
+                onFocus={snapshot}
+                onChange={(e) => patchConfig({ url: e.target.value })}
+                placeholder="https://api.example.com/v1/resource"
+              />
+            </Form.Item>
+            <Form.Item label={t('canvas.httpHeaders')} tooltip={t('canvas.httpHeadersTooltip')}>
+              <Input.TextArea
+                rows={3}
+                value={config?.headers ?? ''}
+                onFocus={snapshot}
+                onChange={(e) => patchConfig({ headers: e.target.value })}
+                placeholder={'{\n  "Authorization": "Bearer {{token}}"\n}'}
+              />
+            </Form.Item>
+            <Form.Item label={t('canvas.httpBody')} tooltip={t('canvas.httpBodyTooltip')}>
+              <Input.TextArea
+                rows={3}
+                value={config?.bodyTemplate ?? ''}
+                onFocus={snapshot}
+                onChange={(e) => patchConfig({ bodyTemplate: e.target.value })}
+                placeholder='{"q":"{{artifacts}}"}'
+              />
+            </Form.Item>
+          </>
+        )}
+
+        {type === StepType.Condition && (
+          <Form.Item label={t('canvas.condExpr')} tooltip={t('canvas.condExprTooltip')}>
+            <Input.TextArea
+              rows={3}
+              value={config?.expression ?? ''}
+              onFocus={snapshot}
+              onChange={(e) => patchConfig({ expression: e.target.value })}
+              placeholder="artifacts.score >= 80 && blackboard.flag === 'ok'"
+            />
+          </Form.Item>
+        )}
+
+        {type === StepType.Loop && (
+          <>
+            <Form.Item label={t('canvas.loopItems')} tooltip={t('canvas.loopItemsTooltip')}>
+              <Input
+                value={config?.itemsSource ?? ''}
+                onFocus={snapshot}
+                onChange={(e) => patchConfig({ itemsSource: e.target.value })}
+                placeholder='["a","b","c"] 或 blackboard.items'
+              />
+            </Form.Item>
+            <Form.Item label={t('canvas.loopItemVar')} tooltip={t('canvas.loopItemVarTooltip')}>
+              <Input
+                value={config?.itemVariable ?? ''}
+                onFocus={snapshot}
+                onChange={(e) => patchConfig({ itemVariable: e.target.value })}
+                placeholder="item"
+              />
+            </Form.Item>
+            <Form.Item label={t('canvas.loopBody')} tooltip={t('canvas.loopBodyTooltip')}>
+              <Select
+                mode="multiple"
+                allowClear
+                placeholder={t('canvas.loopBodyPlaceholder')}
+                value={config?.bodyNodeNames ?? []}
+                onFocus={snapshot}
+                onChange={(value) => patchConfig({ bodyNodeNames: value })}
+                options={nodes
+                  .filter(
+                    (n) =>
+                      n.id !== node.id &&
+                      n.data.stepType !== StepType.Start &&
+                      n.data.stepType !== StepType.End &&
+                      n.data.stepType !== StepType.Loop,
+                  )
+                  .map((n) => ({ value: n.data.label, label: n.data.label }))}
+              />
+            </Form.Item>
+          </>
+        )}
+
+        {type === StepType.Variable && (
+          <>
+            <Form.Item label={t('canvas.varMode')} tooltip={t('canvas.varModeTooltip')}>
+              <Select
+                value={config?.mode ?? 'set'}
+                onFocus={snapshot}
+                onChange={(value) => patchConfig({ mode: value })}
+                options={[
+                  { value: 'set', label: t('canvas.varModeSet') },
+                  { value: 'get', label: t('canvas.varModeGet') },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item label={t('canvas.varName')} tooltip={t('canvas.varNameTooltip')}>
+              <Input
+                value={config?.name ?? ''}
+                onFocus={snapshot}
+                onChange={(e) => patchConfig({ name: e.target.value })}
+                placeholder="token"
+              />
+            </Form.Item>
+            {config?.mode !== 'get' && (
+              <Form.Item label={t('canvas.varValue')} tooltip={t('canvas.varValueTooltip')}>
+                <Input
+                  value={config?.value ?? ''}
+                  onFocus={snapshot}
+                  onChange={(e) => patchConfig({ value: e.target.value })}
+                  placeholder="{{artifacts}}"
+                />
+              </Form.Item>
+            )}
+          </>
+        )}
+
+        {type === StepType.SubWorkflow && (
+          <>
+            <Form.Item label={t('canvas.subWfId')} tooltip={t('canvas.subWfIdTooltip')}>
+              <Input
+                value={config?.workflowId ?? ''}
+                onFocus={snapshot}
+                onChange={(e) => patchConfig({ workflowId: e.target.value })}
+                placeholder="目标工作流 GUID"
+              />
+            </Form.Item>
+            <Form.Item label={t('canvas.subWfInput')} tooltip={t('canvas.subWfInputTooltip')}>
+              <Input.TextArea
+                rows={3}
+                value={config?.inputMapping ?? ''}
+                onFocus={snapshot}
+                onChange={(e) => patchConfig({ inputMapping: e.target.value })}
+                placeholder='{"topic":"{{artifacts}}"}'
+              />
+            </Form.Item>
+          </>
+        )}
+
+        {type === StepType.Delay && (
+          <Form.Item label={t('canvas.delayMs')} tooltip={t('canvas.delayMsTooltip')}>
+            <InputNumber
+              min={0}
+              max={30000}
+              style={{ width: '100%' }}
+              value={config?.durationMs ?? 1000}
+              onFocus={snapshot}
+              onChange={(value) => patchConfig({ durationMs: value ?? 0 })}
+            />
+          </Form.Item>
+        )}
+
+        {type === StepType.UserInput && (
+          <>
+            <Form.Item label={t('canvas.hitlPrompt')} tooltip={t('canvas.hitlPromptTooltip')}>
+              <Input.TextArea
+                rows={3}
+                value={config?.prompt ?? ''}
+                onFocus={snapshot}
+                onChange={(e) => patchConfig({ prompt: e.target.value })}
+                placeholder={t('canvas.hitlPromptPlaceholder')}
+              />
+            </Form.Item>
+            <Form.Item label={t('canvas.hitlRole')} tooltip={t('canvas.hitlRoleTooltip')}>
+              <Input
+                value={config?.approvalRole ?? ''}
+                onFocus={snapshot}
+                onChange={(e) => patchConfig({ approvalRole: e.target.value })}
+                placeholder="admin"
+              />
+            </Form.Item>
+          </>
         )}
 
         {(node.data.state || node.data.result) && (
