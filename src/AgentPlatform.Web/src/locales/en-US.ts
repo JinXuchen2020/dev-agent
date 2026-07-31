@@ -68,6 +68,7 @@ export const enUS: Resources = {
     success: 'Signed in',
     failedWrong: 'Wrong email or password',
     failedOther: 'Sign in failed. Make sure the backend is running and supports login',
+    failedEmpty: 'Please enter your email and password (demo password: Admin@123456)',
     demoSuccess: 'Using local demo session (no real auth)',
   },
   layout: {

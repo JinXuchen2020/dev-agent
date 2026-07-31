@@ -66,6 +66,7 @@ export const zhCN = {
     success: '登录成功',
     failedWrong: '邮箱或密码错误',
     failedOther: '登录失败，请确认后端已启动并支持用户登录',
+    failedEmpty: '请输入邮箱和密码（演示默认密码 Admin@123456）',
     demoSuccess: '已使用本地演示会话（无真实鉴权）',
   },
   layout: {
