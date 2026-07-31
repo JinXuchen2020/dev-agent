@@ -5,6 +5,7 @@ using AgentPlatform.Application.Workflows.Commands.RunWorkflow;
 using AgentPlatform.Application.Workflows.Commands.UpdateWorkflow;
 using AgentPlatform.Application.Workflows.Queries.GetWorkflow;
 using AgentPlatform.Application.Workflows.Queries.ListWorkflows;
+using AgentPlatform.Application.Workflows.Versioning;
 using AgentPlatform.Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -153,6 +154,114 @@ public sealed class WorkflowsController : ControllerBase
         var result = await _mediator.Send(command, ct);
         return result == null ? NotFound() : Ok(result);
     }
+
+    /// <summary>
+    /// Snapshots the current definition of a workflow as a new version.
+    /// </summary>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpPost("{id:guid}/versions")]
+    public async Task<IActionResult> CreateVersion(
+        Guid id,
+        [FromBody] CreateVersionRequest? request,
+        CancellationToken ct = default)
+    {
+        var command = new CreateWorkflowVersionCommand(id, _tenant.GetTenantId(), request?.Note);
+        var result = await _mediator.Send(command, ct);
+        return result == null ? NotFound() : Ok(result);
+    }
+
+    /// <summary>
+    /// Lists versions of a workflow ordered by version number descending.
+    /// </summary>
+    [HttpGet("{id:guid}/versions")]
+    public async Task<IActionResult> ListVersions(
+        Guid id,
+        [FromQuery] int skip = 0,
+        [FromQuery] int take = 20,
+        CancellationToken ct = default)
+    {
+        if (take < 1 || take > 100)
+            return BadRequest("take must be between 1 and 100.");
+
+        var query = new ListWorkflowVersionsQuery(id, skip, take);
+        var result = await _mediator.Send(query, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Retrieves a single workflow version with its captured graph.
+    /// </summary>
+    [HttpGet("{id:guid}/versions/{versionId:guid}")]
+    public async Task<IActionResult> GetVersion(
+        Guid id,
+        Guid versionId,
+        CancellationToken ct = default)
+    {
+        var query = new GetWorkflowVersionQuery(id, versionId);
+        var result = await _mediator.Send(query, ct);
+        return result == null ? NotFound() : Ok(result);
+    }
+
+    /// <summary>
+    /// Rolls a workflow back to a saved version.
+    /// </summary>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpPost("{id:guid}/versions/{versionId:guid}/restore")]
+    public async Task<IActionResult> RestoreVersion(
+        Guid id,
+        Guid versionId,
+        CancellationToken ct = default)
+    {
+        var command = new RestoreWorkflowVersionCommand(id, versionId, _tenant.GetTenantId());
+        var result = await _mediator.Send(command, ct);
+        return result == null ? NotFound() : Ok(result);
+    }
+
+    /// <summary>
+    /// Deletes a workflow version.
+    /// </summary>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpDelete("{id:guid}/versions/{versionId:guid}")]
+    public async Task<IActionResult> DeleteVersion(
+        Guid id,
+        Guid versionId,
+        CancellationToken ct = default)
+    {
+        var command = new DeleteWorkflowVersionCommand(id, versionId, _tenant.GetTenantId());
+        await _mediator.Send(command, ct);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Exports the current definition of a workflow as JSON.
+    /// </summary>
+    [HttpGet("{id:guid}/export")]
+    public async Task<IActionResult> ExportWorkflow(
+        Guid id,
+        CancellationToken ct = default)
+    {
+        var query = new ExportWorkflowQuery(id);
+        var result = await _mediator.Send(query, ct);
+        return result == null ? NotFound() : Ok(result);
+    }
+
+    /// <summary>
+    /// Imports a workflow definition as a new workflow.
+    /// </summary>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpPost("import")]
+    public async Task<IActionResult> ImportWorkflow(
+        [FromBody] ImportWorkflowRequest? request,
+        CancellationToken ct = default)
+    {
+        if (request is null)
+            return BadRequest("Request body is required.");
+
+        var command = new ImportWorkflowCommand(
+            request.Name, request.InitialContext, request.Nodes, request.Edges, _tenant.GetTenantId());
+        var result = await _mediator.Send(command, ct);
+        return Ok(result);
+    }
 }
 
 /// <summary>
@@ -180,4 +289,9 @@ public sealed record UpdateWorkflowRequest(
 /// </summary>
 public sealed record RunExistingWorkflowRequest(
     OrchestrationPreset? Preset = null);
+
+/// <summary>
+/// Request model for creating a workflow version snapshot.
+/// </summary>
+public sealed record CreateVersionRequest(string? Note = null);
 

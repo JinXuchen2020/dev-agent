@@ -20,6 +20,10 @@ const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
+    if (!email.trim() || !password) {
+      message.error(t('login.failedEmpty'));
+      return;
+    }
     setLoading(true);
     try {
       const res = await loginRequest({ email, password });
@@ -30,6 +34,8 @@ const LoginPage: React.FC = () => {
       const status = (e as { response?: { status?: number } })?.response?.status;
       if (status === 401) {
         message.error(t('login.failedWrong'));
+      } else if (status === 400) {
+        message.error(t('login.failedEmpty'));
       } else {
         message.error(t('login.failedOther'));
       }

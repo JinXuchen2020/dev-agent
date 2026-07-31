@@ -111,6 +111,15 @@ public sealed class WorkflowNode : IWorkflowExecutable
         UpdatedAt = DateTime.UtcNow;
     }
 
+    /// <summary>将节点重置为执行前状态（Pending，清除结果与错误），供工作流重跑。</summary>
+    public void Reset()
+    {
+        State = WorkflowState.Pending;
+        Result = null;
+        ErrorDetail = null;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     /// <summary>设置结果并将节点标记为已完成。</summary>
     public void SetResult(string result)
     {

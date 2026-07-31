@@ -44,7 +44,6 @@ const AppLayout: React.FC = () => {
     { key: '/', icon: <DashboardOutlined />, label: t('nav.dashboard') },
     { key: '/agents', icon: <RobotOutlined />, label: t('nav.agents') },
     { key: '/workflows', icon: <ApartmentOutlined />, label: t('nav.workflows') },
-    { key: '/workflows/new', icon: <ApartmentOutlined />, label: t('nav.workflowEditor') },
     { key: '/agent-roles', icon: <TeamOutlined />, label: t('nav.agentRoles') },
     { key: '/agent-configurations', icon: <SettingOutlined />, label: t('nav.configurations') },
     { key: '/credentials', icon: <KeyOutlined />, label: t('nav.credentials') },
@@ -110,7 +109,7 @@ const AppLayout: React.FC = () => {
         </div>
         <Menu
           mode="inline"
-          selectedKeys={[location.pathname]}
+          selectedKeys={[location.pathname.startsWith('/workflows') ? '/workflows' : location.pathname]}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
           style={{ borderInlineEnd: 'none' }}

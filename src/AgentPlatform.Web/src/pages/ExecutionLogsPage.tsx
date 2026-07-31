@@ -45,7 +45,7 @@ const ExecutionLogsPage: React.FC = () => {
     return (
       <Card title={log.workflowName ?? log.id}>
         <Space direction="vertical" size={6} style={{ width: '100%' }}>
-          <Tag color={status.color}>{status.label}</Tag>
+          <Tag color={status.color}>{t(status.label)}</Tag>
           <span style={{ color: colors.textMuted, fontSize: 13 }}>
             {t('pages.executionLogs.colTotalSteps')}: {log.totalSteps}
           </span>
@@ -82,7 +82,7 @@ const ExecutionLogsPage: React.FC = () => {
             setStatusFilter(v ?? undefined);
             setPage(1);
           }}
-          options={WORKFLOW_STATUS_FILTER_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+          options={WORKFLOW_STATUS_FILTER_OPTIONS.map((o) => ({ value: o.value, label: t(o.label) }))}
         />
       </Space>
       <EntityCardGrid

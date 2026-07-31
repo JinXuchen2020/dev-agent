@@ -36,6 +36,16 @@ internal sealed class RunExistingWorkflowCommandHandler
         if (wf.CurrentState is WorkflowState.Running)
             throw new WorkflowConflictException($"Workflow '{wf.Id}' is already running.");
 
+        // Re-run semantics: if the workflow already finished (Completed/Failed/RolledBack)
+        // or was paused, restart it from a clean state. A still-Pending workflow (e.g. a
+        // freshly edited draft) needs no reset, and a Running one is rejected above.
+        // RunAsync only accepts Pending/Running, so reset any terminal/paused state first.
+        if (wf.CurrentState is not (WorkflowState.Pending or WorkflowState.Running))
+        {
+            wf.Reset();
+            _repo.Update(wf);
+        }
+
         // The orchestration primitive handles per-step persistence internally.
         var result = await _primitive.RunAsync(wf, request.Preset, ct);
 

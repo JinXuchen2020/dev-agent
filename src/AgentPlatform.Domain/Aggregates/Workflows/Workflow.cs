@@ -109,6 +109,21 @@ public sealed class Workflow : ITenantScoped, IAggregateRoot
         UpdatedAt = DateTime.UtcNow;
     }
 
+    /// <summary>
+    /// 将工作流重置为执行前状态，以便重跑：状态回到 <see cref="WorkflowState.Pending"/>，
+    /// 并清空所有节点与遗留步骤的结果和错误。供「重跑已有工作流」在终态/暂停态时调用——
+    /// <see cref="IOrchestrationPrimitive.RunAsync"/> 仅接受 Pending/Running，重跑必须从干净状态开始。
+    /// </summary>
+    public void Reset()
+    {
+        CurrentState = WorkflowState.Pending;
+        foreach (var node in _nodes)
+            node.Reset();
+        foreach (var step in _steps)
+            step.Reset();
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     /// <summary>Updates the shared context JSON.</summary>
     public void UpdateContext(string context)
     {

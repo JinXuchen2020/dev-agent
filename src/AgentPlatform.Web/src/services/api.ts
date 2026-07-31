@@ -17,6 +17,10 @@ import type {
   WorkflowNodeRequest,
   WorkflowEdgeRequest,
   WorkflowNodeRunResult,
+  WorkflowVersionList,
+  WorkflowVersionDetail,
+  WorkflowExport,
+  ImportWorkflowRequest,
   KnowledgeBase,
   KnowledgeDocument,
   AuthUser,
@@ -167,6 +171,36 @@ export const runWorkflowNode = (id: string, nodeId: string) =>
   api
     .post<WorkflowNodeRunResult>(`/workflows/${id}/nodes/${nodeId}/run`)
     .then((r) => r.data);
+
+// F7 工作流版本管理 + 导入导出
+export const getWorkflowVersions = (workflowId: string, opts?: { skip?: number; take?: number }) =>
+  api
+    .get<WorkflowVersionList>(`/workflows/${workflowId}/versions`, { params: opts })
+    .then((r) => r.data);
+
+export const getWorkflowVersion = (workflowId: string, versionId: string) =>
+  api.get<WorkflowVersionDetail>(`/workflows/${workflowId}/versions/${versionId}`).then((r) => r.data);
+
+export const createWorkflowVersion = (workflowId: string, note?: string | null) =>
+  api
+    .post<WorkflowVersionDetail>(`/workflows/${workflowId}/versions`, { note: note ?? null })
+    .then((r) => r.data);
+
+export const restoreWorkflowVersion = (workflowId: string, versionId: string) =>
+  api
+    .post<WorkflowDetail>(`/workflows/${workflowId}/versions/${versionId}/restore`)
+    .then((r) => r.data);
+
+export const deleteWorkflowVersion = (workflowId: string, versionId: string) =>
+  api.delete<void>(`/workflows/${workflowId}/versions/${versionId}`).then(() => undefined);
+
+// 导出当前工作流定义为 JSON（WorkflowExport，可直接回灌 importWorkflow）。
+export const exportWorkflow = (workflowId: string) =>
+  api.get<WorkflowExport>(`/workflows/${workflowId}/export`).then((r) => r.data);
+
+// 从 JSON 定义导入为「新」工作流，返回新建的 WorkflowDetail。
+export const importWorkflow = (req: ImportWorkflowRequest) =>
+  api.post<WorkflowDetail>(`/workflows/import`, req).then((r) => r.data);
 
 // Execution Logs
 export const getExecutionLogs = (opts?: {

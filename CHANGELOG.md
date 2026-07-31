@@ -1,5 +1,25 @@
 # 变更日志
 
+## v2.13 (2026-07-30)
+
+### F7 · 工作流版本管理 + 导入导出 完成（feature-builder 全栈实跑，🟢低风险增量；program 子项①）
+
+把 DAG 画布 MVP 推向生产级平台能力的第一步：为工作流增加不可变版本快照、历史查看、回滚、删除，以及整工作流 JSON 导出/导入（导入恒为**新**工作流），全程多租户隔离 + 审计。
+
+**核心改动：**
+- **版本聚合**：新增 `WorkflowVersion`（Domain 聚合，`ITenantScoped` 不可变快照：Context + Nodes + Edges 序列化为 JSON）。EF 迁移 `20260730062346_AddWorkflowVersions`（`Id` `ValueGeneratedNever()` 避 GUID 陷阱；快照列 nvarchar(max)；非唯一 `(WorkflowId, VersionNumber)` 索引）。
+- **快照机制**：`WorkflowGraphSnapshot` 记录（`FromWorkflow`/`ToJson`/`FromJson`/`ToReplaceGraphArgs`）；快照以原节点 Id 作 TempId，`Workflow.ReplaceGraph` 内部重映射保留图拓扑；损坏 JSON→`InvalidOperationException`。
+- **7 个端点**：`POST {id}/versions`（存为版本，版本号=最新+1）、`GET {id}/versions`（分页列表）、`GET {id}/versions/{vid}`（详情）、`POST {id}/versions/{vid}/restore`（回滚，Running/Paused 抛 `WorkflowConflictException` 拒绝）、`DELETE {id}/versions/{vid}`（幂等删除）、`GET {id}/export`（导出 JSON）、`POST import`（导入为新工作流，经 `ReplaceGraph` 校验图结构）。写/回滚/删/导入限 `[Authorize(Roles="Admin,Operator")]`，读/导出/列表仅 `[Authorize]`。
+- **审计**：新增 5 个 `AuditActionType`（CreateWorkflowVersion / RestoreWorkflowVersion / ImportWorkflow / ExportWorkflow / DeleteWorkflowVersion）；Export 为查询，已显式注入 `IAuditLogRepository`+`IUnitOfWork` 持久化审计（修复质量门发现的死代码）。
+- **前端**：`WorkflowsPage` 版本历史 Drawer（存为版本/回滚 `modal.confirm`/删除 `Popconfirm`/导出下载 JSON Blob）+ `canManage` RBAC 门控；`WorkflowCanvasPage`「导入 JSON」按钮（读取文件→`importWorkflow`→跳转新工作流）。`types`/`api`/`locales` 全量对齐（i18n 对称，zh-CN 去字面 Agent）。
+
+**质量与测试：**
+- 三道质量门禁全 PASS（`ddd-code-reviewer` / `ddd-phase-quality-gate` / `codebase-optimizer`）；`.quality-gate.json` 推进 `f7-workflow-versioning`
+- 后端 `dotnet test src/AgentPlatform.sln` **298 passed / 0 failed**（SpecFlow 41 / Arch 9 / Application 114 / Infrastructure 102 / Api 27 / Integration 5；含 F7 新增 `WorkflowGraphSnapshotTests` + `WorkflowsVersioning` handler 测试）
+- 前端 `tsc --noEmit` **0 error** + `node scripts/qa.mjs` OVERALL PASS（typecheck/lint/build/unit 全绿）
+- 已知观察（非阻断）：`WorkflowVersion.CreatedBy` 恒 `null`（审计不记操作人，设计如此，前端已守卫）；版本号并发（`GetLatestVersionNumberAsync()+1` 无行锁，索引非唯一故不抛异常，设计项 G6）
+- F7 其余子项（② 版本差异查看 / ③ 回滚预览 / ④ 版本标签 / ⑤ 定时快照 / ⑥ 版本权限 / ⑦ 跨工作流复制 / ⑧ 版本讨论）见 `features/workflow-platformization.md`，未在本轮实现
+
 ## v2.12 (2026-07-29)
 
 ### F19 · Agent Roles 内建标记 + 页面补全 + 分类合并（统一角色目录，DB 为准）完成（feature-builder 全栈实跑，🟡中风险）

@@ -25,6 +25,7 @@ import {
   RedoOutlined,
   PlayCircleOutlined,
   PlusOutlined,
+  UploadOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -33,14 +34,17 @@ import {
   runExistingWorkflow,
   runWorkflowNode,
   runWorkflow,
+  importWorkflow,
+  getErrorMessage,
 } from '../services/api';
 import { useCanvasStore } from '../stores/workflowCanvasStore';
 import DagNode from '../components/canvas/DagNode';
 import NodePalette from '../components/canvas/NodePalette';
 import NodeConfigPanel from '../components/canvas/NodeConfigPanel';
 import VariableWatchPanel from '../components/canvas/VariableWatchPanel';
-import { StepType } from '../types';
+import { StepType, type ImportWorkflowRequest } from '../types';
 import { useTranslation } from 'react-i18next';
+import { useAppStore } from '../stores/appStore';
 
 const { Title } = Typography;
 
@@ -61,6 +65,8 @@ const CanvasInner: React.FC = () => {
   const navigate = useNavigate();
   const { message } = AntApp.useApp();
   const { screenToFlowPosition } = useReactFlow();
+  const userRole = useAppStore((s) => s.userRole);
+  const canManage = !!userRole && (userRole.toLowerCase() === 'admin' || userRole.toLowerCase() === 'operator');
 
   const nodes = useCanvasStore((s) => s.nodes);
   const edges = useCanvasStore((s) => s.edges);
@@ -80,6 +86,8 @@ const CanvasInner: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
   const seeded = useRef(false);
 
   // Load existing workflow graph.
@@ -165,8 +173,8 @@ const CanvasInner: React.FC = () => {
       });
       message.success(t('pages.workflows.draftSaved'));
       navigate('/workflows');
-    } catch {
-      message.error(t('pages.workflows.saveFailed'));
+    } catch (err) {
+      message.error(getErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -206,8 +214,8 @@ const CanvasInner: React.FC = () => {
         message.success(t('pages.workflows.createdDag'));
         navigate(`/workflows/${created.id}/edit`);
       }
-    } catch {
-      message.error(t('pages.workflows.saveRunFailed'));
+    } catch (err) {
+      message.error(getErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -222,12 +230,41 @@ const CanvasInner: React.FC = () => {
       const wf = await getWorkflow(id);
       loadFromDetail(wf);
       message.success(t('pages.workflows.stepDone'));
-    } catch {
-      message.error(t('pages.workflows.stepFailed'));
+    } catch (err) {
+      message.error(getErrorMessage(err));
       const wf = await getWorkflow(id).catch(() => null);
       if (wf) loadFromDetail(wf);
     } finally {
       setRunning(false);
+    }
+  };
+
+  // F7 子项①：从导出 JSON 创建「新」工作流（不覆盖当前画布），跳转详情页。
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // 允许重复选择同一文件
+    if (!file) return;
+    setImporting(true);
+    try {
+      const raw = await file.text();
+      const data = JSON.parse(raw) as Partial<ImportWorkflowRequest> & { context?: string };
+      const req: ImportWorkflowRequest = {
+        name:
+          typeof data.name === 'string' && data.name.trim()
+            ? data.name.trim()
+            : `Imported ${new Date().toLocaleString()}`,
+        initialContext: data.initialContext ?? data.context ?? '{}',
+        nodes: Array.isArray(data.nodes) ? data.nodes : null,
+        edges: Array.isArray(data.edges) ? data.edges : null,
+      };
+      const created = await importWorkflow(req);
+      message.success(t('pages.workflows.versions.imported'));
+      navigate(`/workflows/${created.id}`);
+    } catch (err) {
+      if (err instanceof SyntaxError) message.error(t('pages.workflows.versions.importFailed'));
+      else message.error(getErrorMessage(err));
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -277,6 +314,20 @@ const CanvasInner: React.FC = () => {
           <Button type="primary" icon={<SaveOutlined />} onClick={handleSaveAndRun} loading={saving}>
             {t('pages.workflows.saveAndRun')}
           </Button>
+          {canManage && (
+            <>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="application/json,.json"
+                style={{ display: 'none' }}
+                onChange={handleImportFile}
+              />
+              <Button icon={<UploadOutlined />} loading={importing} onClick={() => fileRef.current?.click()}>
+                {t('pages.workflows.versions.importJson')}
+              </Button>
+            </>
+          )}
         </Space>
       </Space>
 

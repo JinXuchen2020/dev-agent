@@ -100,6 +100,11 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
     public DbSet<TenantCredentialSetting> TenantCredentialSettings => Set<TenantCredentialSetting>();
 
     /// <summary>
+    /// Gets the <see cref="DbSet{TEntity}"/> providing access to persisted workflow version snapshots.
+    /// </summary>
+    public DbSet<WorkflowVersion> WorkflowVersions => Set<WorkflowVersion>();
+
+    /// <summary>
     /// Returns all aggregate roots currently tracked by the change tracker, used for dispatching domain events on save.
     /// </summary>
     /// <returns>A read-only collection of tracked <see cref="IAggregateRoot"/> instances.</returns>

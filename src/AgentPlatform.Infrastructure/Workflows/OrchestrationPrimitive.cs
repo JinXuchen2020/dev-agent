@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Threading;
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Domain.Aggregates.Workflows;
@@ -119,9 +120,19 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
             throw new InvalidOperationException(
                 $"Workflow {workflow.Id} cannot be started (state: {workflow.CurrentState})");
 
-        // Ensure the workflow is persisted before starting
+        // Ensure the workflow is persisted before starting.
+        // Only INSERT when this is a brand-new, untracked aggregate (the create-and-run
+        // path). When the workflow was loaded from the repository (re-run / resume / retry)
+        // it is already tracked, and calling Add would re-insert the row and violate the
+        // primary-key unique constraint (DbUpdateException: UNIQUE constraint failed: Workflows.Id).
         workflow.SetState(WorkflowState.Running);
-        _repository.Add(workflow);
+        var alreadyTracked = _unitOfWork.GetTrackedAggregates()
+            .OfType<Workflow>()
+            .Any(w => w.Id == workflow.Id);
+        if (!alreadyTracked)
+        {
+            _repository.Add(workflow);
+        }
         await _unitOfWork.SaveChangesAsync(ct);
 
         // Publish WorkflowStarted

@@ -99,6 +99,7 @@ public static class DependencyInjection
         services.AddScoped<IAgentRepository, AgentRepository>();
         services.AddScoped<IConversationRepository, ConversationRepository>();
         services.AddScoped<IWorkflowRepository, WorkflowRepository>();
+        services.AddScoped<IWorkflowVersionRepository, WorkflowVersionRepository>();
         services.AddScoped<IExecutionLogRepository, ExecutionLogRepository>();
         services.AddScoped<IAgentRoleDefinitionRepository, AgentRoleDefinitionRepository>();
         services.AddScoped<IAgentConfigurationRepository, AgentConfigurationRepository>();

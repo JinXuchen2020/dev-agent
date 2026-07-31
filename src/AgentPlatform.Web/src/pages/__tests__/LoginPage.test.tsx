@@ -51,9 +51,18 @@ describe('LoginPage', () => {
 
   it('登录失败（401）调用 loginRequest 且不进入已登录态', async () => {
     vi.mocked(api.loginRequest).mockRejectedValue({ response: { status: 401 } });
-    renderLogin();
+    const { container } = renderLogin();
+    fireEvent.change(screen.getByDisplayValue('admin@acme.io'), { target: { value: 'admin@acme.io' } });
+    const pwd = container.querySelector('input[type="password"]') as HTMLInputElement;
+    fireEvent.change(pwd, { target: { value: 'Admin@123456' } });
     fireEvent.click(byText('登录'));
     await waitFor(() => expect(api.loginRequest).toHaveBeenCalledTimes(1));
     expect(useAppStore.getState().isAuthenticated).toBe(false);
+  });
+
+  it('邮箱或密码为空时不发起登录请求（前端预校验拦截）', async () => {
+    renderLogin();
+    fireEvent.click(byText('登录'));
+    await waitFor(() => expect(api.loginRequest).not.toHaveBeenCalled());
   });
 });

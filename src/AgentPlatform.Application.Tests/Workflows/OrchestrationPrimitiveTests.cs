@@ -1,6 +1,7 @@
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Domain.Abstractions;
 using AgentPlatform.Domain.Aggregates.Workflows;
+using System.Collections.Generic;
 using AgentPlatform.Domain.Enums;
 using AgentPlatform.Domain.Repositories;
 using AgentPlatform.Infrastructure.Workflows;
@@ -139,6 +140,34 @@ public sealed class OrchestrationPrimitiveTests
 
         Assert.Equal(WorkflowState.Completed, result.CurrentState);
         Assert.All(result.Steps, s => Assert.Equal(WorkflowState.Completed, s.State));
+    }
+
+    // ──────────────────────────────────────────────
+    // Regression: an already-tracked (existing) workflow must NOT be re-Added.
+    // RunAsync used to call _repository.Add unconditionally, which re-inserted the
+    // existing row and threw DbUpdateException (UNIQUE constraint failed: Workflows.Id)
+    // → HTTP 500 on every re-run of an existing workflow.
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task RunAsync_ExistingTrackedWorkflow_DoesNotReAdd()
+    {
+        var workflow = CreateWorkflow(stepCount: 2);
+        // Simulate the workflow being loaded (tracked) from the repository, as the
+        // RunExistingWorkflow / Resume / Retry paths do via FindAsync.
+        _unitOfWork.GetTrackedAggregates().Returns(new List<IAggregateRoot> { workflow });
+        _repository.GetByIdAsync(workflow.Id, default).Returns(workflow);
+
+        var executor = CreateStepExecutor((step, ctx) =>
+            StepExecutionResult.Success($"output-{step.Name}", "{}"));
+        SetupExecutor(executor);
+
+        var result = await _primitive.RunAsync(workflow, OrchestrationPreset.Sequential);
+
+        Assert.Equal(WorkflowState.Completed, result.CurrentState);
+        // The workflow was already tracked, so RunAsync must NOT call Add (which would
+        // re-insert the existing primary key and violate the unique constraint).
+        _repository.DidNotReceive().Add(Arg.Any<Workflow>());
     }
 
     // ──────────────────────────────────────────────
