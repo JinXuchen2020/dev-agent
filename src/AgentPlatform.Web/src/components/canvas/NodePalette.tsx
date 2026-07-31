@@ -8,6 +8,13 @@ import {
   BookOutlined,
   ToolOutlined,
   CodeOutlined,
+  GlobalOutlined,
+  BranchesOutlined,
+  RetweetOutlined,
+  TagsOutlined,
+  ApartmentOutlined,
+  ClockCircleOutlined,
+  FormOutlined,
 } from '@ant-design/icons';
 import type { ReactNode } from 'react';
 import { StepType } from '../../types';
@@ -21,6 +28,13 @@ const PALETTE: { type: StepType; icon: ReactNode }[] = [
   { type: StepType.Knowledge, icon: <BookOutlined /> },
   { type: StepType.Tool, icon: <ToolOutlined /> },
   { type: StepType.Code, icon: <CodeOutlined /> },
+  { type: StepType.Http, icon: <GlobalOutlined /> },
+  { type: StepType.Condition, icon: <BranchesOutlined /> },
+  { type: StepType.Loop, icon: <RetweetOutlined /> },
+  { type: StepType.Variable, icon: <TagsOutlined /> },
+  { type: StepType.SubWorkflow, icon: <ApartmentOutlined /> },
+  { type: StepType.Delay, icon: <ClockCircleOutlined /> },
+  { type: StepType.UserInput, icon: <FormOutlined /> },
   { type: StepType.End, icon: <CheckCircleOutlined /> },
 ];
 
@@ -35,6 +49,13 @@ export default function NodePalette() {
     [StepType.Knowledge]: t('canvas.nodeType.knowledge'),
     [StepType.Tool]: t('canvas.nodeType.tool'),
     [StepType.Code]: t('canvas.nodeType.code'),
+    [StepType.Http]: t('canvas.nodeType.http'),
+    [StepType.Condition]: t('canvas.nodeType.condition'),
+    [StepType.Loop]: t('canvas.nodeType.loop'),
+    [StepType.Variable]: t('canvas.nodeType.variable'),
+    [StepType.SubWorkflow]: t('canvas.nodeType.subWorkflow'),
+    [StepType.Delay]: t('canvas.nodeType.delay'),
+    [StepType.UserInput]: t('canvas.nodeType.userInput'),
   };
   const NODE_DESC: Record<StepType, string> = {
     [StepType.Start]: t('canvas.nodeDesc.start'),
@@ -45,6 +66,13 @@ export default function NodePalette() {
     [StepType.Knowledge]: t('canvas.nodeDesc.knowledge'),
     [StepType.Tool]: t('canvas.nodeDesc.tool'),
     [StepType.Code]: t('canvas.nodeDesc.code'),
+    [StepType.Http]: t('canvas.nodeDesc.http'),
+    [StepType.Condition]: t('canvas.nodeDesc.condition'),
+    [StepType.Loop]: t('canvas.nodeDesc.loop'),
+    [StepType.Variable]: t('canvas.nodeDesc.variable'),
+    [StepType.SubWorkflow]: t('canvas.nodeDesc.subWorkflow'),
+    [StepType.Delay]: t('canvas.nodeDesc.delay'),
+    [StepType.UserInput]: t('canvas.nodeDesc.userInput'),
   };
   const onDragStart = (e: React.DragEvent, type: StepType) => {
     e.dataTransfer.setData('application/reactflow', String(type));

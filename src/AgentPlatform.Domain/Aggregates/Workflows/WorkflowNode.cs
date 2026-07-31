@@ -120,10 +120,10 @@ public sealed class WorkflowNode : IWorkflowExecutable
         UpdatedAt = DateTime.UtcNow;
     }
 
-    /// <summary>设置结果并将节点标记为已完成。</summary>
+    /// <summary>设置结果并将节点标记为已完成。空串（如 HTTP 204 无响应体、空审批输入）属合法完成态，允许落库。</summary>
     public void SetResult(string result)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(result);
+        ArgumentNullException.ThrowIfNull(result);
         Result = result;
         State = WorkflowState.Completed;
         UpdatedAt = DateTime.UtcNow;

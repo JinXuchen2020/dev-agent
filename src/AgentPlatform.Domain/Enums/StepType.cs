@@ -28,7 +28,26 @@ public enum StepType
     Tool = 6,
 
     /// <summary>代码执行节点：在沙箱中运行代码（python/javascript），回传真实 stdout/stderr。</summary>
-    Code = 7
+    Code = 7,
 
-    // P2 reserved: Http, Condition, Loop, Variable, SubWorkflow, Delay, UserInput
+    /// <summary>HTTP 节点：向外部服务发起真实 HTTP 请求（method/url/headers/body）。</summary>
+    Http = 8,
+
+    /// <summary>条件分支节点：用表达式求值（Jint 沙箱）选择 true/false 出边。</summary>
+    Condition = 9,
+
+    /// <summary>循环节点：对 itemsSource 的每个元素迭代执行引用的主图 body 子图。</summary>
+    Loop = 10,
+
+    /// <summary>变量节点：向共享 Blackboard 写入（set）或读取（get）键值，跨节点传递数据。</summary>
+    Variable = 11,
+
+    /// <summary>子工作流节点：触发目标工作流以独立 execution 运行，父节点仅持子流引用。</summary>
+    SubWorkflow = 12,
+
+    /// <summary>延迟节点：阻塞等待指定时长（受硬上限保护）后再继续。</summary>
+    Delay = 13,
+
+    /// <summary>人工审批门（HITL）：暂停工作流等待人工输入/批准，恢复后续跑。</summary>
+    UserInput = 14
 }

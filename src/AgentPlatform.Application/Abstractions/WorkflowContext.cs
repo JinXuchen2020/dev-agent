@@ -60,8 +60,12 @@ public sealed record StepArtifact
 /// <summary>
 /// Shared work area for cross-step data exchange (Blueprint C.3.1).
 /// Steps can read/write structured key-value pairs here to avoid passing full natural-language history.
+/// <para>
+/// 设计为可变：编排器在单次运行中维护单一 <see cref="Blackboard"/> 实例并贯穿全程，
+/// <see cref="AgentPlatform.Domain.Enums.StepType.Variable"/> 节点的 set 操作原地写入，使跨节点读写生效。
+/// </para>
 /// </summary>
-public sealed record Blackboard
+public sealed class Blackboard
 {
     private readonly Dictionary<string, string> _data;
 
@@ -74,11 +78,11 @@ public sealed record Blackboard
     public string? Get(string key) =>
         _data.TryGetValue(key, out var value) ? value : null;
 
-    /// <summary>Writes or overwrites a value on the blackboard.</summary>
+    /// <summary>Writes or overwrites a value on the blackboard (in-place, mutates this instance).</summary>
     public Blackboard Set(string key, string value)
     {
-        var copy = new Dictionary<string, string>(_data) { [key] = value };
-        return new Blackboard(copy);
+        _data[key] = value;
+        return this;
     }
 
     /// <summary>All entries currently stored.</summary>

@@ -142,6 +142,7 @@ export interface WorkflowStep {
 
 // P1 DAG: StepType must match AgentPlatform.Domain.Enums.StepType (serialized as int).
 // Declared as a const object (not `enum`) because tsconfig enables `erasableSyntaxOnly`.
+// F20：新增 HTTP/Condition/Loop/Variable/SubWorkflow/Delay/UserInput（值 8–14 与后端一致）。
 export const StepType = {
   Start: 0,
   End: 1,
@@ -151,6 +152,13 @@ export const StepType = {
   Knowledge: 5,
   Tool: 6,
   Code: 7,
+  Http: 8,
+  Condition: 9,
+  Loop: 10,
+  Variable: 11,
+  SubWorkflow: 12,
+  Delay: 13,
+  UserInput: 14,
 } as const;
 export type StepType = (typeof StepType)[keyof typeof StepType];
 
@@ -169,6 +177,31 @@ export interface NodeConfig {
   // 代码执行节点 (StepType.Code)
   code?: string;
   language?: string;
+  // ── F20 节点类型配置 ──
+  // HTTP 节点 (StepType.Http)
+  method?: string;
+  url?: string;
+  headers?: string; // JSON 对象字符串，如 {"Authorization":"Bearer ..."}
+  bodyTemplate?: string;
+  authRef?: string;
+  // 条件节点 (StepType.Condition)
+  expression?: string; // Jint 沙箱表达式，可引用 artifacts/blackboard/input/Math
+  // 循环节点 (StepType.Loop)
+  itemsSource?: string; // JSON 数组字符串或 Blackboard/Artifact 键名
+  itemVariable?: string; // 每轮注入共享 Blackboard 的变量名
+  bodyNodeNames?: string[]; // 引用主图节点名列表（构成循环体）
+  // 变量节点 (StepType.Variable)
+  mode?: 'set' | 'get';
+  name?: string; // 变量名（Blackboard 键）
+  value?: string; // set 模式的值（支持 {{占位}}）
+  // 子工作流节点 (StepType.SubWorkflow)
+  workflowId?: string; // 目标工作流 Id（GUID）
+  inputMapping?: string; // 可选输入映射 JSON
+  // 延迟节点 (StepType.Delay)
+  durationMs?: number;
+  // 人工审批门节点 (StepType.UserInput)
+  prompt?: string; // 展示给审批人的提示
+  approvalRole?: string; // 可选审批角色
 }
 
 // Backend response: a single graph node.
@@ -230,6 +263,20 @@ export interface WorkflowDetail {
   context: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// F20 S3 — HITL 人工审批门（与 HumanApprovalDto 字段镜像；Status 为整数枚举：
+// Pending=0 / Approved=1 / Rejected=2，见 AgentPlatform.Domain.Enums.HumanApprovalStatus）。
+export interface ApprovalDto {
+  id: string;
+  workflowId: string;
+  nodeName: string;
+  prompt: string;
+  status: number;
+  submittedInput: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  executionId: string | null;
 }
 
 // ── F7 工作流版本管理 + 导入导出 ──

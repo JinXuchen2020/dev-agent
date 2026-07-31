@@ -45,6 +45,13 @@ export const STEP_TYPE_TO_NODE_TYPE: Record<StepType, string> = {
   [StepType.Knowledge]: 'knowledge',
   [StepType.Tool]: 'tool',
   [StepType.Code]: 'code',
+  [StepType.Http]: 'http',
+  [StepType.Condition]: 'condition',
+  [StepType.Loop]: 'loop',
+  [StepType.Variable]: 'variable',
+  [StepType.SubWorkflow]: 'subworkflow',
+  [StepType.Delay]: 'delay',
+  [StepType.UserInput]: 'userinput',
 };
 
 export const NODE_TYPE_TO_STEP_TYPE: Record<string, StepType> = {
@@ -56,6 +63,13 @@ export const NODE_TYPE_TO_STEP_TYPE: Record<string, StepType> = {
   knowledge: StepType.Knowledge,
   tool: StepType.Tool,
   code: StepType.Code,
+  http: StepType.Http,
+  condition: StepType.Condition,
+  loop: StepType.Loop,
+  variable: StepType.Variable,
+  subworkflow: StepType.SubWorkflow,
+  delay: StepType.Delay,
+  userinput: StepType.UserInput,
 };
 
 export const STEP_TYPE_LABEL: Record<StepType, string> = {
@@ -67,6 +81,13 @@ export const STEP_TYPE_LABEL: Record<StepType, string> = {
   [StepType.Knowledge]: 'Knowledge',
   [StepType.Tool]: 'Tool',
   [StepType.Code]: 'Code',
+  [StepType.Http]: 'HTTP',
+  [StepType.Condition]: 'Condition',
+  [StepType.Loop]: 'Loop',
+  [StepType.Variable]: 'Variable',
+  [StepType.SubWorkflow]: 'SubWorkflow',
+  [StepType.Delay]: 'Delay',
+  [StepType.UserInput]: 'UserInput',
 };
 
 function newId(): string {
@@ -92,6 +113,20 @@ function defaultConfig(stepType: StepType): NodeConfig {
       return { toolName: '', parameters: '' };
     case StepType.Code:
       return { code: '', language: 'python' };
+    case StepType.Http:
+      return { method: 'GET', url: '', headers: '', bodyTemplate: '' };
+    case StepType.Condition:
+      return { expression: '' };
+    case StepType.Loop:
+      return { itemsSource: '', itemVariable: '', bodyNodeNames: [] };
+    case StepType.Variable:
+      return { mode: 'set', name: '', value: '' };
+    case StepType.SubWorkflow:
+      return { workflowId: '', inputMapping: '' };
+    case StepType.Delay:
+      return { durationMs: 1000 };
+    case StepType.UserInput:
+      return { prompt: '', approvalRole: '' };
     default:
       return {};
   }
@@ -165,7 +200,16 @@ export const useCanvasStore = create<CanvasState>((set, get) => {
 
     onConnect: (connection) => {
       pushHistory();
-      set({ edges: addEdge({ ...connection, id: newId() }, get().edges) });
+      // F20：从 Condition 节点拉出的前两条出边自动标记为 true / false 分支，
+      // 以匹配后端 ValidateGraph 的「true/false 双出边」拓扑规则。
+      let label: string | undefined;
+      const sourceNode = get().nodes.find((n) => n.id === connection.source);
+      if (sourceNode?.data.stepType === StepType.Condition) {
+        const existingOut = get().edges.filter((e) => e.source === connection.source).length;
+        if (existingOut === 0) label = 'true';
+        else if (existingOut === 1) label = 'false';
+      }
+      set({ edges: addEdge({ ...connection, id: newId(), label }, get().edges) });
     },
 
     onNodeDragStart: () => pushHistory(),

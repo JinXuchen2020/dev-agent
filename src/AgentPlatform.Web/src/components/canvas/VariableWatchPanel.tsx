@@ -14,6 +14,13 @@ export default function VariableWatchPanel() {
     [StepType.Knowledge]: t('canvas.nodeType.knowledge'),
     [StepType.Tool]: t('canvas.nodeType.tool'),
     [StepType.Code]: t('canvas.nodeType.code'),
+    [StepType.Http]: t('canvas.nodeType.http'),
+    [StepType.Condition]: t('canvas.nodeType.condition'),
+    [StepType.Loop]: t('canvas.nodeType.loop'),
+    [StepType.Variable]: t('canvas.nodeType.variable'),
+    [StepType.SubWorkflow]: t('canvas.nodeType.subworkflow'),
+    [StepType.Delay]: t('canvas.nodeType.delay'),
+    [StepType.UserInput]: t('canvas.nodeType.userinput'),
   };
   const nodes = useCanvasStore((s) => s.nodes);
   const watched = nodes.filter((n) => n.data.state || n.data.result);

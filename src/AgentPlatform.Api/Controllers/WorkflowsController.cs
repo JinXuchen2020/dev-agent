@@ -1,9 +1,11 @@
 using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Application.Workflows.Commands.ResolveApproval;
 using AgentPlatform.Application.Workflows.Commands.RunExistingWorkflow;
 using AgentPlatform.Application.Workflows.Commands.RunNode;
 using AgentPlatform.Application.Workflows.Commands.RunWorkflow;
 using AgentPlatform.Application.Workflows.Commands.UpdateWorkflow;
 using AgentPlatform.Application.Workflows.Queries.GetWorkflow;
+using AgentPlatform.Application.Workflows.Queries.ListApprovals;
 using AgentPlatform.Application.Workflows.Queries.ListWorkflows;
 using AgentPlatform.Application.Workflows.Versioning;
 using AgentPlatform.Domain.Enums;
@@ -262,6 +264,42 @@ public sealed class WorkflowsController : ControllerBase
         var result = await _mediator.Send(command, ct);
         return Ok(result);
     }
+
+    /// <summary>
+    /// 列出某工作流的全部人工审批门（HITL）记录（F20 S3）。租户隔离由查询处理保证。
+    /// execId 在查询/解析中均无需（审批按 workflowId 归并、由 approvalId 唯一定位），
+    /// 故路径仅取 {id}。
+    /// </summary>
+    [HttpGet("{id:guid}/approvals")]
+    public async Task<IActionResult> ListApprovals(
+        Guid id,
+        CancellationToken ct = default)
+    {
+        var query = new ListApprovalsQuery(id);
+        var result = await _mediator.Send(query, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// 解析（批准/拒绝）一个人工审批门（F20 S3）：加载审批（租户校验）→ 置 Approved/Rejected；
+    /// 将对应 UserInput 节点结果写回并标记 Completed；续跑暂停的工作流（跳过已完成节点）。
+    /// </summary>
+    [HttpPost("{id:guid}/approvals/{approvalId:guid}/resolve")]
+    public async Task<IActionResult> ResolveApproval(
+        Guid id,
+        Guid approvalId,
+        [FromBody] ResolveApprovalRequest request,
+        CancellationToken ct = default)
+    {
+        var command = new ResolveApprovalCommand(
+            id,
+            approvalId,
+            request.Approved,
+            request.Input,
+            _tenant.GetTenantId());
+        var result = await _mediator.Send(command, ct);
+        return result == null ? NotFound() : Ok(result);
+    }
 }
 
 /// <summary>
@@ -294,4 +332,13 @@ public sealed record RunExistingWorkflowRequest(
 /// Request model for creating a workflow version snapshot.
 /// </summary>
 public sealed record CreateVersionRequest(string? Note = null);
+
+/// <summary>
+/// Request model for resolving a HITL approval gate (F20 S3).
+/// <paramref name="Approved"/> selects approve (write <paramref name="Input"/> as the
+/// human input) or reject (write <paramref name="Input"/> as the rejection reason).
+/// </summary>
+public sealed record ResolveApprovalRequest(
+    bool Approved,
+    string? Input = null);
 

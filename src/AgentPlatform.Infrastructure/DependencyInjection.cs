@@ -146,6 +146,8 @@ public static class DependencyInjection
         services.Configure<AgentPlatform.Application.Abstractions.SearchSettings>(
             configuration.GetSection("Search"));
         services.AddHttpClient();
+        // 工作流 HTTP 节点执行器使用的具名客户端：超时放宽到 35s（出站请求另有 30s 硬上限 CTS 保护）。
+        services.AddHttpClient("workflow-http", client => client.Timeout = TimeSpan.FromSeconds(35));
         services.AddScoped<AgentPlatform.Application.Abstractions.IDocumentChunker,
             AgentPlatform.Infrastructure.Services.WordWindowChunker>();
 
@@ -286,6 +288,18 @@ public static class DependencyInjection
         services.AddScoped<IStepExecutor, KnowledgeRetrievalStepExecutor>();
         services.AddScoped<IStepExecutor, ToolStepExecutor>();
         services.AddScoped<IStepExecutor, CodeStepExecutor>();
+
+        // ── F20 节点全家桶（S1）执行器 + 条件求值器 ──
+        services.AddScoped<IStepExecutor, HttpStepExecutor>();
+        services.AddScoped<IStepExecutor, ConditionStepExecutor>();
+        services.AddScoped<IStepExecutor, VariableStepExecutor>();
+        services.AddScoped<IStepExecutor, DelayStepExecutor>();
+        services.AddScoped<IStepExecutor, SubWorkflowStepExecutor>();
+        services.AddScoped<IStepExecutor, UserInputStepExecutor>();
+        services.AddScoped<IConditionEvaluator, JsConditionEvaluator>();
+
+        // ── F20 S3 HITL 审批仓储 ──
+        services.AddScoped<IHumanApprovalRepository, HumanApprovalRepository>();
 
         // Single-node runner for DAG debugging (POST /{id}/nodes/{nodeId}/run)
         services.AddScoped<IWorkflowNodeRunner, WorkflowNodeRunner>();
