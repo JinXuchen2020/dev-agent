@@ -173,8 +173,8 @@ const CanvasInner: React.FC = () => {
       });
       message.success(t('pages.workflows.draftSaved'));
       navigate('/workflows');
-    } catch {
-      message.error(t('pages.workflows.saveFailed'));
+    } catch (err) {
+      message.error(getErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -214,8 +214,8 @@ const CanvasInner: React.FC = () => {
         message.success(t('pages.workflows.createdDag'));
         navigate(`/workflows/${created.id}/edit`);
       }
-    } catch {
-      message.error(t('pages.workflows.saveRunFailed'));
+    } catch (err) {
+      message.error(getErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -230,8 +230,8 @@ const CanvasInner: React.FC = () => {
       const wf = await getWorkflow(id);
       loadFromDetail(wf);
       message.success(t('pages.workflows.stepDone'));
-    } catch {
-      message.error(t('pages.workflows.stepFailed'));
+    } catch (err) {
+      message.error(getErrorMessage(err));
       const wf = await getWorkflow(id).catch(() => null);
       if (wf) loadFromDetail(wf);
     } finally {

@@ -61,6 +61,15 @@ public sealed class WorkflowStep : IWorkflowExecutable
         UpdatedAt = DateTime.UtcNow;
     }
 
+    /// <summary>Resets the step to a pre-execution state (Pending, clears result/error) for re-runs.</summary>
+    public void Reset()
+    {
+        State = WorkflowState.Pending;
+        Result = null;
+        ErrorDetail = null;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     /// <summary>Sets the result of the step and marks it as completed.</summary>
     public void SetResult(string result)
     {
