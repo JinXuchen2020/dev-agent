@@ -40,7 +40,6 @@ export const enUS: Resources = {
     dashboard: 'Dashboard',
     agents: 'Agents',
     workflows: 'Workflows',
-    workflowEditor: 'Workflow Editor',
     agentRoles: 'Agent Roles',
     configurations: 'Configurations',
     credentials: 'My Credentials',

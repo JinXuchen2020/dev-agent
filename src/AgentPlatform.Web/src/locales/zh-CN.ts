@@ -38,7 +38,6 @@ export const zhCN = {
     dashboard: '仪表盘',
     agents: '智能体',
     workflows: '工作流',
-    workflowEditor: '工作流编辑器',
     agentRoles: '智能体角色',
     configurations: '配置',
     credentials: '我的凭据',
