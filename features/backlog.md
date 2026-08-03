@@ -246,6 +246,19 @@
 - 风险：🔴 多工作空间破坏性极大（全部聚合加 WorkspaceId + query filter + TenantProvider 体系）；建议 v1 **仅做用量仪表盘 + diff（低风险纯增量）**，多工作空间独立排期。实现前须锁定 §6（S1 是否含 Workspace / S2 数据模型）。
 
 
+### F27 · BDD 集成测试统一（Reqnroll + 文件 SQLite + Playwright E2E）  [P1]  open  ⚠️高风险（测试架构改造 + SpecFlow→Reqnroll 迁移 + 新增前端 E2E 基建）
+- 设计文档：`features/bdd-integration-design.md`（已建，2026-08-03 确认设计 + §7 例外默认 B）
+- 目标：把 **BDD 重新定义为「最终集成测试层」** = 真 HTTP（走完整管线）+ 真 DB（**文件 SQLite，明确排除 Api.Tests 现行 in-memory**）+ 前端 E2E（Playwright 真浏览器）；**现有 41 例 SpecFlow 域级测试（假 Repository/域内对象）全量迁移到 HTTP+DB 契约**。
+- 核心改造：
+  - 测试基座：`IntegrationAppFactory : WebApplicationFactory<Program>`（环境 `Integration` + 文件 SQLite `test-integration.db`）+ `IntegrationSeeder`（集成租户/用户/ApiKey/示例工作流）+ `AuthHelper`（发布类走 JWT、运行类走 `X-Api-Key`）。
+  - SpecFlow→Reqnroll（`Reqnroll` + `Reqnroll.xUnit` + `Reqnroll.Tools.MsBuildGeneration`；`using TechTalk.SpecFlow`→`using Reqnroll`；删旧 `.feature.cs` 交生成器重出）。
+  - 前端 E2E：新增 `src/AgentPlatform.Web/e2e/`（Playwright + `publish-workflow.spec.ts`，全链路 UI 发布→调用）。
+  - 编排：`scripts/integration` + `deploy/*.yml` 增 `integration` job 作合并前最终闸门；`.quality-gate.json` 增 `bdd: PASSED`。
+- 决策（2026-08-03 锁定）：框架 Reqnroll / 集成 DB 文件 SQLite / 前端 E2E Playwright / 旧 41 例全迁移；**§7 例外默认 B**：`WorkflowStateMachine` 重试/回滚内部无公开 HTTP 表面 → 走「域集成」连真 DB 但经应用层命令驱动（不为测试加生产端点；若坚持全 HTTP 才走方案 A 受控测试端点）。
+- 验收子项：所有 BDD 经真 HTTP+文件 SQLite 全绿（零 mock Repository、零 in-memory）；41 例 + F22 新场景全绿（Reqnroll 报告）；Playwright E2E 覆盖 F22 前端全链路绿（HTML 报告 + trace）；`scripts/integration` 一键编排后端 BDD + 前端 E2E + 卸载；CI 合并前闸门通过。
+- 风险：🔴 测试架构改造 + 41 例迁移工作量大；`WorkflowStateMachine` 内部行为 HTTP 不可达（已定例外 B）；限流（`PerApiKey`）干扰 → 基座移除/白名单测试 key；种子 ApiKey 明文须经 `IApiKeyEncryptionService` 加密落库（复用 F13 基件）；前端 E2E 与后端种子一致性（共用 `IntegrationSeeder` 常量）。
+- 分阶段：A 基座（Reqnroll+文件 SQLite+种子+AuthHelper）/ B 迁移 41 例 / C F22 BDD 6 场景 / D 前端 E2E / E 编排+CI（详见设计文档 §9）。
+
 ### F8 · 差异化优势产品化（Negotiation + Critic）  [native]  open
 - 设计文档：`features/negotiation-productization.md`（待建）
 - 目标：后端已具备 Negotiation 协商式多智能体 + Critic 收敛原语，待产品化画布「Agent-Team / Negotiation」专属模式（多 Agent 节点 + Critic + 收敛终止条件）。
