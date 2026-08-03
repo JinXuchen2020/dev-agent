@@ -573,3 +573,41 @@ export interface DashboardSummary {
   latencyByDay: LatencyDayBucket[];
   topWorkflows: WorkflowCount[];
 }
+
+// ── F21 工作流触发器（Webhook / 定时 / Chat）──
+// 字段名镜像 AgentPlatform.Application.WorkflowTriggers.*（System.Text.Json 默认 camelCase）。
+
+export interface WebhookTriggerView {
+  triggerToken?: string | null;
+  enabled: boolean;
+}
+
+export interface ScheduleTriggerView {
+  cron?: string | null;
+  timezone?: string | null;
+  enabled: boolean;
+  nextRunAt?: string | null;
+}
+
+export interface WorkflowTriggersResponse {
+  webhook?: WebhookTriggerView | null;
+  schedule?: ScheduleTriggerView | null;
+  chatBindingCount: number;
+}
+
+export interface ScheduleTriggerRequest {
+  cron: string;
+  timezone?: string | null;
+  enabled?: boolean;
+}
+
+export interface WorkflowBindingDto {
+  workflowId: string;
+  workflowName: string;
+}
+
+export interface TriggerRunResult {
+  workflowId: string;
+  workflowName: string;
+  state: string;
+}

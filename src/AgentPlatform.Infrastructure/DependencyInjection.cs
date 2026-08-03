@@ -12,6 +12,7 @@ using AgentPlatform.Infrastructure.Models;
 using AgentPlatform.Infrastructure.Models.RoutingMiddleware;
 using AgentPlatform.Infrastructure.Persistence;
 using AgentPlatform.Infrastructure.Persistence.Repositories;
+using AgentPlatform.Infrastructure.Scheduling;
 using AgentPlatform.Infrastructure.Progress;
 using AgentPlatform.Infrastructure.Sandbox;
 using AgentPlatform.Infrastructure.Security;
@@ -246,16 +247,22 @@ public static class DependencyInjection
                     "Set Cache:Provider=Memory or ensure Redis is reachable.");
             });
             services.AddScoped<IShortTermMemory, RedisShortTermMemory>();
+            // F21 多实例调度防重：Redis 分布式锁（Redis 不可用时内部降级放行）。
+            services.AddSingleton<IDistributedLockProvider, RedisDistributedLockProvider>();
         }
         else
         {
             services.AddScoped<IShortTermMemory, InMemoryShortTermMemory>();
+            // F21 本地 / 单实例 / 测试：进程内锁回退。
+            services.AddSingleton<IDistributedLockProvider, InMemoryDistributedLockProvider>();
         }
 
         services.AddHttpContextAccessor();
         // 进程内缓存：用于租户凭据解析的短期缓存（仅缓存密文实体）；BYO 更新时显式失效。
         services.AddMemoryCache();
         services.AddScoped<ITenantProvider, TenantProvider>();
+        // 后台调度 / 匿名 Webhook 的 scope 内租户注入持有器（TenantProvider 优先读此覆盖值）。
+        services.AddScoped<ITenantContext, TenantContext>();
         services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IAesEncryptor, AesGcmEncryptor>();
@@ -300,6 +307,12 @@ public static class DependencyInjection
 
         // ── F20 S3 HITL 审批仓储 ──
         services.AddScoped<IHumanApprovalRepository, HumanApprovalRepository>();
+
+        // ── F21 工作流触发器 + Chat 绑定仓储 ──
+        services.AddScoped<IWorkflowTriggerRepository, WorkflowTriggerRepository>();
+        services.AddScoped<IConversationWorkflowBindingRepository, ConversationWorkflowBindingRepository>();
+        // F21 cron 调度计算（Cronos + IANA 时区）。
+        services.AddSingleton<IScheduleCalculator, CronCalculator>();
 
         // Single-node runner for DAG debugging (POST /{id}/nodes/{nodeId}/run)
         services.AddScoped<IWorkflowNodeRunner, WorkflowNodeRunner>();
@@ -359,6 +372,9 @@ public static class DependencyInjection
 
         // Register API key expiry monitoring background job
         services.AddHostedService<ApiKeyExpiryJob>();
+
+        // F21 定时触发器后台调度器（轮询到期 Schedule，分布式锁防重）。
+        services.AddHostedService<WorkflowScheduler>();
 
         return services;
     }

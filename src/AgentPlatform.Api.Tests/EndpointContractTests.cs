@@ -305,4 +305,52 @@ public sealed class EndpointContractTests : IClassFixture<ApiContractTestFactory
         Assert.Equal(JsonValueKind.Number, statusProperty.ValueKind);
         Assert.Equal(404, statusProperty.GetInt32());
     }
+
+    // ── F21 工作流触发器端点（匿名 Webhook + 鉴权触发器查询）─────────────
+
+    /// <summary>
+    /// 匿名（无 JWT）POST 未知 webhook token 必须返回 404，且不泄露存在性。
+    /// 该端点不受 cookie/JWT 约束，仅受 WebhookAnonymous 限流保护。
+    /// </summary>
+    [Fact]
+    public async Task PostWebhook_UnknownToken_Returns404()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.PostAsync(
+            "/api/v1/webhooks/workflow/does-not-exist-token",
+            new StringContent("{\"hello\":\"world\"}", System.Text.Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    /// <summary>
+    /// 已鉴权 GET /api/v1/workflows/{id}/triggers 必须返回 200 与合法的触发器配置骨架
+    /// （webhook/schedule 均为 null，chatBindingCount=0）。不要求工作流存在。
+    /// </summary>
+    [Fact]
+    public async Task GetTriggers_Returns200WithShape()
+    {
+        var client = _factory.CreateAuthenticatedClient();
+        var response = await client.GetAsync($"/api/v1/workflows/{Guid.NewGuid()}/triggers");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(body);
+        // webhook / schedule 为 null 时按 WhenWritingNull 被省略，仅校验 chatBindingCount。
+        Assert.True(doc.RootElement.TryGetProperty("chatBindingCount", out var count));
+        Assert.Equal(0, count.GetInt32());
+    }
+
+    /// <summary>
+    /// 未鉴权访问受保护的触发器管理端点必须返回 401。
+    /// </summary>
+    [Fact]
+    public async Task GenerateWebhookToken_WithoutAuth_Returns401()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.PostAsync(
+            $"/api/v1/workflows/{Guid.NewGuid()}/triggers/webhook", null);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
 }

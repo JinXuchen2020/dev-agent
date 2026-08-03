@@ -209,15 +209,16 @@
 - **设计文档骨架均已生成**（features/node-bundle.md / workflow-triggers.md / publish-api-mcp.md / template-market.md / execution-trace-eval.md / workflow-debugger.md / enterprise-enhancements.md）；各 feature 实现前须先锁定其 §6 决策，不应自创需求。
 
 
-### F20 · 节点全家桶（Workflow 节点类型扩展）  [P1]  doing  ⚠️高风险（破坏性 StepType 枚举扩展 + HITL 审批门 + 运行时 executor + 编排器分支/循环引擎）
-- 设计文档：`features/node-bundle.md`（已建骨架，§6 决策待锁定）
+### F20 · 节点全家桶（Workflow 节点类型扩展）  [P1]  done  ⚠️高风险（破坏性 StepType 枚举扩展 + HITL 审批门 + 运行时 executor + 编排器分支/循环引擎）
+- 设计文档：`features/node-bundle.md`（已建，§6 决策 S1–S5 已锁定）
 - 目标：补齐 DAG 节点原语——HTTP / Condition / Loop / Variable / SubWorkflow / Delay / UserInput(HITL)，前端调色板+配置面板+后端 executor（Tool/Code/Knowledge 已在 F5 落地）。纯增量节点类型，无新聚合。
 - 风险：🔴 StepType 枚举破坏性扩展（全仓 switch 回归）+ HITL 暂停/恢复 + 表达式引擎选型。实现前须锁定 §6（S1 枚举命名 / S3 HITL 方案 / S2 表达式引擎）。
+- **完成记录（2026-08-03）**：feature-builder 全栈实跑落地（分支 `feat/f20-node-types`，commit `3f14a63`，已合并 master via PR #17）。新增 7 节点类型（StepType 8–14：HTTP/Condition/Loop/Variable/SubWorkflow/Delay/UserInput(HITL)）；HumanApproval 聚合 + 租户隔离仓储 + EF 迁移 `20260731042445_AddHumanApproval`；Jint 4.1.0 沙箱表达式（2s/200k，AllowClr=false）；Workflow.Reset 重跑语义；前端画布全联动 + i18n。三道质量门全 PASS（`.quality-gate.json` 推进 `f20-node-types`，`cleared:true`）；后端 `dotnet test` **330/330**、前端 qa.mjs OVERALL PASS。审查修复 P2（SetResult 空守卫 ThrowIfNullOrWhiteSpace→500，放宽 ThrowIfNull 同步消解 HTTP 204 空体崩溃）/P3（Delay 取消语义澄清）。Loop 编排器内联执行（RunLoopBodyAsync，无 LoopStepExecutor 死代码）；Condition 经 ApplyBranchSkip+ReachableFrom BFS 算不可达子图；HITL 经 HumanApproval(Pending)+NeedsIntervention→SetState(Paused)→ResolveApproval 恢复。质量报告 `docs/quality/f20-node-types-gate.md`。
 
-### F21 · 工作流触发器（Webhook / 定时 / Chat）  [P1]  open  ⚠️高风险（后台调度基础设施 + 匿名 Webhook + Chat 链路耦合）
-- 设计文档：`features/workflow-triggers.md`（已建骨架，§6 决策待锁定）
-- 目标：工作流被动触发——Webhook（POST /webhooks/workflow/{token}）/ 定时（cron + BackgroundService 调度）/ Chat（会话绑定触发）。多租户隔离 + 审计。
-- 风险：🔴 调度基础设施（多实例防重）+ 匿名端点安全 + Chat 耦合。实现前须锁定 §6（S1 调度方案 / S2 Chat 存储）。
+### F21 · 工作流触发器（Webhook / 定时 / Chat）  [P1]  done  ✅（后台调度基础设施 + 匿名 Webhook + Chat 链路耦合）
+- 设计文档：`features/workflow-triggers.md`（§6 决策已锁定：S1 进程内 BackgroundService 轮询 / S2 独立 ConversationWorkflowBinding 表 / S3 复用现有限流 / S4 完整分布式锁(Redis)+进程内回退）
+- 目标（已实现）：工作流被动触发——Webhook（POST /webhooks/workflow/{token}，匿名+限流）/ 定时（cron + BackgroundService 调度，分布式锁防重）/ Chat（会话绑定触发）。多租户隔离 + 审计。
+- 交付：后端 Domain/Application/Infrastructure/Api 全栈 + 前端触发器 Drawer & 会话绑定 UI + 中英 i18n；三道质量门全 PASS（ddd-code-reviewer / ddd-phase-quality-gate / codebase-optimizer），详见 `docs/quality/f21-workflow-triggers-gate.md`。
 
 ### F22 · 发布工作流为 API / MCP Server  [P1]  open  ⚠️高风险（API Key 鉴权复用 + MCP 动态注册 + 外部输入隔离）
 - 设计文档：`features/publish-api-mcp.md`（已建骨架，§6 决策待锁定）

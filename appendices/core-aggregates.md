@@ -137,6 +137,33 @@ public class Conversation                        // 聚合根
     public DateTime CreatedAt { get; private init; }
 }
 
+// Domain/Aggregates/WorkflowTriggers/WorkflowTrigger.cs（F21 工作流触发器）
+public class WorkflowTrigger : ITenantScoped, IAggregateRoot   // 触发器聚合（每工作流至多一个 Webhook + 一个 Schedule，按 Type 区分）
+{
+    public Guid Id { get; private init; }
+    public Guid WorkflowId { get; private init; }
+    public Guid TenantId { get; private init; }                // 租户 ID（多租户隔离）
+    public TriggerType Type { get; private set; }              // Webhook / Schedule
+    public string? TriggerToken { get; private set; }          // 不可猜令牌（仅 Webhook）
+    public string? Cron { get; private set; }                  // cron 表达式（仅 Schedule）
+    public string? Timezone { get; private set; }              // IANA 时区（仅 Schedule）
+    public bool Enabled { get; private set; }                  // 是否启用
+    public DateTime? LastRunAt { get; private set; }           // 上次运行（仅 Schedule）
+    public DateTime? NextRunAt { get; private set; }           // 预计算下次运行（仅 Schedule）
+    public DateTime CreatedAt { get; private init; }
+    public DateTime UpdatedAt { get; private set; }
+}
+
+// Domain/Aggregates/Conversations/ConversationWorkflowBinding.cs（F21 Chat 触发器绑定）
+public class ConversationWorkflowBinding : ITenantScoped, IAggregateRoot   // 会话→工作流 多对多绑定（独立于 Conversation.WorkflowId）
+{
+    public Guid Id { get; private init; }
+    public Guid ConversationId { get; private init; }
+    public Guid WorkflowId { get; private init; }
+    public Guid TenantId { get; private init; }                // 租户 ID（多租户隔离）
+    public DateTime CreatedAt { get; private init; }
+}
+
 // Domain/Aggregates/ToolDefinitions/ToolDefinition.cs
 public class ToolDefinition                      // 聚合根
 {

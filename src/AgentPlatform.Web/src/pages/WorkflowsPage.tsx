@@ -15,8 +15,9 @@ import {
   Spin,
   Popconfirm,
 } from 'antd';
-import { HistoryOutlined, DownloadOutlined, EditOutlined } from '@ant-design/icons';
+import { HistoryOutlined, DownloadOutlined, EditOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import WorkflowTriggersDrawer from '../components/WorkflowTriggersDrawer';
 import type { Workflow, WorkflowVersionSummary } from '../types';
 import {
   getWorkflows,
@@ -62,6 +63,17 @@ const WorkflowsPage: React.FC = () => {
   const [versionsLoading, setVersionsLoading] = useState(false);
   const [saveNote, setSaveNote] = useState('');
   const [savingVersion, setSavingVersion] = useState(false);
+
+  // ── F21 触发器设置抽屉 ──
+  const [triggerDrawerOpen, setTriggerDrawerOpen] = useState(false);
+  const [triggerWfId, setTriggerWfId] = useState<string | null>(null);
+  const [triggerWfName, setTriggerWfName] = useState('');
+
+  const openTriggers = (w: Workflow) => {
+    setTriggerWfId(w.id);
+    setTriggerWfName(w.name);
+    setTriggerDrawerOpen(true);
+  };
 
   const fetch = useCallback((p: number, ps: number, status: number | undefined, signal?: AbortSignal) => {
     setLoading(true);
@@ -230,6 +242,16 @@ const WorkflowsPage: React.FC = () => {
             >
               {t('pages.workflows.versions.exportJson')}
             </Button>
+            <Button
+              size="small"
+              icon={<ThunderboltOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                openTriggers(w);
+              }}
+            >
+              {t('pages.workflows.triggers.open')}
+            </Button>
           </Space>
         </Space>
       </Card>
@@ -374,6 +396,14 @@ const WorkflowsPage: React.FC = () => {
           />
         )}
       </Drawer>
+
+      <WorkflowTriggersDrawer
+        workflowId={triggerWfId ?? ''}
+        workflowName={triggerWfName}
+        open={triggerDrawerOpen}
+        onClose={() => setTriggerDrawerOpen(false)}
+        canManage={canManage}
+      />
     </div>
   );
 };
