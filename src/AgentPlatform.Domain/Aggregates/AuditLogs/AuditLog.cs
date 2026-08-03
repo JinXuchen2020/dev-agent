@@ -94,5 +94,17 @@ public enum AuditActionType
     ExportWorkflow,
 
     /// <summary>A workflow version snapshot was deleted.</summary>
-    DeleteWorkflowVersion
+    DeleteWorkflowVersion,
+
+    /// <summary>A workflow trigger (webhook or schedule) was enabled.</summary>
+    EnableTrigger,
+
+    /// <summary>A workflow trigger (webhook or schedule) was disabled.</summary>
+    DisableTrigger,
+
+    /// <summary>A workflow was invoked through its webhook trigger.</summary>
+    WebhookInvoke,
+
+    /// <summary>A workflow was invoked through its scheduled trigger.</summary>
+    ScheduledRun
 }

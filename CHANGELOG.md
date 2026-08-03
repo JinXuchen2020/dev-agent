@@ -1,5 +1,25 @@
 # 变更日志
 
+## v2.14 (2026-07-31)
+
+### F21 · 工作流触发器（Webhook / 定时 / Chat） 完成（feature-builder 全栈实跑，🔴高风险增量闭环）
+
+为工作流补齐三种被动触发能力，全链路多租户隔离 + 审计，三道质量门全 PASS。
+
+**核心改动：**
+- **触发器聚合**：新增 `WorkflowTrigger`（`ITenantScoped`，每工作流至多一个 Webhook + 一个 Schedule，按 `TriggerType` 区分；`TriggerToken` 32 字节 URL-safe base64 不可猜、`Cron`/`Timezone`/`NextRunAt` 仅 Schedule）+ `ConversationWorkflowBinding`（会话→工作流多对多，Chat 触发器）。EF 迁移 `20260803014825_AddWorkflowTriggersAndBindings`（`Id` 均 `ValueGeneratedNever()` 避 GUID 陷阱；唯一索引 `(TenantId,WorkflowId,Type)` 防重复触发器）。
+- **Webhook 触发器**：`POST /api/v1/webhooks/workflow/{token}` 匿名入口（受 `WebhookAnonymous` 限流，令牌即鉴权，未知/禁用令牌→404 不泄露存在性）；管理端点 `POST/DELETE {id}/triggers/webhook`（生成/启用幂等复用、禁用保留令牌）。
+- **定时触发器**：`PUT {id}/triggers/schedule`（cron+IANA 时区，幂等 upsert；Cronos 计算 `NextRunAt`，空 cron→400）+ 后台 `WorkflowScheduler`（`BackgroundService`，30s 轮询跨租户扫描到期项，每触发器专属分布式锁防多实例重触发，先推进 `NextRunAt` 再运行避免失败死循环）。
+- **Chat 触发器**：会话绑定/解绑/列表/触发端点；`TriggerWorkflowFromConversation` 三重租户校验（会话/工作流归属 + 绑定存在）后委托 `TriggerWorkflowCommand`（Chat 仅作信封/审计标签，`TriggerType.Chat`，不持久化 `WorkflowTrigger` 实体）。
+- **调度防腐**：`TriggerWorkflowCommandHandler` 运行时注入租户（`ITenantContext` Scoped）、合并触发信封到 Context、`Running` 守卫防重入、运行后还原 Context 避免载荷污染工作流配置；`Reset()` 处理终态重跑。
+- **前端**：`WorkflowTriggersDrawer`（Webhook 令牌展示/复制/禁用、Schedule cron/时区/下次运行、Chat 绑定数）+ `ConversationDetailPage` 工作流绑定 Drawer（绑定/运行/解绑）+ `types`/`api`/`locales` 全量对齐（i18n 对称）。
+
+**质量与测试：**
+- 三道质量门禁全 PASS（`ddd-code-reviewer` / `ddd-phase-quality-gate` / `codebase-optimizer`）；`.quality-gate.json` 推进 `f21-workflow-triggers`
+- 后端 `dotnet test src/AgentPlatform.sln` **354 passed / 0 failed**（SpecFlow 41 / Arch 9 / Application 143 / Infrastructure 123 / Api 33 / Integration 5；含 F21 新增 App 层 18 例 + Api 契约 3 例 + **联调冒烟 3 例**：真实宿主 ASP.NET Core 管线跑通 Webhook/Schedule/Chat 全生命周期）
+- 前端 `tsc --noEmit` **0 error** + `node scripts/qa.mjs` OVERALL PASS（typecheck/lint/build/unit 全绿，i18n-symmetry 通过）
+- 质量门闭环修复：Redis 分布式锁释放由无条件删除改为令牌 CAS（`Lua if GET==ARGV then DEL`，降级路径不持有真实锁），杜绝多实例 TTL 过期后误删他实例锁
+
 ## v2.13 (2026-07-30)
 
 ### F7 · 工作流版本管理 + 导入导出 完成（feature-builder 全栈实跑，🟢低风险增量；program 子项①）

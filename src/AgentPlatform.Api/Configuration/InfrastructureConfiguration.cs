@@ -54,6 +54,20 @@ internal static class InfrastructureConfiguration
                         QueueLimit = 0
                     });
             });
+            // F21 匿名 Webhook 端点限流：按 token（路径）分区，缺失时回退到客户端 IP，防止令牌泄露后被滥用。
+            options.AddPolicy("WebhookAnonymous", context =>
+            {
+                var token = context.Request.RouteValues.TryGetValue("token", out var t) ? t?.ToString() : null;
+                var partitionKey = token ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                return RateLimitPartition.GetTokenBucketLimiter(
+                    partitionKey, _ => new TokenBucketRateLimiterOptions
+                    {
+                        TokenLimit = 20,
+                        TokensPerPeriod = 20,
+                        ReplenishmentPeriod = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0
+                    });
+            });
             options.RejectionStatusCode = 429;
         });
 
