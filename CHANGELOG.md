@@ -1,5 +1,27 @@
 # 变更日志
 
+## v2.14 (2026-08-03)
+
+### F22 · 发布工作流为 API / MCP Server 完成（feature-builder 全栈实跑，🔴高风险；program 子项④）
+
+把已构建的工作流一键「发布」为可外部调用的能力：① 受 API Key 鉴权的 HTTP 端点（`POST /api/v1/published-workflows/{slug}`）；② 平台内 MCP tool（`POST /api/v1/mcp`，JSON-RPC 2.0 `tools/list` + `tools/call`，无独立进程/端口）。复用现有 API Key 体系与 `RunWorkflowCommand` 编排，多租户隔离 + 审计。
+
+**核心改动：**
+- **聚合与枚举**：新增 `PublishedWorkflow`（`ITenantScoped`：`Id/WorkflowId/TenantId/Slug/Mode/ApiKeyId?/InputSchemaJson?/IsEnabled/CreatedAt/UpdatedAt`；`Slug` 租户内唯一 + `Id ValueGeneratedNever()` 避 GUID 陷阱）+ `PublishMode` 枚举（Api/Mcp）+ `PublishedWorkflowException`（携带 `HttpStatusCode`）+ `IPublishedWorkflowRepository`。
+- **5 个 handler**：`PublishWorkflow`（同工作流仅一条发布记录，重复发布替换既有；生成 16 位 URL 安全 slug，碰撞重试 ≤5）、`UnpublishWorkflow`（幂等）、`GetPublishStatus`、`ListMcpTools`（仅 `Enabled && Mode==Mcp`，N+1 已修）、`RunPublishedWorkflow`（API/MCP 共用；绑定 Key 隔离、跨租户隔离、`required` 输入校验、Running→409、终态重置后重跑）。均为 `ICommand<T>` 经 `UnitOfWorkBehavior` 自动提交。
+- **EF 映射**：`PublishedWorkflowConfiguration` + 迁移 `20260803035042_AddPublishedWorkflow`（唯一索引 `(TenantId,Slug)` + 索引 `(TenantId,WorkflowId)`）。
+- **Api 层**：`PublishedWorkflowsController`（slug 端点，`[Authorize(AuthenticationSchemes="ApiKey")]` + `PerApiKey` 限流）+ `McpController`（平台内 JSON-RPC 2.0，执行异常按 MCP 约定 `isError=true` 返回）+ `PublishedWorkflowExceptionHandler`（RFC 9457 ProblemDetails）。
+- **审计**：`AuditActionType` 增 `PublishWorkflow`/`UnpublishWorkflow`/`RunWorkflow`，运行/发布/取消均落库。
+- **前端**：`WorkflowsPage` 发布管理 Drawer（发布/取消/查看 slug+端点+绑定 Key+启停 Tag，inputSchema + mode + key 表单）+ `api.ts`/`types`/`locales` 中英 i18n 对称。
+- **§6 决策落地（2026-08-03 锁定 S1–S4）**：S1 复用现有 `ApiKeyAuthenticationHandler`；S2 平台内 MCP tool（v1 无独立部署）；S3 用户自定义 `InputSchema`（运行时 `required` 校验）；S4 仅返回最终输出（Trace 留待 F24）。
+
+**质量与测试：**
+- 三道质量门禁全 PASS（`ddd-code-reviewer` / `ddd-phase-quality-gate` / `codebase-optimizer`）；`.quality-gate.json` 推进 `f22-publish-api-mcp`，`cleared:true`
+- 后端 `dotnet build` **0/0** + 全方案 `dotnet test` **348/348**（SpecFlow 41 / Arch 9 / Application 141 / Infrastructure 123 / Api 29 / Integration 5；含 F22 新增 18 例：Application 16（发布/取消/状态/MCP 列表/运行隔离）、Api 2（鉴权边界 401））
+- 前端 `tsc --noEmit` **0 error** + `node scripts/qa.mjs` OVERALL PASS（typecheck/lint/build/unit 含 i18n-symmetry）
+- 审查修复 P2×1：`ListMcpToolsQueryHandler` 移除按工作流名逐一查名的 N+1，改用 `p.Slug` 作 name/description
+- 已知残留（非阻断）：feature doc 原草拟 `IMcpToolProvider` 命名与落地 `McpController` 机制名差异（仅措辞，S2 行为一致）；控制器 happy-path 端到端测试待补 seed。质量报告 `docs/quality/f22-publish-api-mcp-gate.md`，结构清单嵌入 `features/publish-api-mcp.md`。
+
 ## v2.13 (2026-07-30)
 
 ### F7 · 工作流版本管理 + 导入导出 完成（feature-builder 全栈实跑，🟢低风险增量；program 子项①）

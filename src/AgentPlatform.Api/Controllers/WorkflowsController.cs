@@ -7,6 +7,10 @@ using AgentPlatform.Application.Workflows.Commands.UpdateWorkflow;
 using AgentPlatform.Application.Workflows.Queries.GetWorkflow;
 using AgentPlatform.Application.Workflows.Queries.ListApprovals;
 using AgentPlatform.Application.Workflows.Queries.ListWorkflows;
+using AgentPlatform.Application.PublishedWorkflows;
+using AgentPlatform.Application.Workflows.Commands.PublishWorkflow;
+using AgentPlatform.Application.Workflows.Commands.UnpublishWorkflow;
+using AgentPlatform.Application.Workflows.Queries.GetPublishStatus;
 using AgentPlatform.Application.Workflows.Versioning;
 using AgentPlatform.Domain.Enums;
 using MediatR;
@@ -300,6 +304,52 @@ public sealed class WorkflowsController : ControllerBase
         var result = await _mediator.Send(command, ct);
         return result == null ? NotFound() : Ok(result);
     }
+
+    /// <summary>
+    /// 发布工作流为外部可执行能力（F22）：API 端点或 MCP tool。每工作流至多一条发布记录，重复发布替换既有。
+    /// </summary>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpPost("{id:guid}/publish")]
+    public async Task<IActionResult> PublishWorkflow(
+        Guid id,
+        [FromBody] PublishWorkflowRequest request,
+        CancellationToken ct = default)
+    {
+        if (request is null)
+            return BadRequest("Request body is required.");
+
+        var command = new PublishWorkflowCommand(
+            id, request.Mode, request.ApiKeyId, request.InputSchemaJson, _tenant.GetTenantId());
+        var result = await _mediator.Send(command, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// 取消发布工作流（F22）。幂等：未发布则无操作。
+    /// </summary>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpDelete("{id:guid}/publish")]
+    public async Task<IActionResult> UnpublishWorkflow(
+        Guid id,
+        CancellationToken ct = default)
+    {
+        await _mediator.Send(new UnpublishWorkflowCommand(id, _tenant.GetTenantId()), ct);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// 查询某工作流的发布状态（F22）。未发布返回 204。
+    /// </summary>
+    [HttpGet("{id:guid}/publish")]
+    public async Task<IActionResult> GetPublishStatus(
+        Guid id,
+        CancellationToken ct = default)
+    {
+        var result = await _mediator.Send(new GetPublishStatusQuery(id, _tenant.GetTenantId()), ct);
+        if (result is null)
+            return NoContent();
+        return Ok(result);
+    }
 }
 
 /// <summary>
@@ -341,4 +391,14 @@ public sealed record CreateVersionRequest(string? Note = null);
 public sealed record ResolveApprovalRequest(
     bool Approved,
     string? Input = null);
+
+/// <summary>
+/// Request model for publishing a workflow as an external API/MCP endpoint (F22).
+/// <see cref="Mode"/> 必填（Api / Mcp）；<see cref="ApiKeyId"/> 为可选绑定（null = 租户任意有效 Key）；
+/// <see cref="InputSchemaJson"/> 为可选 JSON Schema 片段（运行时做轻量 required 校验）。
+/// </summary>
+public sealed record PublishWorkflowRequest(
+    PublishMode Mode,
+    Guid? ApiKeyId = null,
+    string? InputSchemaJson = null);
 

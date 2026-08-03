@@ -330,6 +330,8 @@ Scenario Outline: 主模型超时后降级到备用模型
 - [ ] **前端进度面板**：步骤列表中实时展示当前步骤状态和进度条
 - [ ] **日志清理 Job**：定时删除 90 天前的日志、清理 30 天前的 payload
 
+- [x] **发布工作流为 API / MCP Server**：`POST /api/v1/published-workflows/{slug}`（API Key 鉴权）+ `POST /api/v1/mcp`（平台内 JSON-RPC 2.0 `tools/list`/`tools/call`，无独立进程/端口），多租户隔离 + 审计（F22 实现，质量报告 `docs/quality/f22-publish-api-mcp-gate.md`）
+
 **阶段三验收**：平台具备配置管理、可视化编排、监控大盘、<strong>自定义 Agent 角色</strong>。
 
 ### 阶段四 · 前沿特性与收尾

@@ -35,6 +35,7 @@ builder.Services.AddApiVersioning(options =>
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<AgentPlatform.Api.Exceptions.WorkflowConflictExceptionHandler>();
+builder.Services.AddExceptionHandler<AgentPlatform.Api.Exceptions.PublishedWorkflowExceptionHandler>();
 builder.Services.AddExceptionHandler<AgentPlatform.Api.Exceptions.WorkflowGraphExceptionHandler>();
 builder.Services.AddExceptionHandler<AgentPlatform.Api.Exceptions.UnsupportedContentTypeExceptionHandler>();
 builder.Services.AddExceptionHandler<AgentPlatform.Api.Exceptions.InvalidYamlExceptionHandler>();

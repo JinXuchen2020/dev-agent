@@ -17,7 +17,7 @@ import {
 } from 'antd';
 import { HistoryOutlined, DownloadOutlined, EditOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import type { Workflow, WorkflowVersionSummary } from '../types';
+import type { Workflow, WorkflowVersionSummary, PublishStatus, PublishWorkflowRequest, ApiKey } from '../types';
 import {
   getWorkflows,
   runWorkflow,
@@ -27,6 +27,10 @@ import {
   restoreWorkflowVersion,
   deleteWorkflowVersion,
   exportWorkflow,
+  getPublishStatus,
+  publishWorkflow,
+  unpublishWorkflow,
+  getApiKeys,
 } from '../services/api';
 import { useAppStore } from '../stores/appStore';
 import { mapWorkflowStatus, WORKFLOW_STATUS_FILTER_OPTIONS } from '../status';
@@ -182,6 +186,77 @@ const WorkflowsPage: React.FC = () => {
     }
   };
 
+  // ── F22 发布管理（API / MCP 端点）──
+  const [pubDrawerOpen, setPubDrawerOpen] = useState(false);
+  const [pubWfId, setPubWfId] = useState<string | null>(null);
+  const [pubWfName, setPubWfName] = useState('');
+  const [pubStatus, setPubStatus] = useState<PublishStatus | null>(null);
+  const [pubLoading, setPubLoading] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
+  const [pubMode, setPubMode] = useState<'Api' | 'Mcp'>('Api');
+  const [pubApiKeyId, setPubApiKeyId] = useState<string | null>(null);
+  const [pubInputSchema, setPubInputSchema] = useState('');
+
+  const openPublish = (w: Workflow) => {
+    setPubWfId(w.id);
+    setPubWfName(w.name);
+    setPubMode('Api');
+    setPubApiKeyId(null);
+    setPubInputSchema('');
+    setPubStatus(null);
+    setPubDrawerOpen(true);
+    setPubLoading(true);
+    Promise.all([
+      getPublishStatus(w.id).then(setPubStatus).catch(() => setPubStatus(null)),
+      getApiKeys().then((ks) => setApiKeys(ks ?? [])).catch(() => setApiKeys([])),
+    ]).finally(() => setPubLoading(false));
+  };
+
+  const handlePublish = async () => {
+    if (!pubWfId) return;
+    setPublishing(true);
+    try {
+      const req: PublishWorkflowRequest = {
+        mode: pubMode,
+        apiKeyId: pubApiKeyId || null,
+        inputSchemaJson: pubInputSchema.trim() ? pubInputSchema.trim() : null,
+      };
+      const status = await publishWorkflow(pubWfId, req);
+      setPubStatus(status);
+      message.success(t('pages.workflows.publish.publishSuccess'));
+    } catch (e) {
+      message.error(getErrorMessage(e));
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const handleUnpublish = () => {
+    if (!pubWfId) return;
+    modal.confirm({
+      title: t('pages.workflows.publish.unpublishConfirm'),
+      onOk: async () => {
+        try {
+          await unpublishWorkflow(pubWfId);
+          setPubStatus(null);
+          message.success(t('pages.workflows.publish.unpublishSuccess'));
+        } catch (e) {
+          message.error(getErrorMessage(e));
+        }
+      },
+    });
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      message.success(t('common.copied'));
+    } catch {
+      /* clipboard unavailable */
+    }
+  };
+
   const renderWorkflowCard = (w: Workflow) => {
     const status = mapWorkflowStatus(w.currentState);
     return (
@@ -230,6 +305,17 @@ const WorkflowsPage: React.FC = () => {
             >
               {t('pages.workflows.versions.exportJson')}
             </Button>
+            {canManage && (
+              <Button
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openPublish(w);
+                }}
+              >
+                {t('pages.workflows.publish.publish')}
+              </Button>
+            )}
           </Space>
         </Space>
       </Card>
@@ -372,6 +458,125 @@ const WorkflowsPage: React.FC = () => {
               </List.Item>
             )}
           />
+        )}
+      </Drawer>
+
+      <Drawer
+        title={t('pages.workflows.publish.drawerTitle', { name: pubWfName })}
+        open={pubDrawerOpen}
+        onClose={() => setPubDrawerOpen(false)}
+        width={540}
+      >
+        {pubLoading ? (
+          <div style={{ textAlign: 'center', padding: 32 }}>
+            <Spin />
+          </div>
+        ) : pubStatus ? (
+          <Space direction="vertical" size={12} style={{ width: '100%' }}>
+            <Tag color={pubStatus.isEnabled ? 'green' : 'default'}>
+              {pubStatus.isEnabled
+                ? t('pages.workflows.publish.enabled')
+                : t('pages.workflows.publish.disabled')}
+            </Tag>
+            <div>
+              <div style={{ color: colors.textMuted, fontSize: 13 }}>
+                {t('pages.workflows.publish.modeLabel')}
+              </div>
+              <div>
+                {pubStatus.mode === 'Api'
+                  ? t('pages.workflows.publish.modeApi')
+                  : t('pages.workflows.publish.modeMcp')}
+              </div>
+            </div>
+            <div>
+              <div style={{ color: colors.textMuted, fontSize: 13 }}>
+                {t('pages.workflows.publish.slug')}
+              </div>
+              <Space>
+                <code>{pubStatus.slug}</code>
+                <Button size="small" onClick={() => copyToClipboard(pubStatus.slug)}>
+                  {t('common.copy')}
+                </Button>
+              </Space>
+            </div>
+            {pubStatus.mode === 'Api' && (
+              <div>
+                <div style={{ color: colors.textMuted, fontSize: 13 }}>
+                  {t('pages.workflows.publish.endpoint')}
+                </div>
+                <code>POST /api/v1/published-workflows/{pubStatus.slug}</code>
+              </div>
+            )}
+            {pubStatus.apiKeyId && (
+              <div>
+                <div style={{ color: colors.textMuted, fontSize: 13 }}>
+                  {t('pages.workflows.publish.bindKey')}
+                </div>
+                <div>
+                  {apiKeys.find((k) => k.id === pubStatus.apiKeyId)?.name ?? pubStatus.apiKeyId}
+                </div>
+              </div>
+            )}
+            {canManage && (
+              <Popconfirm
+                title={t('pages.workflows.publish.unpublishConfirm')}
+                onConfirm={handleUnpublish}
+                okText={t('common.confirm')}
+                cancelText={t('common.cancel')}
+              >
+                <Button danger>{t('pages.workflows.publish.unpublish')}</Button>
+              </Popconfirm>
+            )}
+          </Space>
+        ) : (
+          <Space direction="vertical" size={12} style={{ width: '100%' }}>
+            <Empty description={t('pages.workflows.publish.notPublished')} />
+            {canManage && (
+              <>
+                <div>
+                  <div style={{ color: colors.textMuted, fontSize: 13, marginBottom: 4 }}>
+                    {t('pages.workflows.publish.mode')}
+                  </div>
+                  <Select
+                    style={{ width: '100%' }}
+                    value={pubMode}
+                    onChange={(v) => setPubMode(v)}
+                    options={[
+                      { value: 'Api', label: t('pages.workflows.publish.modeApi') },
+                      { value: 'Mcp', label: t('pages.workflows.publish.modeMcp') },
+                    ]}
+                  />
+                </div>
+                <div>
+                  <div style={{ color: colors.textMuted, fontSize: 13, marginBottom: 4 }}>
+                    {t('pages.workflows.publish.bindKey')}
+                  </div>
+                  <Select
+                    style={{ width: '100%' }}
+                    allowClear
+                    placeholder={t('pages.workflows.publish.bindKeyAny')}
+                    value={pubApiKeyId ?? undefined}
+                    onChange={(v) => setPubApiKeyId(v ?? null)}
+                    options={apiKeys.map((k) => ({ value: k.id, label: `${k.name} (${k.prefix})` }))}
+                  />
+                </div>
+                <div>
+                  <div style={{ color: colors.textMuted, fontSize: 13, marginBottom: 4 }}>
+                    {t('pages.workflows.publish.inputSchema')}
+                  </div>
+                  <Input.TextArea
+                    rows={4}
+                    placeholder={t('pages.workflows.publish.inputSchemaPlaceholder')}
+                    value={pubInputSchema}
+                    onChange={(e) => setPubInputSchema(e.target.value)}
+                  />
+                </div>
+                <Button type="primary" loading={publishing} onClick={handlePublish}>
+                  {t('pages.workflows.publish.publish')}
+                </Button>
+              </>
+            )}
+          </Space>
         )}
       </Drawer>
     </div>

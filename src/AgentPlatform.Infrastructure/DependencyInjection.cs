@@ -101,6 +101,9 @@ public static class DependencyInjection
         services.AddScoped<IWorkflowRepository, WorkflowRepository>();
         services.AddScoped<IWorkflowVersionRepository, WorkflowVersionRepository>();
         services.AddScoped<IExecutionLogRepository, ExecutionLogRepository>();
+        // ── F22 已发布工作流（API / MCP 暴露）仓储 ──
+        services.AddScoped<AgentPlatform.Domain.Repositories.IPublishedWorkflowRepository,
+            AgentPlatform.Infrastructure.Persistence.Repositories.PublishedWorkflowRepository>();
         services.AddScoped<IAgentRoleDefinitionRepository, AgentRoleDefinitionRepository>();
         services.AddScoped<IAgentConfigurationRepository, AgentConfigurationRepository>();
         services.AddSingleton<IYamlConfigurationParser, YamlConfigurationParserService>();

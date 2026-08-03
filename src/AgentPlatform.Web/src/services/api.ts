@@ -22,6 +22,8 @@ import type {
   WorkflowExport,
   ImportWorkflowRequest,
   ApprovalDto,
+  PublishStatus,
+  PublishWorkflowRequest,
   KnowledgeBase,
   KnowledgeDocument,
   AuthUser,
@@ -220,6 +222,19 @@ export const exportWorkflow = (workflowId: string) =>
 // 从 JSON 定义导入为「新」工作流，返回新建的 WorkflowDetail。
 export const importWorkflow = (req: ImportWorkflowRequest) =>
   api.post<WorkflowDetail>(`/workflows/import`, req).then((r) => r.data);
+
+// F22 · 发布工作流为 API / MCP 端点（管理面）。
+// 未发布时 GET 返回 204（无内容），此处归一化为 null。
+export const getPublishStatus = (workflowId: string) =>
+  api
+    .get<PublishStatus | null>(`/workflows/${workflowId}/publish`)
+    .then((r) => (r.status === 204 ? null : r.data ?? null));
+
+export const publishWorkflow = (workflowId: string, req: PublishWorkflowRequest) =>
+  api.post<PublishStatus>(`/workflows/${workflowId}/publish`, req).then((r) => r.data);
+
+export const unpublishWorkflow = (workflowId: string) =>
+  api.delete<void>(`/workflows/${workflowId}/publish`).then(() => undefined);
 
 // Execution Logs
 export const getExecutionLogs = (opts?: {

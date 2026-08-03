@@ -68,6 +68,9 @@
 | POST | `/api/v1/workflows/{id}/execute` | 执行工作流（异步） | write:workflow |
 | GET | `/api/v1/workflows/{id}/executions` | 执行历史 | read:workflow |
 | GET | `/api/v1/workflows/{id}/stream` | 流式执行状态（SSE） | read:workflow |
+| POST | `/api/v1/workflows/{id}/publish` | 发布为 API/MCP（body: `mode` Api\|Mcp, `apiKeyId?`, `inputSchema?`） | write:workflow |
+| DELETE | `/api/v1/workflows/{id}/publish` | 取消发布（幂等，未发布无操作） | write:workflow |
+| GET | `/api/v1/workflows/{id}/publish` | 发布状态（未发布 → 204） | read:workflow |
 
 ```json
 // POST /api/v1/workflows 请求
@@ -107,6 +110,53 @@
     "updatedAt": "2026-06-30T14:30:00Z"
   }
 }
+```
+
+### I.3.1 发布工作流外部调用 API（F22）
+
+> 由 `POST /api/v1/workflows/{id}/publish` 生成的对外能力。鉴权复用现有 **API Key** 体系（`[Authorize(AuthenticationSchemes="ApiKey")]` + `PerApiKey` 令牌桶限流，非 JWT/cookie），租户由密钥 `tenant_id` 声明自动解析，`key_id` 声明用于调用审计归属。
+
+| 方法 | 路径 | 说明 | 鉴权 |
+| :--- | :--- | :--- | :--- |
+| POST | `/api/v1/published-workflows/{slug}` | 按 slug 运行已发布的 **API 模式**工作流（body: `inputJson?`） | API Key |
+| POST | `/api/v1/mcp` | 平台内 **MCP** 暴露端点（JSON-RPC 2.0：`tools/list` + `tools/call`） | API Key |
+
+**运行端点约定：**
+- 无效 / 禁用 / 绑定 Key 不匹配的 slug → **404**（不泄露存在性）。
+- 输入若定义了 `InputSchemaJson` 且含 `required`，缺字段 → **400**。
+- 工作流处于 `Running` → **409**（Conflict）。
+- 终态/暂停态重跑：服务端先重置为干净状态再运行（同 F7 重跑语义）。
+- 返回仅最终输出（`status` + `output`），不含中间节点 Trace（Trace 视图见 F24）。
+
+```json
+// POST /api/v1/published-workflows/{slug} 请求
+{ "inputJson": "{\"topic\":\"Q3 复盘\"}" }
+
+// 响应 200
+{
+  "workflowId": "guid",
+  "slug": "aZ3kPq9XyLmN2bRt",
+  "status": "Completed",
+  "output": "{...最终 blackboard JSON...}",
+  "errorMessage": null
+}
+```
+
+```json
+// POST /api/v1/mcp  （JSON-RPC 2.0）
+// tools/list 请求
+{ "jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {} }
+// tools/list 响应（仅 Enabled && Mode==Mcp 的发布记录，name/description 同取 slug）
+{ "jsonrpc": "2.0", "id": 1,
+  "result": { "tools": [ { "name": "aZ3kPq9XyLmN2bRt", "description": "aZ3kPq9XyLmN2bRt",
+                           "inputSchema": { "type": "object" } } ] } }
+
+// tools/call 请求（name = slug）
+{ "jsonrpc": "2.0", "id": 2, "method": "tools/call",
+  "params": { "name": "aZ3kPq9XyLmN2bRt", "arguments": { "topic": "Q3 复盘" } } }
+// tools/call 响应（执行异常按 MCP 约定 isError=true，不抛 HTTP 错误）
+{ "jsonrpc": "2.0", "id": 2,
+  "result": { "content": [ { "type": "text", "text": "{...输出...}" } ], "isError": false } }
 ```
 
 ### I.4 Agent API

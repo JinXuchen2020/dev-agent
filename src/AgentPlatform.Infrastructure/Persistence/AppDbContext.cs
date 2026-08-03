@@ -111,6 +111,12 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
     public DbSet<HumanApproval> HumanApprovals => Set<HumanApproval>();
 
     /// <summary>
+    /// Gets the <see cref="DbSet{TEntity}"/> providing access to persisted published-workflow records (F22, tenant-scoped).
+    /// </summary>
+    public DbSet<AgentPlatform.Domain.Aggregates.PublishedWorkflows.PublishedWorkflow> PublishedWorkflows =>
+        Set<AgentPlatform.Domain.Aggregates.PublishedWorkflows.PublishedWorkflow>();
+
+    /// <summary>
     /// Returns all aggregate roots currently tracked by the change tracker, used for dispatching domain events on save.
     /// </summary>
     /// <returns>A read-only collection of tracked <see cref="IAggregateRoot"/> instances.</returns>

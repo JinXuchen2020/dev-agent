@@ -327,6 +327,26 @@ export interface WorkflowVersionList {
   totalCount: number;
 }
 
+// F22 · 发布工作流为 API / MCP 端点。
+export type PublishMode = 'Api' | 'Mcp';
+
+export interface PublishStatus {
+  id: string;
+  workflowId: string;
+  slug: string;
+  mode: PublishMode;
+  isEnabled: boolean;
+  apiKeyId: string | null;
+  inputSchemaJson: string | null;
+  createdAt: string;
+}
+
+export interface PublishWorkflowRequest {
+  mode: PublishMode;
+  apiKeyId?: string | null;
+  inputSchemaJson?: string | null;
+}
+
 // 导出 = 与导入请求同构（nodes/edges 可直接回灌 importWorkflow）。
 export interface WorkflowExport {
   id: string;

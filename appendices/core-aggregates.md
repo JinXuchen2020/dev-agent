@@ -64,7 +64,10 @@ public enum AuditActionType
     KeyRotation,           // Key 轮换
     WorkflowStart,         // 工作流启动
     WorkflowComplete,      // 工作流完成
-    ToolCall               // 工具调用（含 Skill / MCP）
+    ToolCall,              // 工具调用（含 Skill / MCP）
+    PublishWorkflow,       // 发布工作流为 API / MCP（F22）
+    UnpublishWorkflow,     // 取消发布（F22）
+    RunWorkflow            // 经已发布端点运行工作流（F22）
 }
 
 // Domain/Enums/ToolSource.cs  ← 附录 F 引入：能力来源
@@ -181,6 +184,29 @@ public class TenantCredentialSetting : ITenantScoped, IAggregateRoot   // 租户
     public DateTime CreatedAt { get; private init; }
     public DateTime UpdatedAt { get; private set; }
 }
+
+// Domain/Aggregates/PublishedWorkflows/PublishedWorkflow.cs（F22 发布为 API / MCP）
+public sealed class PublishedWorkflow : ITenantScoped, IAggregateRoot   // 已发布工作流聚合
+{
+    public Guid Id { get; private init; }                 // 调用方生成；EF 配置 ValueGeneratedNever（避 GUID 陷阱）
+    public Guid TenantId { get; private init; }            // 租户 ID（HasQueryFilter 隔离）
+    public Guid WorkflowId { get; private init; }          // 被发布的工作流
+    public string Slug { get; private init; }              // 对外调用地址段（租户内唯一，URL 安全，16 位）
+    public PublishMode Mode { get; private init; }        // Api / Mcp（枚举）
+    public Guid? ApiKeyId { get; private set; }            // 绑定 Key（null = 租户任意有效 Key）
+    public string? InputSchemaJson { get; private set; }   // 输入契约（JSON Schema 片段，存 required 校验）
+    public bool IsEnabled { get; private set; }            // 禁用后 slug 失效、MCP 列表移除
+    public DateTime CreatedAt { get; private init; }
+    public DateTime UpdatedAt { get; private set; }
+}
+
+// Domain/Enums/PublishMode.cs（F22）
+public enum PublishMode
+{
+    Api,    // 受 API Key 鉴权的 HTTP 端点
+    Mcp     // 平台内 MCP tool（JSON-RPC 2.0 tools/list + tools/call）
+}
+```
 
 ### A.3 实体（非聚合根）
 
@@ -314,6 +340,17 @@ public interface ITenantCredentialSettingRepository
     Task<TenantCredentialSetting?> GetByTenantAndCategoryAsync(
         Guid tenantId, CredentialCategory category, CancellationToken ct = default);
     Task UpsertAsync(TenantCredentialSetting setting, CancellationToken ct = default);
+}
+
+// Domain/Repositories/IPublishedWorkflowRepository.cs（F22 发布为 API / MCP）
+public interface IPublishedWorkflowRepository
+{
+    Task<PublishedWorkflow?> GetBySlugAsync(string slug, CancellationToken ct = default);
+    Task<PublishedWorkflow?> GetByWorkflowIdAsync(Guid tenantId, Guid workflowId, CancellationToken ct = default);
+    Task<IReadOnlyList<PublishedWorkflow>> GetByTenantAndModeAsync(
+        Guid tenantId, PublishMode mode, bool enabledOnly, CancellationToken ct = default);
+    void Add(PublishedWorkflow publishedWorkflow);
+    void Delete(PublishedWorkflow publishedWorkflow);
 }
 ```
 

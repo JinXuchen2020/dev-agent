@@ -219,10 +219,11 @@
 - 目标：工作流被动触发——Webhook（POST /webhooks/workflow/{token}）/ 定时（cron + BackgroundService 调度）/ Chat（会话绑定触发）。多租户隔离 + 审计。
 - 风险：🔴 调度基础设施（多实例防重）+ 匿名端点安全 + Chat 耦合。实现前须锁定 §6（S1 调度方案 / S2 Chat 存储）。
 
-### F22 · 发布工作流为 API / MCP Server  [P1]  open  ⚠️高风险（API Key 鉴权复用 + MCP 动态注册 + 外部输入隔离）
-- 设计文档：`features/publish-api-mcp.md`（已建骨架，§6 决策待锁定）
+### F22 · 发布工作流为 API / MCP Server  [P1]  done  ⚠️高风险（API Key 鉴权复用 + MCP 动态注册 + 外部输入隔离）
+- 设计文档：`features/publish-api-mcp.md`（§6 决策 S1–S4 已于 2026-08-03 全部锁定）
 - 目标：一键发布工作流为 API Key 鉴权的 HTTP 端点 + 暴露为 MCP tool（复用现有 ApiKey / ToolDefinition）。多租户隔离 + 审计。
 - 风险：🔴 现有 API Key 中间件复用 + MCP 动态注册。实现前须锁定 §6（S1 鉴权复用 / S2 MCP 形态）。
+- **完成记录（2026-08-03）**：feature-builder 全栈实跑落地（分支 `feat/f22-publish-api-mcp`）。后端：新增 `PublishedWorkflow` 聚合（`ITenantScoped`，`Slug` 租户内唯一 + `Id ValueGeneratedNever()`）+ `PublishMode` 枚举（Api/Mcp）+ `PublishedWorkflowException` + `IPublishedWorkflowRepository`；5 个 handler（Publish/Unpublish/GetPublishStatus/ListMcpTools/Run，均为 `ICommand<T>` 经 UoW 自动提交）；`PublishedWorkflowConfiguration` + 迁移 `20260803035042_AddPublishedWorkflow`；`PublishedWorkflowsController`（slug 端点）+ `McpController`（平台内 JSON-RPC 2.0 `tools/list`/`tools/call`，无独立进程/端口）+ `PublishedWorkflowExceptionHandler`（RFC 9457）；`AuditActionType` 增 `PublishWorkflow`/`UnpublishWorkflow`/`RunWorkflow`。前端：`WorkflowsPage` 发布管理 Drawer（发布/取消/查看 slug+端点+绑定 Key+启停 Tag，inputSchema + mode + key 表单）+ `api.ts`/`types`/`locales` 中英 i18n 对称。**§6 决策落地**：S1 复用现有 `ApiKeyAuthenticationHandler`（slug/MCP 端点 `[Authorize(AuthenticationSchemes="ApiKey")]` + `PerApiKey` 限流）；S2 平台内 MCP tool（v1 无独立部署）；S3 用户自定义 `InputSchema`（运行时 `required` 校验）；S4 仅返回最终输出。新增 F22 后端测试 18 例（Application 16 + Api 2：发布/取消/状态/MCP 列表/运行隔离/鉴权边界）+ 修复 N+1。**三道质量门 PASS**（`.quality-gate.json` 推进 `f22-publish-api-mcp`，`cleared:true`）；后端 `dotnet build` **0/0** + 全方案 `dotnet test` **348/348**（SpecFlow 41 / Arch 9 / App 141 / Infra 123 / Api 29 / Integration 5）；前端 `tsc --noEmit` **0 error** + `node scripts/qa.mjs` OVERALL PASS。质量报告 `docs/quality/f22-publish-api-mcp-gate.md`，结构清单嵌入 `features/publish-api-mcp.md` 末尾。注意：feature doc 原草拟 `IMcpToolProvider` 命名与落地 `McpController` 机制名差异（仅措辞，S2 行为一致）；控制器 happy-path 端到端测试待补 seed。
 
 ### F23 · 模板市场 / 示例库  [P2]  open  🟡中风险（种子数据 + 克隆端点 + 前端画廊）
 - 设计文档：`features/template-market.md`（已建骨架，§6 决策待锁定）

@@ -94,5 +94,11 @@ public enum AuditActionType
     ExportWorkflow,
 
     /// <summary>A workflow version snapshot was deleted.</summary>
-    DeleteWorkflowVersion
+    DeleteWorkflowVersion,
+
+    /// <summary>A workflow was published as an external API/MCP endpoint (F22).</summary>
+    PublishWorkflow,
+
+    /// <summary>A workflow's external publication was revoked (F22).</summary>
+    UnpublishWorkflow
 }
