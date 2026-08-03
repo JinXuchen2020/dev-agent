@@ -10,9 +10,13 @@ import {
   Space,
   App as AntApp,
   Empty,
+  Drawer,
+  List,
+  Popconfirm,
+  Typography,
 } from 'antd';
-import { SendOutlined, ArrowLeftOutlined } from '@ant-design/icons';
-import type { Conversation, KnowledgeBase, PlatformModelDto } from '../types';
+import { SendOutlined, ArrowLeftOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import type { Conversation, KnowledgeBase, PlatformModelDto, WorkflowBindingDto, Workflow } from '../types';
 import {
   getConversation,
   getKnowledgeBases,
@@ -20,6 +24,11 @@ import {
   removeConversationKnowledgeBase,
   sendMessage,
   getPlatformModels,
+  getWorkflows,
+  listConversationWorkflowBindings,
+  bindWorkflow,
+  unbindWorkflow,
+  triggerWorkflowFromConversation,
   getErrorMessage,
 } from '../services/api';
 import PageHeader from '../components/PageHeader';
@@ -36,7 +45,9 @@ interface ChatMessage {
 const ConversationDetailPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { id = '' } = useParams<{ id: string }>();
+  const { Paragraph } = Typography;
+
+const { id = '' } = useParams<{ id: string }>();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
@@ -130,6 +141,78 @@ const ConversationDetailPage: React.FC = () => {
     }
   };
 
+  // ── F21 Chat 触发器：会话 ↔ 工作流绑定 ──
+  const [bindDrawerOpen, setBindDrawerOpen] = useState(false);
+  const [bindings, setBindings] = useState<WorkflowBindingDto[]>([]);
+  const [allWorkflows, setAllWorkflows] = useState<Workflow[]>([]);
+  const [bindingLoading, setBindingLoading] = useState(false);
+  const [bindingActionLoading, setBindingActionLoading] = useState(false);
+  const [triggeringId, setTriggeringId] = useState<string | null>(null);
+
+  const loadBindings = (convId: string) => {
+    setBindingLoading(true);
+    listConversationWorkflowBindings(convId)
+      .then(setBindings)
+      .catch((e) => message.error(getErrorMessage(e)))
+      .finally(() => setBindingLoading(false));
+  };
+
+  const openBindDrawer = () => {
+    setBindDrawerOpen(true);
+    loadBindings(id);
+    getWorkflows({ skip: 0, take: 200 })
+      .then((d) => setAllWorkflows(d.items))
+      .catch(() => setAllWorkflows([]));
+  };
+
+  const handleBind = async (workflowId: string) => {
+    if (!workflowId) return;
+    setBindingActionLoading(true);
+    try {
+      await bindWorkflow(id, workflowId);
+      message.success(t('pages.conversationDetail.triggers.bound'));
+      loadBindings(id);
+    } catch (e: unknown) {
+      message.error(t('pages.conversationDetail.triggers.bindFailed') + '：' + getErrorMessage(e));
+    } finally {
+      setBindingActionLoading(false);
+    }
+  };
+
+  const handleUnbind = async (workflowId: string) => {
+    setBindingActionLoading(true);
+    try {
+      await unbindWorkflow(id, workflowId);
+      message.success(t('pages.conversationDetail.triggers.unbound'));
+      loadBindings(id);
+    } catch (e: unknown) {
+      message.error(t('pages.conversationDetail.triggers.unbindFailed') + '：' + getErrorMessage(e));
+    } finally {
+      setBindingActionLoading(false);
+    }
+  };
+
+  const handleRunBound = async (workflowId: string) => {
+    setTriggeringId(workflowId);
+    try {
+      const res = await triggerWorkflowFromConversation(id, workflowId);
+      if (!res) {
+        message.warning(t('pages.conversationDetail.triggers.runNotFound'));
+        return;
+      }
+      message.success(
+        t('pages.conversationDetail.triggers.runStarted', {
+          name: res.workflowName,
+          state: res.state,
+        }),
+      );
+    } catch (e: unknown) {
+      message.error(t('pages.conversationDetail.triggers.runFailed') + '：' + getErrorMessage(e));
+    } finally {
+      setTriggeringId(null);
+    }
+  };
+
   if (loading) {
       return (
         <div>
@@ -172,6 +255,12 @@ const ConversationDetailPage: React.FC = () => {
         actions={
           <Space>
             {linkedKbName && <Tag color="blue">{t('pages.conversationDetail.linkedKb')}：{linkedKbName}</Tag>}
+            <Button
+              icon={<ThunderboltOutlined />}
+              onClick={openBindDrawer}
+            >
+              {t('pages.conversationDetail.triggers.open')}
+            </Button>
             <Select
               style={{ width: 220 }}
               placeholder={t('pages.conversationDetail.modelPlaceholder')}
@@ -272,6 +361,68 @@ const ConversationDetailPage: React.FC = () => {
           </Button>
         </div>
       </Card>
+
+      <Drawer
+        title={t('pages.conversationDetail.triggers.drawerTitle')}
+        open={bindDrawerOpen}
+        onClose={() => setBindDrawerOpen(false)}
+        width={520}
+      >
+        <Paragraph type="secondary">{t('pages.conversationDetail.triggers.desc')}</Paragraph>
+        <Space style={{ marginBottom: 16 }} wrap>
+          <Select
+            style={{ width: 280 }}
+            placeholder={t('pages.conversationDetail.triggers.bindPlaceholder')}
+            loading={bindingActionLoading}
+            onChange={(v) => handleBind(v)}
+            options={allWorkflows
+              .filter((w) => !bindings.some((b) => b.workflowId === w.id))
+              .map((w) => ({ label: w.name, value: w.id }))}
+            showSearch
+            optionFilterProp="label"
+          />
+        </Space>
+        {bindingLoading ? (
+          <div style={{ textAlign: 'center', padding: 24 }}>
+            <Spin />
+          </div>
+        ) : bindings.length === 0 ? (
+          <Empty description={t('pages.conversationDetail.triggers.listEmpty')} />
+        ) : (
+          <List
+            dataSource={bindings}
+            renderItem={(b) => (
+              <List.Item
+                actions={[
+                  <Button
+                    key="run"
+                    size="small"
+                    type="primary"
+                    icon={<ThunderboltOutlined />}
+                    loading={triggeringId === b.workflowId}
+                    onClick={() => handleRunBound(b.workflowId)}
+                  >
+                    {t('pages.conversationDetail.triggers.run')}
+                  </Button>,
+                  <Popconfirm
+                    key="unbind"
+                    title={t('pages.conversationDetail.triggers.unbindConfirm')}
+                    onConfirm={() => handleUnbind(b.workflowId)}
+                    okText={t('common.confirm')}
+                    cancelText={t('common.cancel')}
+                  >
+                    <Button size="small" danger loading={bindingActionLoading}>
+                      {t('pages.conversationDetail.triggers.unbind')}
+                    </Button>
+                  </Popconfirm>,
+                ]}
+              >
+                <List.Item.Meta title={b.workflowName} />
+              </List.Item>
+            )}
+          />
+        )}
+      </Drawer>
     </div>
   );
 };

@@ -268,6 +268,32 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.ToTable("Conversations", (string)null);
                 });
 
+            modelBuilder.Entity("AgentPlatform.Domain.Aggregates.Conversations.ConversationWorkflowBinding", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WorkflowId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "ConversationId");
+
+                    b.HasIndex("TenantId", "WorkflowId");
+
+                    b.ToTable("ConversationWorkflowBindings", (string)null);
+                });
+
             modelBuilder.Entity("AgentPlatform.Domain.Aggregates.ExecutionLogs.ExecutionLog", b =>
                 {
                     b.Property<Guid>("Id")
@@ -614,6 +640,61 @@ namespace AgentPlatform.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("Users", (string)null);
+                });
+
+            modelBuilder.Entity("AgentPlatform.Domain.Aggregates.WorkflowTriggers.WorkflowTrigger", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Cron")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("LastRunAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("NextRunAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Timezone")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TriggerToken")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WorkflowId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NextRunAt");
+
+                    b.HasIndex("TriggerToken");
+
+                    b.HasIndex("TenantId", "WorkflowId", "Type")
+                        .IsUnique();
+
+                    b.ToTable("WorkflowTriggers", (string)null);
                 });
 
             modelBuilder.Entity("AgentPlatform.Domain.Aggregates.Workflows.Workflow", b =>

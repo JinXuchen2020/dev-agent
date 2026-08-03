@@ -8,33 +8,43 @@ namespace AgentPlatform.Infrastructure.Persistence;
 
 /// <summary>
 /// Provides the current tenant identifier resolved from the HTTP request context.
-/// Resolution order: JWT "tenant_id" claim → "X-Tenant-Id" header → configured default tenant.
+/// Resolution order: <see cref="ITenantContext.OverrideTenantId"/> (background / anonymous scope
+/// injection) → JWT "tenant_id" claim → "X-Tenant-Id" header → configured default tenant.
 /// </summary>
 internal sealed class TenantProvider : ITenantProvider
 {
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly TenantSettings _settings;
     private readonly ILogger<TenantProvider> _logger;
+    private readonly ITenantContext _tenantContext;
 
     public TenantProvider(
         IHttpContextAccessor httpContextAccessor,
         IOptions<TenantSettings> settings,
-        ILogger<TenantProvider> logger)
+        ILogger<TenantProvider> logger,
+        ITenantContext tenantContext)
     {
         _httpContextAccessor = httpContextAccessor;
         _settings = settings.Value;
         _logger = logger;
+        _tenantContext = tenantContext;
     }
 
     /// <summary>
-    /// Returns the tenant identifier resolved from the current request context.
+    /// Returns the tenant identifier resolved from the current context.
     /// </summary>
     /// <returns>
-    /// Tenant ID from the JWT "tenant_id" claim if present; otherwise from the
-    /// "X-Tenant-Id" header; otherwise the configured <see cref="TenantSettings.DefaultTenantId"/>.
+    /// Tenant ID from the ambient <see cref="ITenantContext.OverrideTenantId"/> if set
+    /// (background jobs, anonymous webhooks); otherwise from the JWT "tenant_id" claim;
+    /// otherwise from the "X-Tenant-Id" header; otherwise the configured
+    /// <see cref="TenantSettings.DefaultTenantId"/>.
     /// </returns>
     public Guid GetTenantId()
     {
+        // Priority 0: ambient override set by background scheduler / anonymous webhook scope.
+        if (_tenantContext.OverrideTenantId is { } overridden)
+            return overridden;
+
         var httpContext = _httpContextAccessor.HttpContext;
         if (httpContext is not null)
         {

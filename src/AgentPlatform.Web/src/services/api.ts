@@ -38,6 +38,11 @@ import type {
   PlatformModelDto,
   ProviderModelInfo,
   DashboardSummary,
+  WorkflowTriggersResponse,
+  ScheduleTriggerRequest,
+  ScheduleTriggerView,
+  WorkflowBindingDto,
+  TriggerRunResult,
 } from '../types';
 
 const api = axios.create({
@@ -235,6 +240,46 @@ export const publishWorkflow = (workflowId: string, req: PublishWorkflowRequest)
 
 export const unpublishWorkflow = (workflowId: string) =>
   api.delete<void>(`/workflows/${workflowId}/publish`).then(() => undefined);
+// F21 工作流触发器（Webhook / 定时 / Chat）
+// 管理端点受 RBAC Admin,Operator 保护；查询端点仅需登录。
+export const generateWebhookToken = (workflowId: string) =>
+  api
+    .post<{ triggerToken: string; created: boolean }>(`/workflows/${workflowId}/triggers/webhook`)
+    .then((r) => r.data);
+
+export const disableWebhookTrigger = (workflowId: string) =>
+  api
+    .delete<{ enabled: boolean }>(`/workflows/${workflowId}/triggers/webhook`)
+    .then((r) => r.data);
+
+export const putScheduleTrigger = (workflowId: string, req: ScheduleTriggerRequest) =>
+  api
+    .put<ScheduleTriggerView>(`/workflows/${workflowId}/triggers/schedule`, req)
+    .then((r) => r.data);
+
+export const getWorkflowTriggers = (workflowId: string) =>
+  api.get<WorkflowTriggersResponse>(`/workflows/${workflowId}/triggers`).then((r) => r.data);
+
+// F21 Chat 触发器：会话 ↔ 工作流绑定与触发（仅需登录，受租户隔离）。
+export const listConversationWorkflowBindings = (conversationId: string) =>
+  api
+    .get<WorkflowBindingDto[]>(`/conversations/${conversationId}/workflow-bindings`)
+    .then((r) => r.data ?? []);
+
+export const bindWorkflow = (conversationId: string, workflowId: string) =>
+  api
+    .post<{ id: string }>(`/conversations/${conversationId}/workflow-bindings`, { workflowId })
+    .then((r) => r.data);
+
+export const unbindWorkflow = (conversationId: string, workflowId: string) =>
+  api
+    .delete<void>(`/conversations/${conversationId}/workflow-bindings/${workflowId}`)
+    .then(() => undefined);
+
+export const triggerWorkflowFromConversation = (conversationId: string, workflowId: string) =>
+  api
+    .post<TriggerRunResult>(`/conversations/${conversationId}/trigger-workflow/${workflowId}`)
+    .then((r) => r.data);
 
 // Execution Logs
 export const getExecutionLogs = (opts?: {

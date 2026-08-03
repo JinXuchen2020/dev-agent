@@ -11,6 +11,7 @@ using AgentPlatform.Domain.Aggregates.TenantCredentials;
 using AgentPlatform.Domain.Aggregates.ToolDefinitions;
 using AgentPlatform.Domain.Aggregates.Users;
 using AgentPlatform.Domain.Aggregates.HumanApprovals;
+using AgentPlatform.Domain.Aggregates.WorkflowTriggers;
 using AgentPlatform.Domain.Aggregates.Workflows;
 using Microsoft.EntityFrameworkCore;
 
@@ -115,6 +116,16 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
     /// </summary>
     public DbSet<AgentPlatform.Domain.Aggregates.PublishedWorkflows.PublishedWorkflow> PublishedWorkflows =>
         Set<AgentPlatform.Domain.Aggregates.PublishedWorkflows.PublishedWorkflow>();
+    
+    /// <summary>
+    /// Gets the <see cref="DbSet{TEntity}"/> providing access to persisted workflow triggers (webhook / schedule, tenant-scoped).
+    /// </summary>
+    public DbSet<WorkflowTrigger> WorkflowTriggers => Set<WorkflowTrigger>();
+
+    /// <summary>
+    /// Gets the <see cref="DbSet{TEntity}"/> providing access to persisted conversation-to-workflow bindings (Chat trigger, tenant-scoped).
+    /// </summary>
+    public DbSet<ConversationWorkflowBinding> ConversationWorkflowBindings => Set<ConversationWorkflowBinding>();
 
     /// <summary>
     /// Returns all aggregate roots currently tracked by the change tracker, used for dispatching domain events on save.
