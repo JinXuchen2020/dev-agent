@@ -12,6 +12,7 @@ using AgentPlatform.Application.Workflows.Commands.PublishWorkflow;
 using AgentPlatform.Application.Workflows.Commands.UnpublishWorkflow;
 using AgentPlatform.Application.Workflows.Queries.GetPublishStatus;
 using AgentPlatform.Application.Workflows.Versioning;
+using AgentPlatform.Application.WorkflowTriggers;
 using AgentPlatform.Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -350,6 +351,74 @@ public sealed class WorkflowsController : ControllerBase
             return NoContent();
         return Ok(result);
     }
+
+    /// <summary>
+    /// 为工作流生成/启用 Webhook 触发器令牌（幂等：已存在则复用现有令牌并确保启用）。
+    /// 返回令牌供拼接回调 URL。仅 Admin/Operator。
+    /// </summary>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpPost("{id:guid}/triggers/webhook")]
+    public async Task<IActionResult> GenerateWebhookToken(
+        Guid id,
+        CancellationToken ct = default)
+    {
+        var result = await _mediator.Send(
+            new GenerateWebhookTokenCommand(id, _tenant.GetTenantId()), ct);
+        if (result is null)
+            return NotFound();
+        return Ok(new { triggerToken = result.Token, created = result.Created });
+    }
+
+    /// <summary>
+    /// 禁用某工作流的 Webhook 触发器：令牌保留但失效（匿名调用 → 404）。幂等。仅 Admin/Operator。
+    /// </summary>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpDelete("{id:guid}/triggers/webhook")]
+    public async Task<IActionResult> DisableWebhookTrigger(
+        Guid id,
+        CancellationToken ct = default)
+    {
+        await _mediator.Send(
+            new DisableWebhookTriggerCommand(id, _tenant.GetTenantId()), ct);
+        return Ok(new { enabled = false });
+    }
+
+    /// <summary>
+    /// 启用/更新/禁用某工作流的 Schedule（cron）触发器（幂等 upsert）。仅 Admin/Operator。
+    /// </summary>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpPut("{id:guid}/triggers/schedule")]
+    public async Task<IActionResult> PutScheduleTrigger(
+        Guid id,
+        [FromBody] PutScheduleTriggerRequest request,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.Cron))
+            return BadRequest("cron is required.");
+
+        var result = await _mediator.Send(
+            new PutScheduleTriggerCommand(
+                id, _tenant.GetTenantId(), request.Cron,
+                request.Timezone ?? "UTC", request.Enabled), ct);
+        if (result is null)
+            return NotFound();
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// 查询某工作流的触发器配置（Webhook/Schedule/Chat 绑定数）。仅鉴权用户可见。
+    /// </summary>
+    [HttpGet("{id:guid}/triggers")]
+    public async Task<IActionResult> GetTriggers(
+        Guid id,
+        CancellationToken ct = default)
+    {
+        var result = await _mediator.Send(
+            new GetWorkflowTriggersQuery(id, _tenant.GetTenantId()), ct);
+        if (result is null)
+            return NotFound();
+        return Ok(result);
+    }
 }
 
 /// <summary>
@@ -401,4 +470,11 @@ public sealed record PublishWorkflowRequest(
     PublishMode Mode,
     Guid? ApiKeyId = null,
     string? InputSchemaJson = null);
+/// <summary>
+/// Request model for enabling/updating a Schedule (cron) trigger (F21).
+/// </summary>
+public sealed record PutScheduleTriggerRequest(
+    string Cron,
+    string? Timezone = null,
+    bool Enabled = true);
 

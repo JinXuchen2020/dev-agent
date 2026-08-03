@@ -71,6 +71,10 @@
 | POST | `/api/v1/workflows/{id}/publish` | 发布为 API/MCP（body: `mode` Api\|Mcp, `apiKeyId?`, `inputSchema?`） | write:workflow |
 | DELETE | `/api/v1/workflows/{id}/publish` | 取消发布（幂等，未发布无操作） | write:workflow |
 | GET | `/api/v1/workflows/{id}/publish` | 发布状态（未发布 → 204） | read:workflow |
+| POST | `/api/v1/workflows/{id}/triggers/webhook` | 生成/启用 Webhook 令牌（幂等复用现有令牌） | write:workflow |
+| DELETE | `/api/v1/workflows/{id}/triggers/webhook` | 禁用 Webhook（令牌保留但失效） | write:workflow |
+| PUT | `/api/v1/workflows/{id}/triggers/schedule` | 启用/更新/禁用 Schedule（cron+时区，幂等 upsert） | write:workflow |
+| GET | `/api/v1/workflows/{id}/triggers` | 查询触发器配置（Webhook/Schedule/Chat 绑定数） | read:workflow |
 
 ```json
 // POST /api/v1/workflows 请求
@@ -112,7 +116,7 @@
 }
 ```
 
-### I.3.1 发布工作流外部调用 API（F22）
+### I.3.2 发布工作流外部调用 API（F22）
 
 > 由 `POST /api/v1/workflows/{id}/publish` 生成的对外能力。鉴权复用现有 **API Key** 体系（`[Authorize(AuthenticationSchemes="ApiKey")]` + `PerApiKey` 令牌桶限流，非 JWT/cookie），租户由密钥 `tenant_id` 声明自动解析，`key_id` 声明用于调用审计归属。
 
@@ -158,6 +162,13 @@
 { "jsonrpc": "2.0", "id": 2,
   "result": { "content": [ { "type": "text", "text": "{...输出...}" } ], "isError": false } }
 ```
+### I.3.1 匿名 Webhook 入口（F21 工作流触发器）
+
+| 方法 | 路径 | 说明 | 权限 |
+| :--- | :--- | :--- | :--- |
+| POST | `/api/v1/webhooks/workflow/{token}` | 凭令牌触发绑定工作流（请求体原样作触发载荷）；token 不存在或禁用→404 | 匿名（受 `WebhookAnonymous` 限流） |
+
+> 令牌即鉴权，不依赖 JWT/Cookie；未知或禁用令牌统一返回 404，不泄露工作流存在性。
 
 ### I.4 Agent API
 
@@ -233,6 +244,10 @@
 | GET | `/api/v1/conversations/{id}` | 会话详情（含消息历史） | read:workflow |
 | POST | `/api/v1/conversations/{id}/messages` | 发送消息（流式响应 via SSE） | write:workflow |
 | DELETE | `/api/v1/conversations/{id}` | 删除会话 | write:workflow |
+| GET | `/api/v1/conversations/{id}/workflow-bindings` | 列出会话绑定的工作流（Chat 触发器） | read:workflow |
+| POST | `/api/v1/conversations/{id}/workflow-bindings` | 绑定会话到工作流（幂等，双重租户校验） | write:workflow |
+| DELETE | `/api/v1/conversations/{id}/workflow-bindings/{workflowId}` | 解绑工作流 | write:workflow |
+| POST | `/api/v1/conversations/{id}/trigger-workflow/{workflowId}` | 会话上下文触发绑定工作流（未绑定→404） | write:workflow |
 
 ```typescript
 // SSE 流式响应格式

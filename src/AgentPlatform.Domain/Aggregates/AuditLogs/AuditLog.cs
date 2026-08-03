@@ -100,5 +100,17 @@ public enum AuditActionType
     PublishWorkflow,
 
     /// <summary>A workflow's external publication was revoked (F22).</summary>
-    UnpublishWorkflow
+    UnpublishWorkflow,
+
+    /// <summary>A workflow trigger (webhook or schedule) was enabled.</summary>
+    EnableTrigger,
+
+    /// <summary>A workflow trigger (webhook or schedule) was disabled.</summary>
+    DisableTrigger,
+
+    /// <summary>A workflow was invoked through its webhook trigger.</summary>
+    WebhookInvoke,
+
+    /// <summary>A workflow was invoked through its scheduled trigger.</summary>
+    ScheduledRun
 }

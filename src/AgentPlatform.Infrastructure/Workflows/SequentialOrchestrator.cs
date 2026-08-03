@@ -63,6 +63,11 @@ internal sealed class SequentialOrchestrator
         // F20：单次运行维护单一共享 Blackboard，使 Variable/Loop 跨节点读写生效。
         var blackboard = Blackboard.Empty;
 
+        // F21：若工作流共享 Context 含 `trigger` 信封（由触发器注入），将其落入 Blackboard，
+        // 使节点可通过 {{trigger}} / {{trigger.*}} 占位符消费触发载荷（Webhook body / Chat 消息 / 调度元数据）。
+        // 仅当 `trigger` 键存在时生效，遗留工作流（Context 为 {}）完全不受影响。
+        blackboard = SeedTriggerBlackboard(workflow, blackboard);
+
         // F20：Loop body 节点仅由各自 Loop 节点内联执行，主线性遍历需跳过（避免脱离循环上下文重复执行）。
         var loopBodyIds = new HashSet<Guid>();
         foreach (var n in executionOrder)
@@ -579,4 +584,62 @@ internal sealed class SequentialOrchestrator
     }
 
     private sealed record LoopNodeConfig(string? ItemsSource, string? ItemVariable, IReadOnlyList<string> BodyNodeNames);
+
+    /// <summary>
+    /// F21：将工作流共享 Context 中的 `trigger` 信封注入 Blackboard，供节点通过占位符消费触发载荷。
+    /// 仅当 Context 为合法 JSON 且含 `trigger` 对象时生效；否则原样返回 Blackboard（遗留工作流无影响）。
+    /// </summary>
+    private static Blackboard SeedTriggerBlackboard(Workflow workflow, Blackboard blackboard)
+    {
+        if (string.IsNullOrWhiteSpace(workflow.Context)) return blackboard;
+        try
+        {
+            using var doc = JsonDocument.Parse(workflow.Context);
+            if (!doc.RootElement.TryGetProperty("trigger", out var trigger) || trigger.ValueKind != JsonValueKind.Object)
+                return blackboard;
+
+            // 整个 trigger 信封作为 `trigger` 键（完整 JSON）。
+            blackboard = blackboard.Set("trigger", trigger.GetRawText());
+
+            // 平铺 trigger 的标量属性为 `trigger.<prop>`（如 trigger.type / trigger.firedAt）。
+            foreach (var prop in trigger.EnumerateObject())
+            {
+                var flat = FlattenScalar(prop.Value);
+                if (flat is not null)
+                    blackboard = blackboard.Set($"trigger.{prop.Name}", flat);
+            }
+            return blackboard;
+        }
+        catch (JsonException)
+        {
+            return blackboard;
+        }
+    }
+
+    /// <summary>将 JSON 标量（string/number/bool）或一层嵌套标量对象压为字符串；数组或深层结构返回 null。</summary>
+    private static string? FlattenScalar(JsonElement el)
+    {
+        switch (el.ValueKind)
+        {
+            case JsonValueKind.String:
+                return el.GetString();
+            case JsonValueKind.Number:
+                return el.GetRawText();
+            case JsonValueKind.True:
+                return "true";
+            case JsonValueKind.False:
+                return "false";
+            case JsonValueKind.Object:
+                // 平铺一层嵌套对象的标量属性（如 trigger.payload.text）。
+                var sb = new System.Text.StringBuilder();
+                foreach (var p in el.EnumerateObject())
+                {
+                    var v = FlattenScalar(p.Value);
+                    if (v is not null) sb.Append($"{p.Name}={v}; ");
+                }
+                return sb.Length == 0 ? null : sb.ToString(0, sb.Length - 2);
+            default:
+                return null;
+        }
+    }
 }

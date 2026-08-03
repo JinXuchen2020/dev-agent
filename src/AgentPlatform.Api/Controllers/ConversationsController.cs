@@ -1,11 +1,15 @@
 using AgentPlatform.Api.Models;
 using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Application.Conversations.Commands.BindConversationWorkflow;
 using AgentPlatform.Application.Conversations.Commands.CreateConversation;
+using AgentPlatform.Application.Conversations.Commands.TriggerWorkflowFromConversation;
+using AgentPlatform.Application.Conversations.Commands.UnbindConversationWorkflow;
 using AgentPlatform.Application.Conversations.Commands.RemoveConversationKnowledgeBase;
 using AgentPlatform.Application.Conversations.Commands.SendMessage;
 using AgentPlatform.Application.Conversations.Commands.SetConversationKnowledgeBase;
 using AgentPlatform.Application.Conversations.Queries.GetConversationById;
 using AgentPlatform.Application.Conversations.Queries.GetConversations;
+using AgentPlatform.Application.Conversations.Queries.ListConversationWorkflowBindings;
 using AgentPlatform.Application.Routing.Queries.GetCostReport;
 using AgentPlatform.Domain.Enums;
 using MediatR;
@@ -150,5 +154,74 @@ public sealed class ConversationsController : ControllerBase
         var result = await _mediator.Send(new GetCostReportQuery(), ct);
         return Ok(result);
     }
+
+    /// <summary>
+    /// 列出某会话绑定的全部工作流（Chat 触发器）。受租户过滤。
+    /// </summary>
+    [HttpGet("{id:guid}/workflow-bindings")]
+    public async Task<IActionResult> ListWorkflowBindings(
+        Guid id,
+        CancellationToken ct = default)
+    {
+        var result = await _mediator.Send(
+            new ListConversationWorkflowBindingsQuery(id, _tenant.GetTenantId()), ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// 将某会话绑定到一个工作流（Chat 触发器）。幂等。受租户过滤（会话与工作流均须归属本租户）。
+    /// </summary>
+    [HttpPost("{id:guid}/workflow-bindings")]
+    public async Task<IActionResult> BindWorkflow(
+        Guid id,
+        [FromBody] BindWorkflowRequest request,
+        CancellationToken ct = default)
+    {
+        var ok = await _mediator.Send(
+            new BindConversationWorkflowCommand(id, request.WorkflowId, _tenant.GetTenantId()), ct);
+        if (!ok)
+            return NotFound();
+        return Ok(new { id });
+    }
+
+    /// <summary>
+    /// 解除某会话对某一工作流的绑定（Chat 触发器）。幂等。仅本租户绑定可解。
+    /// </summary>
+    [HttpDelete("{id:guid}/workflow-bindings/{workflowId:guid}")]
+    public async Task<IActionResult> UnbindWorkflow(
+        Guid id,
+        Guid workflowId,
+        CancellationToken ct = default)
+    {
+        await _mediator.Send(
+            new UnbindConversationWorkflowCommand(id, workflowId, _tenant.GetTenantId()), ct);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// 在会话上下文中显式触发（运行）绑定的工作流（Chat 触发器）。未绑定 / 越界 / 工作流不存在 → 404。
+    /// </summary>
+    [HttpPost("{id:guid}/trigger-workflow/{workflowId:guid}")]
+    public async Task<IActionResult> TriggerWorkflow(
+        Guid id,
+        Guid workflowId,
+        CancellationToken ct = default)
+    {
+        var result = await _mediator.Send(
+            new TriggerWorkflowFromConversationCommand(id, workflowId, _tenant.GetTenantId()), ct);
+        if (result is null)
+            return NotFound();
+        return Ok(new
+        {
+            workflowId = result.WorkflowId,
+            workflowName = result.WorkflowName,
+            state = result.State.ToString()
+        });
+    }
 }
+
+/// <summary>
+/// Request model for binding a conversation to a workflow (Chat trigger, F21).
+/// </summary>
+public sealed record BindWorkflowRequest(Guid WorkflowId);
 
