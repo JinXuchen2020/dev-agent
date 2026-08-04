@@ -1,438 +1,223 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net;
+using System.Threading.Tasks;
 using AgentPlatform.Domain.Aggregates.ExecutionLogs;
 using AgentPlatform.Domain.Enums;
-using AgentPlatform.Domain.Repositories;
-using System.Collections.Concurrent;
-using TechTalk.SpecFlow;
+using Reqnroll;
 using Xunit;
 
 namespace AgentPlatform.SpecFlowTests.Steps;
 
+/// <summary>
+/// Execution Log BDD 步骤 —— 真 HTTP + 真 DB（设计文档 §7：GET /api/v1/execution-logs）。
+/// 移除旧版 InMemoryExecutionLogRepository 假仓库：执行日志经 ExecutionLogSeeder 真实落库
+/// （文件 SQLite），再经 HTTP 查询端点断言过滤 / 分页行为。所有种子落 T1，admin(T1) 查询可见。
+/// </summary>
 [Binding]
 public class ExecutionLogSteps
 {
-    private readonly InMemoryExecutionLogRepository _repository = new();
-    private ExecutionLog? _currentLog;
-    private Guid _currentTenantId = Guid.NewGuid();
-    private IReadOnlyList<ExecutionLogSummary> _queryResults = [];
-    private int _totalCount;
+    private string _adminToken = "";
+    private ExecutionLogListResponseDto? _lastList;
+    private ExecutionLogStepsResponseDto? _lastSteps;
+    private Guid _lastLogId;
 
-    [Given("the execution log repository is initialized")]
-    public void GivenRepositoryInitialized()
+    private async Task EnsureAdminAsync() => _adminToken = await IntegrationClient.AdminTokenAsync();
+
+    private static ExecutionLog MakeCompletedLog(Guid id, string wfName, int steps, bool failed = false)
     {
-        _repository.Clear();
+        var log = new ExecutionLog(id, Guid.NewGuid(), wfName, IntegrationConstants.Tenant1Id, steps);
+        for (int i = 0; i < steps; i++)
+            log.AddEntry(new ExecutionLogEntry(Guid.NewGuid(), $"Step {i + 1}", i, WorkflowState.Completed, TimeSpan.FromMilliseconds(120), "ok", null));
+        if (failed) log.Fail(); else log.Complete();
+        return log;
     }
 
-    [Given("a workflow has completed with (.*) steps")]
-    public void GivenWorkflowCompleted(int stepCount)
+    [Given("the execution log store is reset")]
+    public async Task GivenStoreReset() => await ExecutionLogSeeder.ClearAsync();
+
+    [Given("3 workflow executions have completed")]
+    public async Task GivenThreeCompleted()
     {
-        var workflowId = Guid.NewGuid();
-        var log = new ExecutionLog(
-            Guid.NewGuid(),
-            workflowId,
-            "Test Workflow",
-            Guid.NewGuid(),
-            stepCount);
-
-        for (int i = 0; i < stepCount; i++)
+        var logs = new[]
         {
-            var entry = new ExecutionLogEntry(
-                Guid.NewGuid(),
-                $"Step {i + 1}",
-                i,
-                WorkflowState.Completed,
-                TimeSpan.FromSeconds(i + 1),
-                $"Result for step {i + 1}",
-                null);
-            log.AddEntry(entry);
-        }
-
-        log.Complete();
-        _repository.Add(log);
-        _currentLog = log;
-    }
-
-    [Given("step (.*) of the workflow failed")]
-    public void GivenStepFailed(int stepNumber)
-    {
-        var log = _repository.GetAll().First();
-        // Clear existing entries and rebuild with the specified step failed
-        _repository.Clear();
-
-        var rebuiltLog = new ExecutionLog(
-            Guid.NewGuid(),
-            log.WorkflowId,
-            log.WorkflowName,
-            log.TenantId,
-            log.TotalSteps);
-
-        for (int i = 0; i < log.TotalSteps; i++)
-        {
-            var isFailedStep = i == stepNumber - 1;
-            var entry = new ExecutionLogEntry(
-                Guid.NewGuid(),
-                $"Step {i + 1}",
-                i,
-                isFailedStep ? WorkflowState.Failed : WorkflowState.Completed,
-                TimeSpan.FromSeconds(i + 1),
-                isFailedStep ? null : $"Result for step {i + 1}",
-                isFailedStep ? $"Error occurred in step {i + 1}" : null);
-            rebuiltLog.AddEntry(entry);
-        }
-
-        rebuiltLog.Rollback();
-        _repository.Add(rebuiltLog);
-        _currentLog = rebuiltLog;
-    }
-
-    [Given("logs exist across multiple days")]
-    public void GivenLogsExistAcrossMultipleDays()
-    {
-        var workflowId = Guid.NewGuid();
-        var baseTime = new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc);
-
-        // Create logs on day 1, day 3, and day 5
-        for (int dayDelta = 0; dayDelta <= 4; dayDelta += 2)
-        {
-            var log = new ExecutionLog(
-                Guid.NewGuid(),
-                workflowId,
-                $"Workflow Day {dayDelta + 1}",
-                Guid.NewGuid(),
-                1);
-
-            log.AddEntry(new ExecutionLogEntry(
-                Guid.NewGuid(),
-                "Step 1",
-                0,
-                WorkflowState.Completed,
-                TimeSpan.FromSeconds(1),
-                "OK",
-                null));
-
-            log.Complete();
-            _repository.Add(log);
-        }
-    }
-
-    [Given("some steps succeeded and some failed")]
-    public void GivenSomeStepsSucceededAndSomeFailed()
-    {
-        var log = new ExecutionLog(
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            "Mixed Workflow",
-            Guid.NewGuid(),
-            4);
-
-        var entries = new[]
-        {
-            new ExecutionLogEntry(Guid.NewGuid(), "Step 1", 0, WorkflowState.Completed, TimeSpan.FromSeconds(1), "OK", null),
-            new ExecutionLogEntry(Guid.NewGuid(), "Step 2", 1, WorkflowState.Completed, TimeSpan.FromSeconds(2), "OK", null),
-            new ExecutionLogEntry(Guid.NewGuid(), "Step 3", 2, WorkflowState.Failed, TimeSpan.FromSeconds(3), null, "Step 3 error"),
-            new ExecutionLogEntry(Guid.NewGuid(), "Step 4", 3, WorkflowState.Failed, TimeSpan.FromSeconds(1), null, "Step 4 error"),
+            MakeCompletedLog(Guid.NewGuid(), "WF A", 1),
+            MakeCompletedLog(Guid.NewGuid(), "WF B", 1),
+            MakeCompletedLog(Guid.NewGuid(), "WF C", 1),
         };
-
-        foreach (var entry in entries)
-            log.AddEntry(entry);
-
-        log.Rollback();
-        _repository.Add(log);
-        _currentLog = log;
-    }
-
-    [Given("(.*) log entries exist")]
-    public void GivenLogEntriesExist(int count)
-    {
-        var workflowId = Guid.NewGuid();
-        _currentTenantId = Guid.NewGuid();
-        for (int i = 0; i < count; i++)
-        {
-            var log = new ExecutionLog(
-                Guid.NewGuid(),
-                workflowId,
-                $"Large Workflow #{i + 1}",
-                _currentTenantId,
-                1);
-
-            log.AddEntry(new ExecutionLogEntry(
-                Guid.NewGuid(),
-                "Step 1",
-                0,
-                WorkflowState.Completed,
-                TimeSpan.FromMilliseconds(100),
-                $"Result {i + 1}",
-                null));
-
-            log.Complete();
-            _repository.Add(log);
-        }
+        await ExecutionLogSeeder.SeedAsync(logs);
     }
 
     [When("a user queries execution logs for the workflow")]
-    public async Task WhenUserQueriesLogsForWorkflow()
+    public async Task WhenQueryLogs()
     {
-        var logs = await _repository.GetByWorkflowIdAsync(_currentLog!.WorkflowId);
-        _queryResults = logs.Select(l => new ExecutionLogSummary(
-            l.Id, l.WorkflowId, l.WorkflowName, l.Status,
-            l.TotalSteps,
-            l.Entries.Count(e => e.Status == WorkflowState.Completed),
-            l.Entries.Count(e => e.Status == WorkflowState.Failed),
-            l.StartedAt, l.CompletedAt
-        )).ToList();
+        await EnsureAdminAsync();
+        var resp = await IntegrationClient.SendAsync(HttpMethod.Get, "/api/v1/execution-logs", _adminToken);
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        _lastList = await IntegrationClient.ReadAsAsync<ExecutionLogListResponseDto>(resp);
     }
 
-    [When("a user queries execution logs")]
-    public async Task WhenUserQueriesExecutionLogs()
+    [Then("they should receive 3 log entries")]
+    public void ThenThreeEntries()
     {
-        var (items, total) = await _repository.QueryAsync(
-            _currentLog?.TenantId ?? Guid.NewGuid());
-        _queryResults = items.Select(l => new ExecutionLogSummary(
-            l.Id, l.WorkflowId, l.WorkflowName, l.Status,
-            l.TotalSteps,
-            l.Entries.Count(e => e.Status == WorkflowState.Completed),
-            l.Entries.Count(e => e.Status == WorkflowState.Failed),
-            l.StartedAt, l.CompletedAt
-        )).ToList();
-        _totalCount = total;
-    }
-
-    [When("a user filters logs by a date range")]
-    public async Task WhenUserFiltersLogsByDateRange()
-    {
-        var from = new DateTime(2025, 6, 2, 0, 0, 0, DateTimeKind.Utc);
-        var to = new DateTime(2025, 6, 6, 0, 0, 0, DateTimeKind.Utc);
-        var (items, total) = await _repository.QueryAsync(
-            _currentLog?.TenantId ?? Guid.NewGuid(),
-            from: from,
-            to: to);
-        _queryResults = items.Select(l => new ExecutionLogSummary(
-            l.Id, l.WorkflowId, l.WorkflowName, l.Status,
-            l.TotalSteps,
-            l.Entries.Count(e => e.Status == WorkflowState.Completed),
-            l.Entries.Count(e => e.Status == WorkflowState.Failed),
-            l.StartedAt, l.CompletedAt
-        )).ToList();
-        _totalCount = total;
-    }
-
-    [When("a user filters logs by status \"(.*)\"")]
-    public async Task WhenUserFiltersLogsByStatus(string statusName)
-    {
-        var status = ParseState(statusName);
-        var (items, total) = await _repository.QueryAsync(
-            _currentLog?.TenantId ?? Guid.NewGuid(),
-            status: status);
-        _queryResults = items.Select(l => new ExecutionLogSummary(
-            l.Id, l.WorkflowId, l.WorkflowName, l.Status,
-            l.TotalSteps,
-            l.Entries.Count(e => e.Status == WorkflowState.Completed),
-            l.Entries.Count(e => e.Status == WorkflowState.Failed),
-            l.StartedAt, l.CompletedAt
-        )).ToList();
-        _totalCount = total;
-    }
-
-    [When("a user queries with page (.*) and page size (.*)")]
-    public async Task WhenUserQueriesWithPagination(int page, int pageSize)
-    {
-        var (items, total) = await _repository.QueryAsync(
-            _currentTenantId,
-            skip: (page - 1) * pageSize,
-            take: pageSize);
-        _queryResults = items.Select(l => new ExecutionLogSummary(
-            l.Id, l.WorkflowId, l.WorkflowName, l.Status,
-            l.TotalSteps,
-            l.Entries.Count(e => e.Status == WorkflowState.Completed),
-            l.Entries.Count(e => e.Status == WorkflowState.Failed),
-            l.StartedAt, l.CompletedAt
-        )).ToList();
-        _totalCount = total;
-    }
-
-    [Then("they should receive (.*) log entries")]
-    public void ThenShouldReceiveLogEntries(int expectedCount)
-    {
-        var totalEntries = _queryResults.Sum(r => r.CompletedSteps + r.FailedSteps);
-        Assert.Equal(expectedCount, totalEntries);
+        Assert.NotNull(_lastList);
+        Assert.Equal(3, _lastList!.TotalCount);
+        Assert.Equal(3, _lastList.Items.Count);
     }
 
     [Then("each entry should contain status, duration, and timestamp")]
-    public void ThenEachEntryShouldHaveMetadata()
+    public void ThenEntryFields()
     {
-        var log = _repository.GetAll().First();
-        foreach (var entry in log.Entries)
+        Assert.NotNull(_lastList);
+        foreach (var e in _lastList!.Items)
         {
-            Assert.NotEqual(WorkflowState.Pending, entry.Status);
-            Assert.True(entry.Duration > TimeSpan.Zero);
-            Assert.NotEqual(default, entry.StartedAt);
+            Assert.True(Enum.IsDefined(typeof(WorkflowState), e.Status));
+            Assert.True(e.StartedAt != default);
         }
     }
 
-    [Then("the log entry for step (.*) should include error details")]
-    public void ThenStepShouldHaveErrorDetails(int stepNumber)
+    [Given("step 2 of the workflow failed")]
+    public async Task GivenStep2Failed()
     {
-        var log = _repository.GetAll().First();
-        var entry = log.Entries.First(e => e.StepOrder == stepNumber - 1);
-        Assert.NotNull(entry.ErrorDetail);
-        Assert.NotEmpty(entry.ErrorDetail);
+        _lastLogId = Guid.NewGuid();
+        var log = new ExecutionLog(_lastLogId, Guid.NewGuid(), "WF With Failure", IntegrationConstants.Tenant1Id, 3);
+        log.AddEntry(new ExecutionLogEntry(Guid.NewGuid(), "Step 1", 0, WorkflowState.Completed, TimeSpan.FromMilliseconds(100), "ok", null));
+        log.AddEntry(new ExecutionLogEntry(Guid.NewGuid(), "Step 2", 1, WorkflowState.Failed, TimeSpan.FromMilliseconds(200), null, "Step 2 failed: downstream timeout"));
+        log.AddEntry(new ExecutionLogEntry(Guid.NewGuid(), "Step 3", 2, WorkflowState.Completed, TimeSpan.FromMilliseconds(100), "ok", null));
+        log.Fail();
+        await ExecutionLogSeeder.SeedAsync(new[] { log });
+    }
+
+    [When("a user queries execution logs")]
+    public async Task WhenQueryFailedSteps()
+    {
+        await EnsureAdminAsync();
+        var resp = await IntegrationClient.SendAsync(
+            HttpMethod.Get, $"/api/v1/execution-logs/{_lastLogId}/steps?status=Failed", _adminToken);
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        _lastSteps = await IntegrationClient.ReadAsAsync<ExecutionLogStepsResponseDto>(resp);
+    }
+
+    [Then("the log entry for step 2 should include error details")]
+    public void ThenStep2ErrorDetails()
+    {
+        Assert.NotNull(_lastSteps);
+        var failed = _lastSteps!.Items.SingleOrDefault(s => s.StepName == "Step 2");
+        Assert.NotNull(failed);
+        Assert.Equal((int)WorkflowState.Failed, failed!.Status);
+        Assert.False(string.IsNullOrWhiteSpace(failed.ErrorDetail));
     }
 
     [Then("the error message should describe the failure reason")]
-    public void ThenErrorMessageDescribesFailure()
+    public void ThenErrorMessageDescribes()
     {
-        var log = _repository.GetAll().First();
-        var failedEntry = log.Entries.First(e => e.Status == WorkflowState.Failed);
-        Assert.Contains("Error", failedEntry.ErrorDetail, StringComparison.OrdinalIgnoreCase);
+        Assert.NotNull(_lastSteps);
+        var failed = _lastSteps!.Items.SingleOrDefault(s => s.StepName == "Step 2");
+        Assert.NotNull(failed);
+        Assert.Contains("timeout", failed!.ErrorDetail, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Then("only logs within that range should be returned")]
-    public void ThenOnlyLogsWithinRangeReturned()
+    [Given("execution logs exist")]
+    public async Task GivenLogsExist() => await GivenThreeCompleted();
+
+    [When("a user filters logs by a future date range")]
+    public async Task WhenFilterFutureRange()
     {
-        var from = new DateTime(2025, 6, 2, 0, 0, 0, DateTimeKind.Utc);
-        var to = new DateTime(2025, 6, 6, 0, 0, 0, DateTimeKind.Utc);
-        Assert.All(_queryResults, r =>
+        await EnsureAdminAsync();
+        var from = DateTime.UtcNow.AddDays(1).ToString("yyyy-MM-dd");
+        var to = DateTime.UtcNow.AddDays(2).ToString("yyyy-MM-dd");
+        var resp = await IntegrationClient.SendAsync(
+            HttpMethod.Get, $"/api/v1/execution-logs?from={from}&to={to}", _adminToken);
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        _lastList = await IntegrationClient.ReadAsAsync<ExecutionLogListResponseDto>(resp);
+    }
+
+    [Then("no logs should be returned")]
+    public void ThenNoLogs()
+    {
+        Assert.NotNull(_lastList);
+        Assert.Equal(0, _lastList!.TotalCount);
+    }
+
+    [When("a user filters logs by a range covering today")]
+    public async Task WhenFilterTodayRange()
+    {
+        await EnsureAdminAsync();
+        var from = DateTime.UtcNow.AddDays(-1).ToString("yyyy-MM-dd");
+        var to = DateTime.UtcNow.AddDays(1).ToString("yyyy-MM-dd");
+        var resp = await IntegrationClient.SendAsync(
+            HttpMethod.Get, $"/api/v1/execution-logs?from={from}&to={to}", _adminToken);
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        _lastList = await IntegrationClient.ReadAsAsync<ExecutionLogListResponseDto>(resp);
+    }
+
+    [Then("all logs within that range should be returned")]
+    public void ThenAllInRange()
+    {
+        Assert.NotNull(_lastList);
+        Assert.Equal(3, _lastList!.TotalCount);
+    }
+
+    [Given("some executions succeeded and some failed")]
+    public async Task GivenMixed()
+    {
+        var logs = new[]
         {
-            Assert.True(r.StartedAt >= from);
-            Assert.True(r.StartedAt <= to);
-        });
-    }
-
-    [Then("only failed step entries should be returned")]
-    public void ThenOnlyFailedEntriesReturned()
-    {
-        var log = _repository.GetAll().First();
-        Assert.All(log.Entries.Where(e => e.Status == WorkflowState.Failed), e =>
-            Assert.Equal(WorkflowState.Failed, e.Status));
-    }
-
-    [Then("they should receive (.*) entries")]
-    public void ThenShouldReceiveEntries(int expectedCount)
-    {
-        Assert.Equal(expectedCount, _queryResults.Count);
-    }
-
-    [Then("total count should be (.*)")]
-    public void ThenTotalCountShouldBe(int expectedCount)
-    {
-        Assert.Equal(expectedCount, _totalCount);
-    }
-
-    private static WorkflowState ParseState(string name)
-    {
-        return name switch
-        {
-            "Pending" => WorkflowState.Pending,
-            "Running" => WorkflowState.Running,
-            "Paused" => WorkflowState.Paused,
-            "Completed" => WorkflowState.Completed,
-            "Failed" => WorkflowState.Failed,
-            "RolledBack" => WorkflowState.RolledBack,
-            _ => throw new ArgumentException($"Unknown state: {name}")
+            MakeCompletedLog(Guid.NewGuid(), "WF Ok", 1),
+            MakeCompletedLog(Guid.NewGuid(), "WF Bad", 1, failed: true),
         };
+        await ExecutionLogSeeder.SeedAsync(logs);
     }
 
-    private sealed record ExecutionLogSummary(
-        Guid Id, Guid WorkflowId, string WorkflowName, WorkflowState Status,
-        int TotalSteps, int CompletedSteps, int FailedSteps,
-        DateTime StartedAt, DateTime? CompletedAt);
-
-    /// <summary>
-    /// In-memory implementation of <see cref="IExecutionLogRepository"/> for spec flow testing.
-    /// </summary>
-    private sealed class InMemoryExecutionLogRepository : IExecutionLogRepository
+    [When(@"a user filters logs by status ""(.*)""")]
+    public async Task WhenFilterByStatus(string status)
     {
-        private readonly ConcurrentDictionary<Guid, ExecutionLog> _store = new();
+        await EnsureAdminAsync();
+        var resp = await IntegrationClient.SendAsync(
+            HttpMethod.Get, $"/api/v1/execution-logs?status={status}", _adminToken);
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        _lastList = await IntegrationClient.ReadAsAsync<ExecutionLogListResponseDto>(resp);
+    }
 
-        public void Clear() => _store.Clear();
-        public List<ExecutionLog> GetAll() => _store.Values.ToList();
+    [Then("only failed execution entries should be returned")]
+    public void ThenOnlyFailed()
+    {
+        Assert.NotNull(_lastList);
+        Assert.Equal(1, _lastList!.TotalCount);
+        Assert.All(_lastList.Items, i => Assert.Equal((int)WorkflowState.Failed, i.Status));
+    }
 
-        public Task<ExecutionLog?> GetByIdAsync(Guid id, CancellationToken ct = default)
-        {
-            _store.TryGetValue(id, out var log);
-            return Task.FromResult(log);
-        }
+    [Given("50 execution logs exist")]
+    public async Task GivenFifty()
+    {
+        var logs = new List<ExecutionLog>();
+        for (int i = 0; i < 50; i++)
+            logs.Add(MakeCompletedLog(Guid.NewGuid(), $"WF {i}", 1));
+        await ExecutionLogSeeder.SeedAsync(logs);
+    }
 
-        public Task<IReadOnlyList<ExecutionLog>> GetByWorkflowIdAsync(Guid workflowId, CancellationToken ct = default)
-        {
-            var logs = _store.Values
-                .Where(l => l.WorkflowId == workflowId)
-                .OrderByDescending(l => l.StartedAt)
-                .ToList() as IReadOnlyList<ExecutionLog>;
-            return Task.FromResult(logs);
-        }
+    [When("a user queries with page 1 and page size 20")]
+    public async Task WhenPaginate()
+    {
+        await EnsureAdminAsync();
+        var resp = await IntegrationClient.SendAsync(
+            HttpMethod.Get, "/api/v1/execution-logs?skip=0&take=20", _adminToken);
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        _lastList = await IntegrationClient.ReadAsAsync<ExecutionLogListResponseDto>(resp);
+    }
 
-        public Task<(IReadOnlyList<ExecutionLog> Items, int TotalCount)> QueryAsync(
-            Guid tenantId,
-            WorkflowState? status = null,
-            DateTime? from = null,
-            DateTime? to = null,
-            int skip = 0,
-            int take = 20,
-            CancellationToken ct = default)
-        {
-            var query = _store.Values.Where(l => l.TenantId == tenantId).AsEnumerable();
+    [Then("they should receive 20 entries")]
+    public void ThenTwenty()
+    {
+        Assert.NotNull(_lastList);
+        Assert.Equal(20, _lastList!.Items.Count);
+    }
 
-            if (status.HasValue)
-                query = query.Where(l => l.Status == status.Value);
-
-            if (from.HasValue)
-                query = query.Where(l => l.StartedAt >= from.Value);
-
-            if (to.HasValue)
-                query = query.Where(l => l.StartedAt <= to.Value);
-
-            var filtered = query.OrderByDescending(l => l.StartedAt).ToList();
-            var totalCount = filtered.Count;
-            var items = filtered.Skip(skip).Take(take).ToList() as IReadOnlyList<ExecutionLog>;
-
-            return Task.FromResult((items, totalCount));
-        }
-
-        public Task<(IReadOnlyList<ExecutionLogEntry> Items, int TotalCount)?> QueryStepsAsync(
-            Guid executionLogId,
-            WorkflowState? status = null,
-            int skip = 0,
-            int take = 50,
-            CancellationToken ct = default)
-        {
-            if (!_store.TryGetValue(executionLogId, out var log))
-                return Task.FromResult<(IReadOnlyList<ExecutionLogEntry> Items, int TotalCount)?>(null);
-
-            var query = log.Entries.AsEnumerable();
-
-            if (status.HasValue)
-                query = query.Where(e => e.Status == status.Value);
-
-            var filtered = query.OrderBy(e => e.StepOrder).ToList();
-            var totalCount = filtered.Count;
-            var items = filtered.Skip(skip).Take(take).ToList() as IReadOnlyList<ExecutionLogEntry>;
-
-            return Task.FromResult<(IReadOnlyList<ExecutionLogEntry> Items, int TotalCount)?>((items, totalCount));
-        }
-
-        public void Add(ExecutionLog log)
-        {
-            _store.TryAdd(log.Id, log);
-        }
-
-        public void Update(ExecutionLog log)
-        {
-            _store[log.Id] = log;
-        }
-
-        public Task<IReadOnlyList<ExecutionLog>> GetByTenantAsync(
-            Guid tenantId, DateTime? from = null, DateTime? to = null, CancellationToken ct = default)
-        {
-            var query = _store.Values.Where(l => l.TenantId == tenantId).AsEnumerable();
-
-            if (from.HasValue)
-                query = query.Where(l => l.StartedAt >= from.Value);
-
-            if (to.HasValue)
-                query = query.Where(l => l.StartedAt <= to.Value);
-
-            var logs = query.OrderByDescending(l => l.StartedAt).ToList() as IReadOnlyList<ExecutionLog>;
-            return Task.FromResult(logs);
-        }
+    [Then("total count should be 50")]
+    public void ThenTotalFifty()
+    {
+        Assert.NotNull(_lastList);
+        Assert.Equal(50, _lastList!.TotalCount);
     }
 }

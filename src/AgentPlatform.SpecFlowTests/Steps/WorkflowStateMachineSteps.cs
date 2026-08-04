@@ -3,7 +3,7 @@ using AgentPlatform.Domain.Abstractions;
 using AgentPlatform.Domain.Aggregates.Workflows;
 using AgentPlatform.Domain.Enums;
 using System.Collections.Concurrent;
-using TechTalk.SpecFlow;
+using Reqnroll;
 using Xunit;
 
 namespace AgentPlatform.SpecFlowTests.Steps;

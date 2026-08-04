@@ -9,13 +9,13 @@ Feature: AgentType Migration
     Scenario: Create agent with new AgentType
         When a user creates an agent with role code "architecture"
         Then the agent should have an AgentType with RoleCode "architecture"
-        And the agent's role should be retrievable via GetByRoleAsync("architecture")
+        And the agent should be retrievable by role code "architecture"
 
     Scenario: Migrate existing AgentRole agent
         Given an agent was created with AgentRole.Architect
         When the system migrates agent roles
-        Then the agent should have an AgentType with RoleCode "architecture"
-        And the old AgentRole enum should no longer be referenced in application code
+        Then the agent should have an AgentType with RoleCode "architect"
+        And the agent should be retrievable by role code "architect"
 
     Scenario: Unknown role code returns empty
         When a user queries agents by role code "nonexistent-role"

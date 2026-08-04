@@ -247,7 +247,7 @@
 - 风险：🔴 多工作空间破坏性极大（全部聚合加 WorkspaceId + query filter + TenantProvider 体系）；建议 v1 **仅做用量仪表盘 + diff（低风险纯增量）**，多工作空间独立排期。实现前须锁定 §6（S1 是否含 Workspace / S2 数据模型）。
 
 
-### F27 · BDD 集成测试统一（Reqnroll + 文件 SQLite + Playwright E2E）  [P1]  open  ⚠️高风险（测试架构改造 + SpecFlow→Reqnroll 迁移 + 新增前端 E2E 基建）
+### F27 · BDD 集成测试统一（Reqnroll + 文件 SQLite + Playwright E2E）  [P1]  done  ⚠️高风险（测试架构改造 + SpecFlow→Reqnroll 迁移 + 新增前端 E2E 基建 · 2026-08-04 全阶段 DONE）
 - 设计文档：`features/bdd-integration-design.md`（已建，2026-08-03 确认设计 + §7 例外默认 B）
 - 目标：把 **BDD 重新定义为「最终集成测试层」** = 真 HTTP（走完整管线）+ 真 DB（**文件 SQLite，明确排除 Api.Tests 现行 in-memory**）+ 前端 E2E（Playwright 真浏览器）；**现有 41 例 SpecFlow 域级测试（假 Repository/域内对象）全量迁移到 HTTP+DB 契约**。
 - 核心改造：

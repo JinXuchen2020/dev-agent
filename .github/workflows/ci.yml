@@ -37,11 +37,33 @@ jobs:
         run: dotnet build src/AgentPlatform.sln --no-restore --configuration Release
 
       - name: Run unit + architecture tests
-        run: dotnet test src/AgentPlatform.sln --no-build --configuration Release --filter "FullyQualifiedName!~IntegrationTests"
+        run: dotnet test src/AgentPlatform.sln --no-build --configuration Release --filter "FullyQualifiedName!~IntegrationTests&FullyQualifiedName!~SpecFlowTests"
 
       - name: Run integration tests
         if: false  # Integration tests need Docker. Enable when Docker is available on runner.
         run: dotnet test src/AgentPlatform.sln --no-build --configuration Release --filter "FullyQualifiedName~IntegrationTests"
+
+  integration:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore src/AgentPlatform.sln
+
+      - name: Build
+        run: dotnet build src/AgentPlatform.sln --no-restore --configuration Release
+
+      # F27 集成闸门（后端 BDD）：真实 HTTP + 文件 SQLite，无 Docker 依赖，跨平台可跑。
+      # 前端 E2E（Playwright + Edge）为 Windows 本机本地闸门，见 scripts/integration.mjs --e2e。
+      - name: Run backend BDD (Reqnroll + file SQLite)
+        run: dotnet test src/AgentPlatform.SpecFlowTests --configuration Release --logger "console;verbosity=minimal"
 
   quality-gate:
     runs-on: ubuntu-latest

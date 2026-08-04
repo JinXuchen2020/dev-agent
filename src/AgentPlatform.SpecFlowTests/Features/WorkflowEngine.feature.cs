@@ -17,22 +17,21 @@ namespace AgentPlatform.SpecFlowTests.Features
     
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("Reqnroll", "3.0.0.0")]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    public partial class AgentTypeMigrationFeature : object, global::Xunit.IClassFixture<AgentTypeMigrationFeature.FixtureData>, global::Xunit.IAsyncLifetime
+    public partial class 工作流引擎重试与回滚真实IOrchestrationPrimitiveFeature : object, global::Xunit.IClassFixture<工作流引擎重试与回滚真实IOrchestrationPrimitiveFeature.FixtureData>, global::Xunit.IAsyncLifetime
     {
         
         private global::Reqnroll.ITestRunner testRunner;
         
         private static string[] featureTags = ((string[])(null));
         
-        private static global::Reqnroll.FeatureInfo featureInfo = new global::Reqnroll.FeatureInfo(new global::System.Globalization.CultureInfo("en-US"), "Features", "AgentType Migration", "    As a platform maintainer\r\n    I want to migrate from AgentRole enum to AgentT" +
-                "ype value object\r\n    So that agent roles become extensible and type-safe", global::Reqnroll.ProgrammingLanguage.CSharp, featureTags, InitializeCucumberMessages());
+        private static global::Reqnroll.FeatureInfo featureInfo = new global::Reqnroll.FeatureInfo(new global::System.Globalization.CultureInfo("en-US"), "Features", "工作流引擎重试与回滚（真实 IOrchestrationPrimitive）", "\t作为平台编排器\r\n\t我希望工作流在步骤失败时按真实引擎语义重试并回滚\r\n\t以保证执行状态真实持久化到数据库", global::Reqnroll.ProgrammingLanguage.CSharp, featureTags, InitializeCucumberMessages());
         
         private global::Xunit.Abstractions.ITestOutputHelper _testOutputHelper;
         
-#line 1 "AgentTypeMigration.feature"
+#line 1 "WorkflowEngine.feature"
 #line hidden
         
-        public AgentTypeMigrationFeature(AgentTypeMigrationFeature.FixtureData fixtureData, global::Xunit.Abstractions.ITestOutputHelper testOutputHelper)
+        public 工作流引擎重试与回滚真实IOrchestrationPrimitiveFeature(工作流引擎重试与回滚真实IOrchestrationPrimitiveFeature.FixtureData fixtureData, global::Xunit.Abstractions.ITestOutputHelper testOutputHelper)
         {
             this._testOutputHelper = testOutputHelper;
         }
@@ -104,18 +103,9 @@ namespace AgentPlatform.SpecFlowTests.Features
             await testRunner.CollectScenarioErrorsAsync();
         }
         
-        public virtual async global::System.Threading.Tasks.Task FeatureBackgroundAsync()
-        {
-#line 6
-    #line hidden
-#line 7
-        await testRunner.GivenAsync("the system is initialized with the AgentRole-to-AgentType migration", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
-#line hidden
-        }
-        
         private static global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages InitializeCucumberMessages()
         {
-            return new global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages("Features/AgentTypeMigration.feature", 5);
+            return new global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages("Features/WorkflowEngine.feature", 5);
         }
         
         async global::System.Threading.Tasks.Task global::Xunit.IAsyncLifetime.InitializeAsync()
@@ -143,19 +133,19 @@ namespace AgentPlatform.SpecFlowTests.Features
             await this.TestTearDownAsync();
         }
         
-        [global::Xunit.SkippableFactAttribute(DisplayName="Create agent with new AgentType")]
-        [global::Xunit.TraitAttribute("FeatureTitle", "AgentType Migration")]
-        [global::Xunit.TraitAttribute("Description", "Create agent with new AgentType")]
-        public async global::System.Threading.Tasks.Task CreateAgentWithNewAgentType()
+        [global::Xunit.SkippableFactAttribute(DisplayName="步骤重试耗尽后回滚已完成步骤")]
+        [global::Xunit.TraitAttribute("FeatureTitle", "工作流引擎重试与回滚（真实 IOrchestrationPrimitive）")]
+        [global::Xunit.TraitAttribute("Description", "步骤重试耗尽后回滚已完成步骤")]
+        public async global::System.Threading.Tasks.Task 步骤重试耗尽后回滚已完成步骤()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "0";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Create agent with new AgentType", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("步骤重试耗尽后回滚已完成步骤", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 9
-    this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line 12
+this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
             {
@@ -164,35 +154,50 @@ namespace AgentPlatform.SpecFlowTests.Features
             else
             {
                 await this.ScenarioStartAsync();
-#line 6
-    await this.FeatureBackgroundAsync();
+#line 13
+ await testRunner.GivenAsync("a 3-step workflow is defined", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 10
-        await testRunner.WhenAsync("a user creates an agent with role code \"architecture\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line 14
+ await testRunner.AndAsync("step 2 is configured to fail with retryable error", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 11
-        await testRunner.ThenAsync("the agent should have an AgentType with RoleCode \"architecture\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line 15
+ await testRunner.WhenAsync("the workflow is executed sequentially", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 12
-        await testRunner.AndAsync("the agent should be retrievable by role code \"architecture\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line 16
+ await testRunner.ThenAsync("step 1 should be in state Completed", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 17
+ await testRunner.AndAsync("step 2 should be in state Pending", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 18
+ await testRunner.AndAsync("step 3 should be in state Pending", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 19
+ await testRunner.AndAsync("step 2 should have been attempted 3 times", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 20
+ await testRunner.AndAsync("the workflow should be in state RolledBack", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 21
+ await testRunner.AndAsync("the workflow state should be persisted to the database", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Xunit.SkippableFactAttribute(DisplayName="Migrate existing AgentRole agent")]
-        [global::Xunit.TraitAttribute("FeatureTitle", "AgentType Migration")]
-        [global::Xunit.TraitAttribute("Description", "Migrate existing AgentRole agent")]
-        public async global::System.Threading.Tasks.Task MigrateExistingAgentRoleAgent()
+        [global::Xunit.SkippableFactAttribute(DisplayName="全部步骤成功则工作流完成")]
+        [global::Xunit.TraitAttribute("FeatureTitle", "工作流引擎重试与回滚（真实 IOrchestrationPrimitive）")]
+        [global::Xunit.TraitAttribute("Description", "全部步骤成功则工作流完成")]
+        public async global::System.Threading.Tasks.Task 全部步骤成功则工作流完成()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "1";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Migrate existing AgentRole agent", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("全部步骤成功则工作流完成", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 14
-    this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line 23
+this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
             {
@@ -201,38 +206,44 @@ namespace AgentPlatform.SpecFlowTests.Features
             else
             {
                 await this.ScenarioStartAsync();
-#line 6
-    await this.FeatureBackgroundAsync();
+#line 24
+ await testRunner.GivenAsync("a 3-step workflow is defined", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 15
-        await testRunner.GivenAsync("an agent was created with AgentRole.Architect", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line 25
+ await testRunner.WhenAsync("the workflow is executed sequentially", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 16
-        await testRunner.WhenAsync("the system migrates agent roles", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line 26
+ await testRunner.ThenAsync("step 1 should be in state Completed", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
-#line 17
-        await testRunner.ThenAsync("the agent should have an AgentType with RoleCode \"architect\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line 27
+ await testRunner.AndAsync("step 2 should be in state Completed", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 18
-        await testRunner.AndAsync("the agent should be retrievable by role code \"architect\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line 28
+ await testRunner.AndAsync("step 3 should be in state Completed", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 29
+ await testRunner.AndAsync("the workflow should be in state Completed", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 30
+ await testRunner.AndAsync("the workflow state should be persisted to the database", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Xunit.SkippableFactAttribute(DisplayName="Unknown role code returns empty")]
-        [global::Xunit.TraitAttribute("FeatureTitle", "AgentType Migration")]
-        [global::Xunit.TraitAttribute("Description", "Unknown role code returns empty")]
-        public async global::System.Threading.Tasks.Task UnknownRoleCodeReturnsEmpty()
+        [global::Xunit.SkippableFactAttribute(DisplayName="协商预设多智能体管线成功完成")]
+        [global::Xunit.TraitAttribute("FeatureTitle", "工作流引擎重试与回滚（真实 IOrchestrationPrimitive）")]
+        [global::Xunit.TraitAttribute("Description", "协商预设多智能体管线成功完成")]
+        public async global::System.Threading.Tasks.Task 协商预设多智能体管线成功完成()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "2";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Unknown role code returns empty", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("协商预设多智能体管线成功完成", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 20
-    this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line 32
+this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
             {
@@ -241,14 +252,17 @@ namespace AgentPlatform.SpecFlowTests.Features
             else
             {
                 await this.ScenarioStartAsync();
-#line 6
-    await this.FeatureBackgroundAsync();
+#line 33
+ await testRunner.GivenAsync("a 3-step workflow is defined", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 21
-        await testRunner.WhenAsync("a user queries agents by role code \"nonexistent-role\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line 34
+ await testRunner.WhenAsync("the workflow is executed with the negotiation preset", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 22
-        await testRunner.ThenAsync("the system should return an empty list", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line 35
+ await testRunner.ThenAsync("the workflow should be in state Completed", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 36
+ await testRunner.AndAsync("the workflow state should be persisted to the database", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
@@ -261,12 +275,12 @@ namespace AgentPlatform.SpecFlowTests.Features
             
             async global::System.Threading.Tasks.Task global::Xunit.IAsyncLifetime.InitializeAsync()
             {
-                await AgentTypeMigrationFeature.FeatureSetupAsync();
+                await 工作流引擎重试与回滚真实IOrchestrationPrimitiveFeature.FeatureSetupAsync();
             }
             
             async global::System.Threading.Tasks.Task global::Xunit.IAsyncLifetime.DisposeAsync()
             {
-                await AgentTypeMigrationFeature.FeatureTearDownAsync();
+                await 工作流引擎重试与回滚真实IOrchestrationPrimitiveFeature.FeatureTearDownAsync();
             }
         }
     }

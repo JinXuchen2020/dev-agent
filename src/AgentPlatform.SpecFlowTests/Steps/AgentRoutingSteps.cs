@@ -7,7 +7,7 @@ using Microsoft.Extensions.Options;
 using NSubstitute;
 using System.Linq;
 using System.Threading.Tasks;
-using TechTalk.SpecFlow;
+using Reqnroll;
 using Xunit;
 
 namespace AgentPlatform.SpecFlowTests.Steps;

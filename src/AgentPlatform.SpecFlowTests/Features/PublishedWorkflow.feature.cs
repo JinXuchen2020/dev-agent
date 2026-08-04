@@ -17,23 +17,23 @@ namespace AgentPlatform.SpecFlowTests.Features
     
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("Reqnroll", "3.0.0.0")]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    public partial class WorkflowStateMachineFeature : object, global::Xunit.IClassFixture<WorkflowStateMachineFeature.FixtureData>, global::Xunit.IAsyncLifetime
+    public partial class 发布工作流为APIMCPServerF22真HTTP真DBFeature : object, global::Xunit.IClassFixture<发布工作流为APIMCPServerF22真HTTP真DBFeature.FixtureData>, global::Xunit.IAsyncLifetime
     {
         
         private global::Reqnroll.ITestRunner testRunner;
         
         private static string[] featureTags = ((string[])(null));
         
-        private static global::Reqnroll.FeatureInfo featureInfo = new global::Reqnroll.FeatureInfo(new global::System.Globalization.CultureInfo("en-US"), "Features", "Workflow State Machine", "    As a workflow orchestrator\r\n    I want a state machine engine with branching," +
-                " retry, and rollback\r\n    So that multi-agent workflows can handle failures grac" +
-                "efully", global::Reqnroll.ProgrammingLanguage.CSharp, featureTags, InitializeCucumberMessages());
+        private static global::Reqnroll.FeatureInfo featureInfo = new global::Reqnroll.FeatureInfo(new global::System.Globalization.CultureInfo("en-US"), "Features", "发布工作流为 API / MCP Server（F22，真 HTTP + 真 DB）", "  后端 BDD 集成层：所有场景经真实 HttpClient 走完整 ASP.NET Core 管线\r\n  （认证中间件 / 异常处理器 / MediatR +" +
+                " UoW / EF），连真实文件 SQLite 数据库，\r\n  零 mock Repository、零 in-memory。对应设计文档 features/bd" +
+                "d-integration-design.md §4.3。", global::Reqnroll.ProgrammingLanguage.CSharp, featureTags, InitializeCucumberMessages());
         
         private global::Xunit.Abstractions.ITestOutputHelper _testOutputHelper;
         
-#line 1 "WorkflowStateMachine.feature"
+#line 1 "PublishedWorkflow.feature"
 #line hidden
         
-        public WorkflowStateMachineFeature(WorkflowStateMachineFeature.FixtureData fixtureData, global::Xunit.Abstractions.ITestOutputHelper testOutputHelper)
+        public 发布工作流为APIMCPServerF22真HTTP真DBFeature(发布工作流为APIMCPServerF22真HTTP真DBFeature.FixtureData fixtureData, global::Xunit.Abstractions.ITestOutputHelper testOutputHelper)
         {
             this._testOutputHelper = testOutputHelper;
         }
@@ -107,19 +107,19 @@ namespace AgentPlatform.SpecFlowTests.Features
         
         public virtual async global::System.Threading.Tasks.Task FeatureBackgroundAsync()
         {
-#line 6
-    #line hidden
 #line 7
-        await testRunner.GivenAsync("a workflow with 3 steps defined", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
-#line hidden
+  #line hidden
 #line 8
-        await testRunner.AndAsync("the state machine engine is initialized", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+    await testRunner.GivenAsync("集成租户 T1 下存在一个 Completed 状态的工作流 W1", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line hidden
+#line 9
+    await testRunner.AndAsync("集成租户 T1 持有一个有效的 ApiKey", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
         }
         
         private static global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages InitializeCucumberMessages()
         {
-            return new global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages("Features/WorkflowStateMachine.feature", 8);
+            return new global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages("Features/PublishedWorkflow.feature", 8);
         }
         
         async global::System.Threading.Tasks.Task global::Xunit.IAsyncLifetime.InitializeAsync()
@@ -147,19 +147,19 @@ namespace AgentPlatform.SpecFlowTests.Features
             await this.TestTearDownAsync();
         }
         
-        [global::Xunit.SkippableFactAttribute(DisplayName="Normal flow completes all steps")]
-        [global::Xunit.TraitAttribute("FeatureTitle", "Workflow State Machine")]
-        [global::Xunit.TraitAttribute("Description", "Normal flow completes all steps")]
-        public async global::System.Threading.Tasks.Task NormalFlowCompletesAllSteps()
+        [global::Xunit.SkippableFactAttribute(DisplayName="发布为 API 模式并生成 slug")]
+        [global::Xunit.TraitAttribute("FeatureTitle", "发布工作流为 API / MCP Server（F22，真 HTTP + 真 DB）")]
+        [global::Xunit.TraitAttribute("Description", "发布为 API 模式并生成 slug")]
+        public async global::System.Threading.Tasks.Task 发布为API模式并生成Slug()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "0";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Normal flow completes all steps", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("发布为 API 模式并生成 slug", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 10
-    this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line 11
+  this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
             {
@@ -168,41 +168,35 @@ namespace AgentPlatform.SpecFlowTests.Features
             else
             {
                 await this.ScenarioStartAsync();
-#line 6
-    await this.FeatureBackgroundAsync();
-#line hidden
-#line 11
-        await testRunner.WhenAsync("the workflow starts", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line 7
+  await this.FeatureBackgroundAsync();
 #line hidden
 #line 12
-        await testRunner.ThenAsync("step 1 should execute successfully", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+    await testRunner.WhenAsync("发布 W1 为 API 模式", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 13
-        await testRunner.AndAsync("step 2 should execute successfully", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+    await testRunner.ThenAsync("响应 200 且返回 16 位 URL 安全 slug", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
 #line 14
-        await testRunner.AndAsync("step 3 should execute successfully", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
-#line hidden
-#line 15
-        await testRunner.AndAsync("the workflow status should be \"Completed\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+    await testRunner.AndAsync("查询 W1 发布状态为 Enabled", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Xunit.SkippableFactAttribute(DisplayName="Step failure triggers retry up to 3 times")]
-        [global::Xunit.TraitAttribute("FeatureTitle", "Workflow State Machine")]
-        [global::Xunit.TraitAttribute("Description", "Step failure triggers retry up to 3 times")]
-        public async global::System.Threading.Tasks.Task StepFailureTriggersRetryUpTo3Times()
+        [global::Xunit.SkippableFactAttribute(DisplayName="用绑定 Key 经 slug 运行")]
+        [global::Xunit.TraitAttribute("FeatureTitle", "发布工作流为 API / MCP Server（F22，真 HTTP + 真 DB）")]
+        [global::Xunit.TraitAttribute("Description", "用绑定 Key 经 slug 运行")]
+        public async global::System.Threading.Tasks.Task 用绑定Key经Slug运行()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "1";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Step failure triggers retry up to 3 times", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("用绑定 Key 经 slug 运行", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 17
-    this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line 16
+  this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
             {
@@ -211,41 +205,35 @@ namespace AgentPlatform.SpecFlowTests.Features
             else
             {
                 await this.ScenarioStartAsync();
-#line 6
-    await this.FeatureBackgroundAsync();
+#line 7
+  await this.FeatureBackgroundAsync();
+#line hidden
+#line 17
+    await testRunner.GivenAsync("W1 已发布为 Api 模式并绑定 T1 Key", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
 #line 18
-        await testRunner.GivenAsync("step 2 is configured to fail", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+    await testRunner.WhenAsync("带 ApiKey 调用 slug 运行并附输入", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 19
-        await testRunner.WhenAsync("the workflow starts", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 20
-        await testRunner.ThenAsync("step 1 should execute successfully", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 21
-        await testRunner.AndAsync("step 2 should retry up to 3 times", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
-#line hidden
-#line 22
-        await testRunner.AndAsync("after 3 failures, step 2 should be marked as \"Failed\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+    await testRunner.ThenAsync("响应 200 且返回工作流最终输出", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Xunit.SkippableFactAttribute(DisplayName="All retries exhausted triggers rollback")]
-        [global::Xunit.TraitAttribute("FeatureTitle", "Workflow State Machine")]
-        [global::Xunit.TraitAttribute("Description", "All retries exhausted triggers rollback")]
-        public async global::System.Threading.Tasks.Task AllRetriesExhaustedTriggersRollback()
+        [global::Xunit.SkippableFactAttribute(DisplayName="错误 Key 被拒")]
+        [global::Xunit.TraitAttribute("FeatureTitle", "发布工作流为 API / MCP Server（F22，真 HTTP + 真 DB）")]
+        [global::Xunit.TraitAttribute("Description", "错误 Key 被拒")]
+        public async global::System.Threading.Tasks.Task 错误Key被拒()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "2";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("All retries exhausted triggers rollback", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("错误 Key 被拒", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 24
-    this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line 21
+  this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
             {
@@ -254,41 +242,35 @@ namespace AgentPlatform.SpecFlowTests.Features
             else
             {
                 await this.ScenarioStartAsync();
-#line 6
-    await this.FeatureBackgroundAsync();
+#line 7
+  await this.FeatureBackgroundAsync();
 #line hidden
-#line 25
-        await testRunner.GivenAsync("step 2 is configured to always fail", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line 22
+    await testRunner.GivenAsync("W1 已发布并绑定 T1 Key", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 26
-        await testRunner.WhenAsync("the workflow starts", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line 23
+    await testRunner.WhenAsync("用 T2 的 Key 调用 slug 运行", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 27
-        await testRunner.ThenAsync("step 2 should fail after 3 retries", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 28
-        await testRunner.AndAsync("all completed steps should be rolled back", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
-#line hidden
-#line 29
-        await testRunner.AndAsync("the workflow status should be \"RolledBack\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line 24
+    await testRunner.ThenAsync("响应 404", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Xunit.SkippableFactAttribute(DisplayName="Branching skips failed branch, continues others")]
-        [global::Xunit.TraitAttribute("FeatureTitle", "Workflow State Machine")]
-        [global::Xunit.TraitAttribute("Description", "Branching skips failed branch, continues others")]
-        public async global::System.Threading.Tasks.Task BranchingSkipsFailedBranchContinuesOthers()
+        [global::Xunit.SkippableFactAttribute(DisplayName="跨租户不可运行他人发布")]
+        [global::Xunit.TraitAttribute("FeatureTitle", "发布工作流为 API / MCP Server（F22，真 HTTP + 真 DB）")]
+        [global::Xunit.TraitAttribute("Description", "跨租户不可运行他人发布")]
+        public async global::System.Threading.Tasks.Task 跨租户不可运行他人发布()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "3";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Branching skips failed branch, continues others", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("跨租户不可运行他人发布", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 31
-    this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line 26
+  this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
             {
@@ -297,38 +279,35 @@ namespace AgentPlatform.SpecFlowTests.Features
             else
             {
                 await this.ScenarioStartAsync();
-#line 6
-    await this.FeatureBackgroundAsync();
+#line 7
+  await this.FeatureBackgroundAsync();
 #line hidden
-#line 32
-        await testRunner.GivenAsync("step 2 is in a branch path", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line 27
+    await testRunner.GivenAsync("租户 T2 发布了 W2，Api 模式，T2 Key", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 33
-        await testRunner.WhenAsync("the branch step fails", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line 28
+    await testRunner.WhenAsync("租户 T1 用自身 Key 调用 W2 的 slug", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 34
-        await testRunner.ThenAsync("alternative branch should execute", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 35
-        await testRunner.AndAsync("the workflow should complete with the successful branch result", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line 29
+    await testRunner.ThenAsync("响应 404", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Xunit.SkippableFactAttribute(DisplayName="Concurrent workflow executions")]
-        [global::Xunit.TraitAttribute("FeatureTitle", "Workflow State Machine")]
-        [global::Xunit.TraitAttribute("Description", "Concurrent workflow executions")]
-        public async global::System.Threading.Tasks.Task ConcurrentWorkflowExecutions()
+        [global::Xunit.SkippableFactAttribute(DisplayName="MCP tools/list 仅暴露启用且 Mcp 模式的发布")]
+        [global::Xunit.TraitAttribute("FeatureTitle", "发布工作流为 API / MCP Server（F22，真 HTTP + 真 DB）")]
+        [global::Xunit.TraitAttribute("Description", "MCP tools/list 仅暴露启用且 Mcp 模式的发布")]
+        public async global::System.Threading.Tasks.Task MCPToolsList仅暴露启用且Mcp模式的发布()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "4";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Concurrent workflow executions", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("MCP tools/list 仅暴露启用且 Mcp 模式的发布", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 37
-    this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line 31
+  this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
             {
@@ -337,38 +316,38 @@ namespace AgentPlatform.SpecFlowTests.Features
             else
             {
                 await this.ScenarioStartAsync();
-#line 6
-    await this.FeatureBackgroundAsync();
+#line 7
+  await this.FeatureBackgroundAsync();
 #line hidden
-#line 38
-        await testRunner.GivenAsync("2 workflows are started simultaneously", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line 32
+    await testRunner.GivenAsync("W1 发布为 Mcp 模式并启用", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 39
-        await testRunner.WhenAsync("both workflows run", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line 33
+    await testRunner.AndAsync("W3 发布为 Api 模式，应被列表排除", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
-#line 40
-        await testRunner.ThenAsync("they should not corrupt each other\'s state", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line 34
+    await testRunner.WhenAsync("带 ApiKey 发送 MCP tools list 请求", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 41
-        await testRunner.AndAsync("both should produce correct results independently", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line 35
+    await testRunner.ThenAsync("tools 列表仅含 W1", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Xunit.SkippableFactAttribute(DisplayName="Workflow state recovery after system restart")]
-        [global::Xunit.TraitAttribute("FeatureTitle", "Workflow State Machine")]
-        [global::Xunit.TraitAttribute("Description", "Workflow state recovery after system restart")]
-        public async global::System.Threading.Tasks.Task WorkflowStateRecoveryAfterSystemRestart()
+        [global::Xunit.SkippableFactAttribute(DisplayName="取消发布后 slug 不可用")]
+        [global::Xunit.TraitAttribute("FeatureTitle", "发布工作流为 API / MCP Server（F22，真 HTTP + 真 DB）")]
+        [global::Xunit.TraitAttribute("Description", "取消发布后 slug 不可用")]
+        public async global::System.Threading.Tasks.Task 取消发布后Slug不可用()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "5";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Workflow state recovery after system restart", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("取消发布后 slug 不可用", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 43
-    this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line 37
+  this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
             {
@@ -377,17 +356,17 @@ namespace AgentPlatform.SpecFlowTests.Features
             else
             {
                 await this.ScenarioStartAsync();
-#line 6
-    await this.FeatureBackgroundAsync();
+#line 7
+  await this.FeatureBackgroundAsync();
 #line hidden
-#line 44
-        await testRunner.GivenAsync("a workflow is in \"Running\" state", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line 38
+    await testRunner.GivenAsync("W1 已发布", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
-#line 45
-        await testRunner.WhenAsync("the system restarts", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line 39
+    await testRunner.WhenAsync("取消发布 W1", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
-#line 46
-        await testRunner.ThenAsync("the workflow should be recovered to \"Failed\" state", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line 40
+    await testRunner.ThenAsync("再调用 slug 端点返回 404", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
@@ -400,12 +379,12 @@ namespace AgentPlatform.SpecFlowTests.Features
             
             async global::System.Threading.Tasks.Task global::Xunit.IAsyncLifetime.InitializeAsync()
             {
-                await WorkflowStateMachineFeature.FeatureSetupAsync();
+                await 发布工作流为APIMCPServerF22真HTTP真DBFeature.FeatureSetupAsync();
             }
             
             async global::System.Threading.Tasks.Task global::Xunit.IAsyncLifetime.DisposeAsync()
             {
-                await WorkflowStateMachineFeature.FeatureTearDownAsync();
+                await 发布工作流为APIMCPServerF22真HTTP真DBFeature.FeatureTearDownAsync();
             }
         }
     }

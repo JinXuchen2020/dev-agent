@@ -28,6 +28,12 @@ internal static class InfrastructureConfiguration
                 .AllowCredentials());
         });
 
+        // 限流：由 Security:RateLimitingEnabled 开关控制（默认 true，生产/默认环境开启）。
+        // 集成测试下关闭以避免令牌桶干扰真 HTTP 验收（设计 §11 风险 2）：
+        //   · 后端 BDD 经 IntegrationAppFactory 在进程内 RemoveRateLimitPolicies() 移除策略；
+        //   · 前端 E2E 由 scripts/integration.mjs 的 startBackend 经 env Security__RateLimitingEnabled=false 关闭。
+        if (configuration.GetValue<bool>("Security:RateLimitingEnabled", true))
+        {
         services.AddRateLimiter(options =>
         {
             options.AddPolicy("PerTenant", context =>
@@ -70,6 +76,7 @@ internal static class InfrastructureConfiguration
             });
             options.RejectionStatusCode = 429;
         });
+        }
 
         // OpenTelemetry — metrics + tracing
         services.AddOpenTelemetry()
