@@ -138,14 +138,22 @@ async function main() {
         fail('后端在超时内未就绪（/health 未返回 200）');
       } else {
         console.log('✅ 后端已就绪');
+        const webCwd = path.join(ROOT, 'src/AgentPlatform.Web');
+        // 前端 E2E 已统一为 BDD（playwright-bdd v9）：先 bddgen 生成测试，再 playwright test。
+        const genCode = await run(
+          'npx',
+          ['bddgen'],
+          { cwd: webCwd, env: { ...process.env, API_BASE: BACKEND_URL }, shell: true },
+        );
+        if (genCode !== 0) fail(`前端 BDD 生成失败（退出码 ${genCode}）`);
         const e2eCode = await run(
           'npx',
-          // 仅跑 F27 交付的 e2e 规格（发布链路）。其余预存 e2e 规格（create-agent /
+          // 仅跑 BDD 交付的 e2e 规格（发布链路）。其余预存 e2e 规格（create-agent /
           // page-polish 等）断言英文 UI 文本，但默认 locale 为 zh-CN（i18n F15），
-          // 属与 F27 无关的预存语言环境错配，需各自修复，不阻塞 F27 闸门。
+          // 属与 BDD 无关的预存语言环境错配，需各自修复，不阻塞闸门。
           ['playwright', 'test', 'publish-workflow'],
           // shell:true 使 Windows 能解析 npx.cmd（直接 spawn('npx') 会 ENOENT）。
-          { cwd: path.join(ROOT, 'src/AgentPlatform.Web'), env: { ...process.env, API_BASE: BACKEND_URL }, shell: true },
+          { cwd: webCwd, env: { ...process.env, API_BASE: BACKEND_URL }, shell: true },
         );
         if (e2eCode !== 0) fail(`前端 E2E 失败（退出码 ${e2eCode}）`);
         else console.log('✅ 前端 E2E 通过');

@@ -26,7 +26,7 @@
 | 单元层 | xUnit + NSubstitute | mock 依赖 | handler / 域逻辑 | 保留（Application.Tests / Infra.Tests 等） |
 | HTTP 集成层（非 BDD） | xUnit + WebApplicationFactory | in-memory SQLite | 端点/中间件契约（如 401 边界） | 保留，但**不计入 BDD 层** |
 | **BDD 集成层（最终）** | **Reqnroll + WebApplicationFactory** | **真 HTTP + 文件 SQLite** | **端到端行为验收** | **本设计新建/迁移目标** |
-| **前端 E2E 层** | **Playwright (@playwright/test)** | **真浏览器 + Vite + 后端 HTTP + 文件 SQLite** | **UI 全链路验收** | **本设计新建** |
+| **前端 E2E 层（BDD）** | **playwright-bdd（Gherkin）+ Playwright runner** | **真浏览器 + Vite + 后端 HTTP + 文件 SQLite** | **UI 全链路验收（Given/When/Then）** | **本设计新建，2026-08-04 由裸 .spec.ts 升级为 BDD** |
 
 ---
 
@@ -36,7 +36,7 @@
 |---|---|---|
 | BDD 框架 | **Reqnroll 3.x**（`Reqnroll` + `Reqnroll.xUnit` + `Reqnroll.Tools.MsBuildGeneration`） | SpecFlow 商业授权收紧后停止主版本；Reqnroll 是开源继任者，Gherkin/绑定语法近 100% 兼容，迁移成本极低 |
 | 集成 DB | **文件 SQLite**（每次运行独立 `test-integration.db`） | 零基础设施依赖、CI 友好，仍具真实磁盘 I/O 与迁移；与生产 dev SQLite 一致 |
-| 前端 E2E | **Playwright（`@playwright/test`）** | TS 原生、Vite/React 支持好、可同时驱动后端、报告/追踪强 |
+| 前端 E2E | **playwright-bdd（Gherkin）+ @playwright/test 运行器** | TS 原生、Gherkin 可读、Vite/React 支持好、可同时驱动后端、报告/追踪强 |
 | 旧 SpecFlow | **全部迁移到 HTTP+DB** | 全仓 BDD 契约统一（纯域内部行为见 §7 例外处置） |
 
 ---
@@ -140,33 +140,39 @@ Feature: 发布工作流为 API / MCP Server（F22，真 HTTP + 真 DB）
 
 ---
 
-## 5. 前端 E2E 设计（Playwright）
+## 5. 前端 E2E 设计（playwright-bdd / Gherkin）
+
+> 2026-08-04 升级：前端 E2E 从裸 `@playwright/test` 的 `.spec.ts` 改为 **playwright-bdd** 驱动的 Gherkin BDD（用户指令「前端 E2E 也变 BDD，以后 feature 都要有 BDD 驱动的前端 E2E」）。后端 BDD（Reqnroll）与前端 E2E（playwright-bdd）现在同属「BDD 集成层」，共用 `Integration` 后端夹具与顶层编排闸门。
 
 ### 5.1 目录与配置
-- 新增 `src/AgentPlatform.Web/e2e/`：`playwright.config.ts` + `*.spec.ts`。
-- `package.json` 加 `"e2e": "playwright test"`、`"e2e:ui": "playwright test --ui"`，devDependency `@playwright/test`。
+- 新增 `src/AgentPlatform.Web/e2e/`：`playwright.config.ts` + `features/*.feature`（Gherkin 场景）+ `steps/*.steps.ts`（步骤）+ `steps/fixtures.ts`（自定义 fixture）。
+- `package.json`：`"e2e": "bddgen && playwright test"`、`"e2e:ui": "bddgen && playwright test --ui"`，devDependency 加 `playwright-bdd`（与 `@playwright/test` 并存）。
 - `playwright.config.ts`：
-  - `webServer`：启动 Vite dev（`npm run dev`，端口 5173），`reuseExistingServer: true`。
-  - `baseURL: http://localhost:5173`。
-  - 后端依赖：由顶层编排脚本先起 `IntegrationAppFactory` 对应服务（见 §6），E2E 通过 `API_BASE` 指向 `http://localhost:5000`（或 Playwright `request` fixture 直连）。
+  - `defineBddConfig({ features:'e2e/features/**/*.feature', steps:'e2e/steps/**/*.ts', outputDir:'e2e/.features-gen' })`（配置加载时把 BDD 配置写入 env；`e2e/.features-gen` 已被 .gitignore 忽略）。
+  - 运行链路：先 `bddgen`（生成测试到 `e2e/.features-gen`）→ 再 `playwright test`。
+  - `webServer`：启动 Vite dev（`npm run dev -- --port 5180 --strictPort`），`reuseExistingServer: true`，`channel:'msedge'`（本机 Edge 驱动，免下载 chromium）。
+  - `baseURL: http://localhost:5180`；后端经 `API_BASE` 指向 `http://localhost:5000`（顶层编排脚本先起 `Integration` 后端）。
   - `use: { trace: 'on-first-retry', screenshot: 'only-on-failure' }`。
 
-### 5.2 场景（F22 全链路 UI）
-`e2e/publish-workflow.spec.ts`：
+### 5.2 场景（F22 全链路 UI，Gherkin 真实示例）
+`e2e/features/publish-workflow.feature`：
 
 ```gherkin
-# 用 Playwright 的 test() 描述，等价于：
-Scenario: 在 UI 发布工作流并调用
-  Given 后端已起（Integration 环境 + 文件 SQLite + 种子）
-  When 打开 Workflows 页并登录集成租户用户
-  And 打开某 Completed 工作流的发布 Drawer，选择 Api 模式，点击发布
-  Then Drawer 显示 slug 与调用端点
-  When 复制 slug 并用 ApiKey 经端点调用
-  Then 页面/接口返回工作流最终输出
+Feature: Publish workflow via UI and invoke its API endpoint
+  Background:
+    Given the integration backend is reachable and I am authenticated as admin
+
+  Scenario: Publish a completed workflow and call its API endpoint
+    When I open the Workflows page
+    And I publish the fixture workflow "Integration Fixture Workflow"
+    Then the publish drawer shows a non-empty slug and the API endpoint text
+    When I invoke the published workflow endpoint with the fixture API key
+    Then no unexpected HTTP or JS errors occurred during the flow
 ```
 
+- 步骤定义在 `e2e/steps/publishWorkflow.steps.ts`，用 `createBdd(test)`（`test` 来自 `playwright-bdd` 自带 `test` 经 `extend` 注入 `flowErrors` fixture，负责并行安全地收集 JS/HTTP 错误）。
 - 复用后端同一套种子（集成租户 + ApiKey + 示例工作流），保证前后端 E2E 数据一致。
-- 登录态：通过注入种子用户 JWT（localStorage/session）或走登录页。
+- 登录态：经 `/api/v1/auth/login` 写入 httpOnly cookie（`ap_access_token`），页面与 `request` fixture 共享。
 
 ---
 
@@ -228,8 +234,12 @@ src/
   AgentPlatform.Web/
     e2e/
       playwright.config.ts
-      publish-workflow.spec.ts
-      fixtures/                      # 种子数据常量
+      features/
+        publish-workflow.feature    # Gherkin 场景
+      steps/
+        fixtures.ts                 # 自定义 fixture（flowErrors 错误收集）
+        publishWorkflow.steps.ts    # 步骤定义（createBdd）
+      .features-gen/                # bddgen 生成（.gitignore 忽略）
 scripts/
   integration.(sh|mjs)               # 顶层编排
 deploy/
@@ -245,7 +255,8 @@ deploy/
 | **A. 基座** | SpecFlow→Reqnroll；`IntegrationAppFactory` + 文件 SQLite + `Integration` 环境 + `IntegrationSeeder` + `AuthHelper` | 空 BDD 工程能起服务、能连真 DB、能拿 JWT/ApiKey |
 | **B. 迁移** | 5 个可达 feature 迁 HTTP+DB；WorkflowStateMachine 走域集成(B) | 41 例全绿（Reqnroll 报告） |
 | **C. F22 BDD** | 写 `PublishedWorkflow.feature` 6 场景 + Steps | F22 行为经真 HTTP+DB 全绿 |
-| **D. 前端 E2E** | Playwright 配置 + `publish-workflow.spec.ts` + 种子对齐 | UI 全链路绿 |
+| **D. 前端 E2E** | Playwright 配置 + `publish-workflow.spec.ts`（裸 .spec.ts，v1）+ 种子对齐 | UI 全链路绿（v1） |
+| **D'. 前端 E2E → BDD** | 2026-08-04：`publish-workflow.spec.ts` 重写为 `features/publish-workflow.feature` + `steps/publishWorkflow.steps.ts`（playwright-bdd），`package.json` 改 `bddgen && playwright test`，`playwright.config.ts` 接 `defineBddConfig` | 前端 E2E 已 BDD 驱动，顶层闸门 `node scripts/integration.mjs --e2e` 两次全绿 |
 | **E. 编排/CI** | `scripts/integration` + `deploy/*.yml` integration job + 质量门 `bdd` 字段 | CI 合并前闸门通过 |
 
 ---
