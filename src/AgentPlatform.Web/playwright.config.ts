@@ -17,6 +17,14 @@ const bddOutputDir = defineBddConfig({
   outputDir: 'e2e/.features-gen',
 });
 
+// 浏览器选择：
+//   - 本机默认用 Edge（channel:'msedge'），免装 Chromium；F28 已在 Edge 上验证 22/22 全绿。
+//   - CI 环境（CI=true）自动切到 Playwright 自带 Chromium（ubuntu runner 经
+//     `npx playwright install --with-deps chromium` 提供），实现跨平台 job、无需本机浏览器。
+//   - 任何环境设 E2E_BROWSER=edge 可强制回退 Edge（便于本地复现 CI 行为）。
+// headless 由 Playwright 按 CI 环境变量自动判定（CI=true → headless，本地 → headed，便于调试）。
+const useEdge = process.env.CI !== 'true' || process.env.E2E_BROWSER === 'edge';
+
 export default defineConfig({
   testDir: bddOutputDir,
   timeout: 30000,
@@ -35,13 +43,6 @@ export default defineConfig({
     baseURL: `http://localhost:${PORT}`,
     trace: 'on-first-retry',
   },
-  // 浏览器选择：
-  //   - 本机默认用 Edge（channel:'msedge'），免装 Chromium；F28 已在 Edge 上验证 22/22 全绿。
-  //   - CI 环境（CI=true）自动切到 Playwright 自带 Chromium（ubuntu runner 经
-  //     `npx playwright install --with-deps chromium` 提供），实现跨平台 job、无需本机浏览器。
-  //   - 任何环境设 E2E_BROWSER=edge 可强制回退 Edge（便于本地复现 CI 行为）。
-  // headless 由 Playwright 按 CI 环境变量自动判定（CI=true → headless，本地 → headed，便于调试）。
-  const useEdge = process.env.CI !== 'true' || process.env.E2E_BROWSER === 'edge';
   projects: [
     {
       name: useEdge ? 'edge' : 'chromium',
