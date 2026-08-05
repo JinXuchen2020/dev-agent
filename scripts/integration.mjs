@@ -23,6 +23,8 @@ const ROOT = path.resolve(__dirname, '..');
 const E2E_DB = path.join(ROOT, 'integration-e2e.db');
 
 const withE2e = process.argv.includes('--e2e');
+// --skip-bdd：跳过阶段 1 的后端 BDD（CI 的 integration job 已单独覆盖），仅跑前端 E2E。
+const skipBdd = process.argv.includes('--skip-bdd');
 const BACKEND_PORT = 5000;
 const BACKEND_URL = `http://localhost:${BACKEND_PORT}`;
 const HEALTH_URL = `${BACKEND_URL}/health`;
@@ -144,17 +146,21 @@ function startBackend() {
 
 async function main() {
   // ── 阶段 1：后端 BDD ──
-  banner('阶段 1 / 后端 BDD (Reqnroll + 文件 SQLite)');
-  const bddCode = await run('dotnet', [
-    'test',
-    'src/AgentPlatform.SpecFlowTests',
-    '--logger',
-    'console;verbosity=minimal',
-  ]);
-  if (bddCode !== 0) {
-    fail(`后端 BDD 失败（退出码 ${bddCode}）`);
+  if (skipBdd) {
+    banner('阶段 1 / 后端 BDD 跳过（--skip-bdd；CI 的 integration job 已单独覆盖）');
   } else {
-    console.log('✅ 后端 BDD 通过');
+    banner('阶段 1 / 后端 BDD (Reqnroll + 文件 SQLite)');
+    const bddCode = await run('dotnet', [
+      'test',
+      'src/AgentPlatform.SpecFlowTests',
+      '--logger',
+      'console;verbosity=minimal',
+    ]);
+    if (bddCode !== 0) {
+      fail(`后端 BDD 失败（退出码 ${bddCode}）`);
+    } else {
+      console.log('✅ 后端 BDD 通过');
+    }
   }
 
   // ── 阶段 2：前端 E2E（可选）──
