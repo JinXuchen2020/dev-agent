@@ -54,7 +54,10 @@ internal sealed class GetExecutionLogStepsQueryHandler(
                 e.Result,
                 e.ErrorDetail,
                 e.StartedAt,
-                e.CompletedAt))
+                e.CompletedAt,
+                e.TokensIn,
+                e.TokensOut,
+                e.NodeType))
             .ToList();
 
         return new ExecutionLogStepsResponse(items, totalCount);

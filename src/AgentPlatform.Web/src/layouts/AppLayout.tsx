@@ -17,6 +17,7 @@ import {
   GlobalOutlined,
   KeyOutlined,
   AppstoreOutlined,
+  ExperimentOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '../stores/appStore';
@@ -53,6 +54,7 @@ const AppLayout: React.FC = () => {
     { key: '/conversations', icon: <MessageOutlined />, label: t('nav.conversations') },
     { key: '/research', icon: <GlobalOutlined />, label: t('nav.research') },
     { key: '/template-market', icon: <AppstoreOutlined />, label: t('nav.templateMarket') },
+    { key: '/evaluation-datasets', icon: <ExperimentOutlined />, label: t('nav.evaluationDatasets') },
   ];
   if (!isAdminOrOperator) {
     // 仅 Admin/Operator 可见「我的凭据」（与后端 RBAC 对齐）。

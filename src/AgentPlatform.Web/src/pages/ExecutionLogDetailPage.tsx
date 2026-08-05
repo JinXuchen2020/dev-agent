@@ -30,6 +30,16 @@ const ExecutionLogDetailPage: React.FC = () => {
     { title: t('pages.executionLogs.colDuration'), dataIndex: 'duration', key: 'duration' },
     { title: t('pages.executionLogs.colResult'), dataIndex: 'result', key: 'result', ellipsis: true, render: (r: string | null) => r || '-' },
     { title: t('pages.executionLogs.colError'), dataIndex: 'errorDetail', key: 'errorDetail', ellipsis: true, render: (e: string | null) => e ? <Text type="danger">{e}</Text> : '-' },
+    {
+      title: t('pages.executionLogs.colNodeType'),
+      dataIndex: 'nodeType',
+      key: 'nodeType',
+      width: 110,
+      render: (n: number | null) =>
+        n == null ? '-' : <Tag>{t(`pages.executionLogs.stepType.${n}`, { defaultValue: String(n) })}</Tag>,
+    },
+    { title: t('pages.executionLogs.colTokensIn'), dataIndex: 'tokensIn', key: 'tokensIn', width: 100, render: (v: number) => v ?? 0 },
+    { title: t('pages.executionLogs.colTokensOut'), dataIndex: 'tokensOut', key: 'tokensOut', width: 100, render: (v: number) => v ?? 0 },
   ];
 
   const load = useCallback(() => {

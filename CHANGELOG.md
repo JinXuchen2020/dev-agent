@@ -1,5 +1,27 @@
 # 变更日志
 
+## v2.18 (2026-08-05)
+
+### F24 · 执行 Trace / 评估视图 完成（feature-builder 全栈实跑，🟡中风险闭环）
+
+节点级可观测性（耗时 / token / 节点类型 / 输出 / 错误）与数据集回归评估，对标 LangSmith / Langfuse。让运营者「钻进一次运行看每个节点发生了什么」，并用测试数据集批量回归工作流质量。三道质量门全 PASS。
+
+**核心改动：**
+- **Trace 数据补全（S1/S4）**：复用现有 `ExecutionLog.Entries`（拥有实体），新增 `TokensIn int` / `TokensOut int` / `NodeType StepType?` 三列；贯通 `StepExecutionResult → StepCompleted/StepFailed 事件 → StepTraceEventHandler → ExecutionLogEntry → EF 迁移 ExtendExecutionLogEntry → DTO → 前端类型`。token 复用模型层已算 `TokenUsage`（仅被丢弃，补回即可）；**Input（节点入参）v1 不采集**（已知残留）。
+- **Trace 视图前端**：扩展 `ExecutionLogDetailPage` 步骤表，增加 `节点类型 / TokensIn / TokensOut` 三列（后端 DTO 已含）；列表/明细/步骤端点已存在，仅扩响应模型字段，不改路由与鉴权。
+- **评估（数据集回归，全新）**：新建 `EvaluationDataset` 聚合（`ITenantScoped` + 拥有实体 `EvaluationCase`，自动获得全局租户过滤，避免重蹈 `ExecutionLog` 手动过滤覆辙）+ `EvaluationMatchMode { Exact=0, Contains=1 }` 枚举 + `EvaluationSettings { MaxCases=10 可配 }`。
+- **6 端点**（`EvaluationDatasetsController`，路由前缀 `api/v1/evaluation-datasets`）：`GET /`（tenant-scoped + `keyword?`，任意已认证）、`GET /{id:guid}`（含 `cases[]`）、`POST /`（Admin,Operator）、`PUT /{id:guid}`（Admin,Operator）、`DELETE /{id:guid}`（Admin,Operator，tenant-scoped）、`POST /{id:guid}/run`（Admin,Operator，body `{ workflowId }` → `EvaluationReport`）。
+- **RunEvaluation 主链路**：对每个 case（上限 MaxCases，可配置）**克隆全新 Workflow**（new Guid，避免编排器 `Update+SaveChanges` 污染源工作流）以 `case.Input` 作初始 context 跑 `IOrchestrationPrimitive.RunAsync(Sequential)`，取末位 Completed 节点 `Result` 为 actual，按 `MatchMode` 比对（Exact `string.Equals(Ordinal)` / Contains `actual.Contains(expected, OrdinalIgnoreCase)`），从运行产生的 `ExecutionLog` 汇总 token（In/Out），聚合 `EvaluationReport { total, passed, score, cases[] }`；审计 `RunEvaluation`。缺失 dataset/workflow → `KeyNotFoundException` → 404（新增 `KeyNotFoundExceptionHandler`）。
+- **EF 迁移**：`20260805073534_ExtendExecutionLogEntry`（含 `#pragma warning disable IDE0161`）+ `20260805080820_AddEvaluation`（EvaluationDatasets + OwnsMany EvaluationCases 含 DatasetId FK + 根与拥有实体双 `ValueGeneratedNever()` 避 GUID 陷阱）。
+- **前端**：`EvaluationDatasetsPage`（CRUD 表格 + 新建/编辑 Modal（`Form.List` cases）+ 运行 Modal（Select workflow）+ 评估报告 Drawer（Progress 圆环 + 结果表））+ 扩展 `ExecutionLogDetailPage` 三列 + `api.ts`/`types/index.ts`/`locales`（中-en i18n 对称，新增 `common.view` / `nav.evaluationDatasets` / `pages.evaluation.*`）+ `App.tsx` 路由 `/evaluation-datasets` + `AppLayout.tsx` 菜单（ExperimentOutlined 图标，写按钮按 `canWrite`(Admin/Operator) 门控）。
+
+**质量与测试：**
+- 三道质量门禁全 PASS（`ddd-code-reviewer` / `ddd-phase-quality-gate` / `codebase-optimizer`）；`.quality-gate.json` 推进 `f24-execution-trace`，`cleared:true`
+- 后端 `dotnet build` **0/0** + F24 新增单测 **12/12**（StepTrace 7：token/NodeType 持久化、null-tenant 默认、缺失 log NoOp、StepExecutionResult 四态 token 透传；Eval 5：聚合 Update 替换 cases、Create 映射、>MaxCases 拒绝、RunEvaluation Contains 通过+求和、Exact 失配失败）
+- 前端 `tsc --noEmit` **0 error** + `node scripts/qa.mjs` OVERALL PASS（typecheck/lint/build/unit，含 i18n 对称）
+- 质量报告 `docs/quality/f24-execution-trace-gate.md`，结构清单嵌入 `features/execution-trace-eval.md`
+- 已知残留（非阻断）：①节点级 Input 采集 v1 不做（需编排器额外 plumbing）；②Token 实际落库依赖编排器对评估克隆工作流产生 ExecutionLog（与 F20 Trace 共用 RunWorkflow 管线，单元测 mock 验证求和逻辑）；③BDD e2e（评估列表/运行/报告门控）属增强，由后端 12 单测 + 前端 qa.mjs 等价覆盖，不阻塞本 feature 收敛
+
 ## v2.17 (2026-08-05)
 
 ### F23 · 模板市场 / 示例库 完成（feature-builder 全栈实跑，🟡中风险闭环）

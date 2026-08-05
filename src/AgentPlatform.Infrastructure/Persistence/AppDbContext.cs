@@ -3,6 +3,7 @@ using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Domain.Abstractions;
 using AgentPlatform.Domain.Aggregates.AgentConfigurations;
 using AgentPlatform.Domain.Aggregates.Agents;
+using AgentPlatform.Domain.Aggregates.Evaluation;
 using AgentPlatform.Domain.Aggregates.AuditLogs;
 using AgentPlatform.Domain.Aggregates.Conversations;
 using AgentPlatform.Domain.Aggregates.ApiKeys;
@@ -121,6 +122,11 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
     /// Gets the <see cref="DbSet{TEntity}"/> providing access to persisted workflow triggers (webhook / schedule, tenant-scoped).
     /// </summary>
     public DbSet<WorkflowTrigger> WorkflowTriggers => Set<WorkflowTrigger>();
+
+    /// <summary>
+    /// Gets the <see cref="DbSet{TEntity}"/> providing access to persisted evaluation datasets (F24, tenant-scoped).
+    /// </summary>
+    public DbSet<EvaluationDataset> EvaluationDatasets => Set<EvaluationDataset>();
 
     /// <summary>
     /// Gets the <see cref="DbSet{TEntity}"/> providing access to persisted conversation-to-workflow bindings (Chat trigger, tenant-scoped).

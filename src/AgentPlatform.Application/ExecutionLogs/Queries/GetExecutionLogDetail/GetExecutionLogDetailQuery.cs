@@ -60,6 +60,9 @@ internal sealed class GetExecutionLogDetailQueryHandler(
                 e.Result,
                 e.ErrorDetail,
                 e.StartedAt,
-                e.CompletedAt)).ToList());
+                e.CompletedAt,
+                e.TokensIn,
+                e.TokensOut,
+                e.NodeType)).ToList());
     }
 }

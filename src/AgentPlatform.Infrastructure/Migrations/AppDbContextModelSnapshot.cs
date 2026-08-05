@@ -294,6 +294,36 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.ToTable("ConversationWorkflowBindings", (string)null);
                 });
 
+            modelBuilder.Entity("AgentPlatform.Domain.Aggregates.Evaluation.EvaluationDataset", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "Name");
+
+                    b.ToTable("EvaluationDatasets", (string)null);
+                });
+
             modelBuilder.Entity("AgentPlatform.Domain.Aggregates.ExecutionLogs.ExecutionLog", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1015,6 +1045,42 @@ namespace AgentPlatform.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("AgentPlatform.Domain.Aggregates.Evaluation.EvaluationDataset", b =>
+                {
+                    b.OwnsMany("AgentPlatform.Domain.Aggregates.Evaluation.EvaluationCase", "Cases", b1 =>
+                        {
+                            b1.Property<Guid>("Id")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid>("EvaluationDatasetId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("ExpectedOutput")
+                                .IsRequired()
+                                .HasMaxLength(4000)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Input")
+                                .IsRequired()
+                                .HasMaxLength(4000)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int>("MatchMode")
+                                .HasColumnType("INTEGER");
+
+                            b1.HasKey("Id");
+
+                            b1.HasIndex("EvaluationDatasetId");
+
+                            b1.ToTable("EvaluationCases", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("EvaluationDatasetId");
+                        });
+
+                    b.Navigation("Cases");
+                });
+
             modelBuilder.Entity("AgentPlatform.Domain.Aggregates.ExecutionLogs.ExecutionLog", b =>
                 {
                     b.OwnsMany("AgentPlatform.Domain.Aggregates.ExecutionLogs.ExecutionLogEntry", "Entries", b1 =>
@@ -1035,6 +1101,9 @@ namespace AgentPlatform.Infrastructure.Migrations
                             b1.Property<Guid>("ExecutionLogId")
                                 .HasColumnType("TEXT");
 
+                            b1.Property<int?>("NodeType")
+                                .HasColumnType("INTEGER");
+
                             b1.Property<string>("Result")
                                 .HasMaxLength(4000)
                                 .HasColumnType("TEXT");
@@ -1053,6 +1122,12 @@ namespace AgentPlatform.Infrastructure.Migrations
                                 .HasColumnType("TEXT");
 
                             b1.Property<int>("StepOrder")
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<int>("TokensIn")
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<int>("TokensOut")
                                 .HasColumnType("INTEGER");
 
                             b1.HasKey("Id");

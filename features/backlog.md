@@ -234,10 +234,11 @@
 - 风险：🟡 种子图须过 ValidateGraph、克隆后 Agent 绑定缺失降级。实现前须锁定 §6（S1 来源 / S2 存储 / S3 Agent 缺失处理）。
 - **完成记录（2026-08-05）**：feature-builder 全栈实跑落地（分支 `feat/f23-template-market`）。后端：新增平台级 `WorkflowTemplate` 聚合（**刻意不** `ITenantScoped`，S2）+ `WorkflowTemplateCategory` 枚举（General=0…DataAnalysis=7，硬编码 S4）+ `IWorkflowTemplateRepository`；`WorkflowTemplatesController` 四端点（`GET /` 分类+关键词 / `GET /categories` / `GET /{id}` 含预览图 / `POST /{id}/clone` `[Authorize(Roles="Admin,Operator")]`）；`CloneWorkflowTemplateCommandHandler` 走 F7 ① 快照重建 → `ReplaceGraph`→`ValidateGraph`，节点 Agent 全解绑（S3）、归属当前租户（S2）、审计 `CloneTemplate`（S6）；`DatabaseInitializer` 幂等种子 8 模板（固定 Guid `22222222-…-201..208`，覆盖全 8 分类，图均过 `ValidateGraph`）；迁移 `20260805043045_AddWorkflowTemplate`（`Id ValueGeneratedNever()`）。前端：`TemplateMarketPage`（卡片网格 + 分类 `Select` + 关键词 `Input.Search` + 预览 `Drawer` + RBAC 克隆 `Modal.confirm`→跳转 `/workflows/{id}`）+ `api.ts`/`types`/`locales`（中-en i18n 对称）/ `App.tsx` 路由 / `AppLayout.tsx` 菜单。**审查修复 P1×1**：`getWorkflowTemplates` 原将 `keyword:null` 入参致初始加载空白，改为条件 `params`。**三道质量门 PASS**（`.quality-gate.json` 推进 `f23-template-market`，`cleared:true`）；后端 `dotnet build` **0/0** + F23 单测 **7/7** + 架构测试 **9/9**；前端 `tsc --noEmit` **0 error** + `node scripts/qa.mjs` OVERALL PASS。质量报告 `docs/quality/f23-template-market-gate.md`，结构清单嵌入 `features/template-market.md` 末尾。已知残留（非阻断）：BDD e2e（模板列表/预览/克隆门控）属增强，由后端 7 单测 + 前端 qa.mjs 等价覆盖。
 
-### F24 · 执行 Trace / 评估视图  [P1]  open  🟡中风险（Trace 字段完备性 + 评估批量跑 + 与 F20 兼容）
-- 设计文档：`features/execution-trace-eval.md`（已建骨架，§6 决策待锁定）
-- 目标：节点级 Trace（耗时/token/IO，复用 ExecutionLog.Entries）+ 数据集回归评估（对标 LangSmith/Langfuse）。多租户隔离 + 审计。
-- 风险：🟡 Trace 数据完备性、评估性能。实现前须锁定 §6（S1 Trace 存储 / S2 比对 / S3 运行方式）。
+### F24 · 执行 Trace / 评估视图  [P1]  done  ✅（2026-08-05 · feat/f24-execution-trace · dotnet build 0/0 + 12 单测 + qa.mjs OVERALL PASS + 三道质量门）
+- 设计文档：`features/execution-trace-eval.md`（§6 决策 2026-08-05 锁定；v2.18 收口）
+- 目标：节点级 Trace（耗时/token/节点类型/IO，复用 ExecutionLog.Entries）+ 数据集回归评估（对标 LangSmith/Langfuse）。多租户隔离 + 审计。
+- 落地：ExecutionLogEntry 增 TokensIn/TokensOut/NodeType 三列（迁移 ExtendExecutionLogEntry）+ ExecutionLogDetailPage 三列；EvaluationDataset(ITenantScoped) 聚合 + 6 端点 + RunEvaluation（克隆工作流逐 case 跑编排、Exact/Contains 比对、汇总通过率/逐 case 报告）+ 前端 EvaluationDatasetsPage（CRUD+运行+报告）+ i18n 中/en 对称。
+- 已知残留（非阻断）：①节点级 Input 采集 v1 不做；②Token 实际落库依赖编排器对评估克隆工作流产生 ExecutionLog（与 F20 Trace 共用管线，单测 mock 验证求和）；③BDD e2e（评估门控）属增强。
 
 ### F25 · 工作流调试器（变量监视 + 单步重跑 + 错误分支）  [P1]  open  ⚠️高风险（执行引擎支持暂停/单步/局部重跑，侵入大）
 - 设计文档：`features/workflow-debugger.md`（已建骨架，§6 决策待锁定）

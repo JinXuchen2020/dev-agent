@@ -61,7 +61,7 @@ internal sealed class AgentCallStepExecutor : IStepExecutor
 
             _logger.LogInformation("Step {StepName} completed via model {ModelId} (tokens: {Tokens})",
                 step.Name, response.ModelId, response.TokenUsage?.TotalTokens ?? 0);
-            return StepExecutionResult.Success(output, artifact);
+            return StepExecutionResult.Success(output, artifact, tokenUsage: response.TokenUsage);
         }
         catch (OperationCanceledException)
         {

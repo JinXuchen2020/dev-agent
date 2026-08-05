@@ -115,5 +115,17 @@ public enum AuditActionType
     ScheduledRun,
 
     /// <summary>A workflow was cloned from a platform template into the caller's tenant (F23).</summary>
-    CloneTemplate
+    CloneTemplate,
+
+    /// <summary>A dataset regression evaluation was run against a workflow (F24).</summary>
+    RunEvaluation,
+
+    /// <summary>An evaluation dataset was created (F24).</summary>
+    CreateEvaluationDataset,
+
+    /// <summary>An evaluation dataset was updated (F24).</summary>
+    UpdateEvaluationDataset,
+
+    /// <summary>An evaluation dataset was deleted (F24).</summary>
+    DeleteEvaluationDataset
 }

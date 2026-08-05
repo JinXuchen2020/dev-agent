@@ -56,6 +56,8 @@ public sealed class StepFailedEventHandler
             return;
         }
 
+        var (tokensIn, tokensOut) = SplitTokens(evt.TokenUsage);
+
         var entry = new ExecutionLogEntry(
             Guid.NewGuid(),
             evt.StepName,
@@ -63,7 +65,10 @@ public sealed class StepFailedEventHandler
             Domain.Enums.WorkflowState.Failed,
             duration: evt.Duration,
             result: null,
-            errorDetail: evt.ErrorDetail);
+            errorDetail: evt.ErrorDetail,
+            tokensIn: tokensIn,
+            tokensOut: tokensOut,
+            nodeType: evt.NodeType);
 
         log.AddEntry(entry);
         _repository.Update(log);
@@ -84,4 +89,8 @@ public sealed class StepFailedEventHandler
             ErrorDetail: evt.ErrorDetail,
             Timestamp: DateTime.UtcNow), ct);
     }
+
+    /// <summary>Splits a step token usage into prompt/completion counts (F24 trace).</summary>
+    private static (int In, int Out) SplitTokens(Domain.ValueObjects.TokenUsage? usage) =>
+        usage is null ? (0, 0) : (usage.PromptTokens, usage.CompletionTokens);
 }

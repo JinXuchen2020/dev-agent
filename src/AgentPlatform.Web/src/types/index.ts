@@ -432,6 +432,49 @@ export interface ExecutionLogStepEntry {
   errorDetail: string | null;
   startedAt: string;
   completedAt: string;
+  tokensIn: number;
+  tokensOut: number;
+  nodeType: number | null;
+}
+
+// ── 评估数据集 / 回归评估（F24）──
+export type EvaluationMatchMode = 0 | 1; // 0=Exact, 1=Contains
+
+export interface EvaluationCase {
+  id: string;
+  input: string;
+  expectedOutput: string;
+  matchMode: EvaluationMatchMode;
+}
+
+export interface EvaluationDatasetSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  caseCount: number;
+  createdAt: string;
+}
+
+export interface EvaluationDatasetDetail extends EvaluationDatasetSummary {
+  cases: EvaluationCase[];
+}
+
+export interface EvaluationCaseResult {
+  input: string;
+  expectedOutput: string;
+  actualOutput: string | null;
+  passed: boolean;
+  durationMs: number;
+  tokensIn: number;
+  tokensOut: number;
+  errorDetail: string | null;
+}
+
+export interface EvaluationReport {
+  total: number;
+  passed: number;
+  score: number;
+  cases: EvaluationCaseResult[];
 }
 
 // ── RAG 知识库（R1-R4 地基层）──

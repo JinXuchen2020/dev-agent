@@ -39,6 +39,7 @@ builder.Services.AddExceptionHandler<AgentPlatform.Api.Exceptions.PublishedWorkf
 builder.Services.AddExceptionHandler<AgentPlatform.Api.Exceptions.WorkflowGraphExceptionHandler>();
 builder.Services.AddExceptionHandler<AgentPlatform.Api.Exceptions.UnsupportedContentTypeExceptionHandler>();
 builder.Services.AddExceptionHandler<AgentPlatform.Api.Exceptions.InvalidYamlExceptionHandler>();
+builder.Services.AddExceptionHandler<AgentPlatform.Api.Exceptions.KeyNotFoundExceptionHandler>();
 builder.Services.AddHealthChecks();
 
 builder.Services.AddOpenApiConfiguration();

@@ -14,6 +14,9 @@ namespace AgentPlatform.Application.ExecutionLogs;
 /// <param name="ErrorDetail">The error detail if the step failed.</param>
 /// <param name="StartedAt">When the step started.</param>
 /// <param name="CompletedAt">When the step completed.</param>
+/// <param name="TokensIn">Prompt tokens consumed by the step (F24 trace).</param>
+/// <param name="TokensOut">Completion tokens produced by the step (F24 trace).</param>
+/// <param name="NodeType">The node/step type of the entry (F24 trace).</param>
 public sealed record ExecutionLogStepEntry(
     Guid Id,
     string StepName,
@@ -23,4 +26,7 @@ public sealed record ExecutionLogStepEntry(
     string? Result,
     string? ErrorDetail,
     DateTime StartedAt,
-    DateTime CompletedAt);
+    DateTime CompletedAt,
+    int TokensIn = 0,
+    int TokensOut = 0,
+    StepType? NodeType = null);
