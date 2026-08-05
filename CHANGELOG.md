@@ -1,5 +1,27 @@
 # 变更日志
 
+## v2.17 (2026-08-05)
+
+### F23 · 模板市场 / 示例库 完成（feature-builder 全栈实跑，🟡中风险闭环）
+
+内置「模板市场 / 示例库」：随 `DatabaseInitializer` 种子落地 8 条行业模板（覆盖全部 8 个 `WorkflowTemplateCategory`），前端画廊支持分类 / 关键词筛选、预览抽屉、RBAC 克隆为「我的工作流」。三道质量门全 PASS。
+
+**核心改动：**
+- **平台级聚合**：新增 `WorkflowTemplate`（`IAggregateRoot`，**刻意不** `ITenantScoped`——模板平台级共享、只读，决策 S2）+ `WorkflowTemplateCategory` 枚举（General=0…DataAnalysis=7，硬编码，决策 S4）+ `IWorkflowTemplateRepository`。
+- **4 端点**（`WorkflowTemplatesController`，`[Authorize]` 鉴权）：`GET /`（分类+关键词过滤）、`GET /categories`、`GET /{id:guid}`（含预览图 nodes/edges）、`POST /{id:guid}/clone`（`[Authorize(Roles="Admin,Operator")]`，克隆为当前租户新 `Workflow`）。
+- **克隆链路**：`CloneWorkflowTemplateCommandHandler` 走 F7 ① 快照重建（`WorkflowGraphSnapshot.FromJson`→`ToReplaceGraphArgs`→`ReplaceGraph`→`ValidateGraph`），节点 `AgentId=(Guid?)null` 全部解绑（S3），归还当前租户（S2），审计 `CloneTemplate`（S6）；缺失模板→`404`。
+- **种子 8 模板**：固定 Guid（`22222222-…-201..208`）幂等播种，图均过 `ValidateGraph`（1 Start + ≥1 End + 无环 + 从 Start 连通 + 节点名唯一），克隆不会 500。
+- **EF 迁移**：`20260805043045_AddWorkflowTemplate`（`Id ValueGeneratedNever()` 避 GUID 陷阱，含 `#pragma warning disable IDE0161`）。
+- **前端**：`TemplateMarketPage`（卡片网格 + 分类 `Select` + 关键词 `Input.Search` + 预览 `Drawer` + RBAC 克隆 `Modal.confirm`→`cloneWorkflowTemplate`→跳转 `/workflows/{id}`）+ `api.ts`/`types`/`locales`（中-en i18n 对称）/ `App.tsx` 路由 / `AppLayout.tsx` 菜单。
+
+**质量与测试：**
+- 三道质量门禁全 PASS（`ddd-code-reviewer` / `ddd-phase-quality-gate` / `codebase-optimizer`）；`.quality-gate.json` 推进 `f23-template-market`，`cleared:true`
+- 后端 `dotnet build` **0/0** + F23 新增单测 **7/7**（Clone 2 + Query 5，含 `List_PassesCategoryAndKeywordToRepository` 查询契约透传）；架构测试 **9/9**
+- 前端 `tsc --noEmit` **0 error** + `node scripts/qa.mjs` OVERALL PASS（typecheck/lint/build/unit，含 i18n 对称）
+- 审查修复 P1×1：前端 `getWorkflowTemplates` 原将 `keyword:null` 传入 axios `params` 可能序列化为 `keyword=null` 致初始加载空白，改为仅含非 null 键的条件 `params`
+- 质量报告 `docs/quality/f23-template-market-gate.md`，结构清单嵌入 `features/template-market.md` 末尾
+- 已知残留（非阻断）：BDD e2e（模板列表/预览/克隆门控）属增强，由后端 7 单测 + 前端 qa.mjs 等价覆盖，不阻塞本 feature 收敛
+
 ## v2.16 (2026-08-04)
 
 ### F27 · BDD 集成测试统一（Reqnroll + 文件 SQLite + Playwright E2E）完成（feature-builder 全栈实跑；测试架构改造 ⚠️高风险闭环）

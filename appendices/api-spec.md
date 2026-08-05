@@ -312,4 +312,41 @@ data: {}
 | GET | `/api/v1/monitoring/logs` | 日志搜索 | admin |
 | GET | `/api/v1/monitoring/alerts` | 告警历史 | admin |
 
-> **一句话总结**：前端通过统一前缀 `/api/v1/` 的 REST API 与后端通信，8 个资源域（认证 / 工作流 / Agent / 模型 / 对话 / 调研 / 管理 / 监控），对话与调研流均走 SSE 流式输出，权限按 RBAC 粒度控制。Agent 角色类型 API（`/agents/types`）支持动态加载自定义角色。完整 Swagger 文档在开发环境 `{host}/swagger` 实时生成。
+### I.9 模板市场 API（F23）
+
+> **用途**：平台级工作流模板（随种子落地，对所有租户共享、只读）。认证用户可浏览 / 预览；克隆为「我的工作流」需 Admin / Operator。
+
+| 方法 | 路径 | 说明 | 权限 |
+| :--- | :--- | :--- | :--- |
+| GET | `/api/v1/workflow-templates` | 列出模板，支持 `?category=`（`WorkflowTemplateCategory` 数值）与 `?keyword=` 过滤 | authenticated |
+| GET | `/api/v1/workflow-templates/categories` | 返回全部分类选项（`[{value,name}]`，8 项） | authenticated |
+| GET | `/api/v1/workflow-templates/{id:guid}` | 模板详情（含预览图 `context` / `nodes` / `edges`） | authenticated |
+| POST | `/api/v1/workflow-templates/{id:guid}/clone` | 克隆为当前租户的新 `Workflow`（Agent 全解绑、审计 `CloneTemplate`） | Admin, Operator |
+
+```json
+// GET /api/v1/workflow-templates 响应（WorkflowTemplateSummaryResponse[]）
+[
+  {
+    "id": "22222222-2222-2222-2222-222222222201",
+    "name": "知识库智能问答",
+    "category": 1,                 // WorkflowTemplateCategory.KnowledgeQa
+    "description": "…",
+    "tags": ["rag", "qa"]
+  }
+]
+
+// GET /api/v1/workflow-templates/{id} 响应（WorkflowTemplateDetailResponse，节选）
+{
+  "id": "guid", "name": "…", "category": 1, "description": "…", "tags": ["…"],
+  "context": "系统提示词…",
+  "nodes": [{ "id": "guid", "name": "开始", "type": 0, "agentId": null, "configJson": "{}" }],
+  "edges": [{ "id": "guid", "source": "nodeA", "target": "nodeB" }]
+}
+
+// POST /api/v1/workflow-templates/{id}/clone 响应（WorkflowDetailResponse）
+// 成功 200；模板不存在 404；非 Admin/Operator 403
+```
+
+> 注：模板为平台级共享资源，`WorkflowTemplate` **不实现** `ITenantScoped`（不受租户查询过滤器约束，决策 S2）；克隆出的 `Workflow` 才带当前租户。`ListAsync` 的 `keyword` 走 `EF.Functions.Like` 参数化（无 SQL 注入）。
+
+> **一句话总结**：前端通过统一前缀 `/api/v1/` 的 REST API 与后端通信，9 个资源域（认证 / 工作流 / 模板市场 / Agent / 模型 / 对话 / 调研 / 管理 / 监控），对话与调研流均走 SSE 流式输出，权限按 RBAC 粒度控制。Agent 角色类型 API（`/agents/types`）支持动态加载自定义角色。完整 Swagger 文档在开发环境 `{host}/swagger` 实时生成。

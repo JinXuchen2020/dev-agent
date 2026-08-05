@@ -14,5 +14,5 @@ When('我点击开始调研', async ({ page }) => {
 
 Then('调研报告已生成', async ({ page }) => {
   // 报告标题 "调研报告" 仅在报告流式返回后出现；未配置 SerpApi 时各检索会失败但报告仍基于规划内容生成。
-  await expect(page.getByText('调研报告')).toBeVisible({ timeout: 30000 });
+  await expect(page.getByText('调研报告', { exact: true })).toBeVisible({ timeout: 30000 });
 });

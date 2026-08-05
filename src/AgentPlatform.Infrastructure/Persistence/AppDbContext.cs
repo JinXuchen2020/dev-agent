@@ -128,6 +128,13 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
     public DbSet<ConversationWorkflowBinding> ConversationWorkflowBindings => Set<ConversationWorkflowBinding>();
 
     /// <summary>
+    /// Gets the <see cref="DbSet{TEntity}"/> providing access to platform-level workflow templates (F23).
+    /// Templates are intentionally NOT tenant-scoped — shared across all tenants, no query filter.
+    /// </summary>
+    public DbSet<AgentPlatform.Domain.Aggregates.WorkflowTemplates.WorkflowTemplate> WorkflowTemplates =>
+        Set<AgentPlatform.Domain.Aggregates.WorkflowTemplates.WorkflowTemplate>();
+
+    /// <summary>
     /// Returns all aggregate roots currently tracked by the change tracker, used for dispatching domain events on save.
     /// </summary>
     /// <returns>A read-only collection of tracked <see cref="IAggregateRoot"/> instances.</returns>

@@ -13,7 +13,7 @@ When('我在智能体表单填写名称 {string}', async ({ page }, name: string
 });
 
 Then('智能体创建成功', async ({ page }) => {
-  await expect(page.getByText('已创建智能体')).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText('已创建智能体', { exact: true })).toBeVisible({ timeout: 10000 });
 });
 
 Then('页面出现智能体 {string}', async ({ page }, name: string) => {

@@ -112,5 +112,8 @@ public enum AuditActionType
     WebhookInvoke,
 
     /// <summary>A workflow was invoked through its scheduled trigger.</summary>
-    ScheduledRun
+    ScheduledRun,
+
+    /// <summary>A workflow was cloned from a platform template into the caller's tenant (F23).</summary>
+    CloneTemplate
 }
