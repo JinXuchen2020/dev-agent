@@ -17,7 +17,7 @@ When('我在知识库表单填写名称 {string}', async ({ page }, name: string
 });
 
 Then('知识库创建成功', async ({ page }) => {
-  await expect(page.getByText('知识库已创建')).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText('知识库已创建', { exact: true })).toBeVisible({ timeout: 10000 });
 });
 
 When('我打开知识库 {string}', async ({ page }, name: string) => {

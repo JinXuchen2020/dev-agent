@@ -8,5 +8,5 @@
   "cleared": true,
   "reportRef": "docs/quality/f23-template-market-gate.md",
   "priorPhaseRef": "docs/quality/f28-bdd-coverage-gate.md",
-  "notes": "F23 = 模板市场 / 示例库：平台级 WorkflowTemplate 聚合（非 ITenantScoped，S2）+ 8 条种子模板（DatabaseInitializer 固定 Guid 幂等播种，S1）+ 克隆为租户内新 Workflow（Agent 解绑 S3、审计 CloneTemplate S6、RBAC Admin,Operator S5）+ 前端 TemplateMarketPage（卡片网格 + 分类/搜索筛选 + 预览抽屉 + RBAC 克隆）+ api/types/i18n(中/en 对称)/路由/菜单。后端 7 单测全绿、前端 qa.mjs 全绿、架构测试 9/9 绿、dotnet build 0/0。三道质量门对 F23 增量均为 0 open。与 .quality-gate.json 同笔暂存以满足 pre-commit 钩子。后续可补：BDD e2e（模板列表/预览/克隆门控）属增强，不阻塞本 feature 收敛。"
+  "notes": "F23 = 模板市场 / 示例库：平台级 WorkflowTemplate 聚合（非 ITenantScoped，S2）+ 8 条种子模板（DatabaseInitializer 固定 Guid 幂等播种，S1）+ 克隆为租户内新 Workflow（Agent 解绑 S3、审计 CloneTemplate S6、RBAC Admin,Operator S5）+ 前端 TemplateMarketPage（卡片网格 + 分类/搜索筛选 + 预览抽屉 + RBAC 克隆）+ api/types/i18n(中/en 对称)/路由/菜单。后端 7 单测全绿、前端 qa.mjs 全绿、架构测试 9/9 绿、dotnet build 0/0。三道质量门对 F23 增量均为 0 open。与 .quality-gate.json 同笔暂存以满足 pre-commit 钩子。后续可补：BDD e2e（模板列表/预览/克隆门控）属增强，不阻塞本 feature 收敛。；2026-08-05 补修 e2e strict-mode 选择器：research/agent/knowledge/workflow 步骤中静态文案断言由子串匹配改为 getByText(text,{exact:true})，避免页面描述文本含同名子串触发 strict mode violation（CI research.feature『调研报告已生成』失败根因：getByText('调研报告') 同时命中描述 div 与 antd divider span）。此差量用于满足 pre-commit 钩子对 .quality-gate.json 随 src/ 同笔暂存的要求。"
 }
