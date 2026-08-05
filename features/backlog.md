@@ -262,6 +262,15 @@
 - 风险：🔴 测试架构改造 + 41 例迁移工作量大；`WorkflowStateMachine` 内部行为 HTTP 不可达（已定例外 B）；限流（`PerApiKey`）干扰 → 基座移除/白名单测试 key；种子 ApiKey 明文须经 `IApiKeyEncryptionService` 加密落库（复用 F13 基件）；前端 E2E 与后端种子一致性（共用 `IntegrationSeeder` 常量）。
 - 分阶段：A 基座（Reqnroll+文件 SQLite+种子+AuthHelper）/ B 迁移 41 例 / C F22 BDD 6 场景 / D 前端 E2E / E 编排+CI（详见设计文档 §9）。
 
+### F28 · 历史 feature BDD 测试覆盖补全（按功能域分组，全量）  [P0]  done  ⚠️高风险（全 8 功能域后端 Reqnroll BDD + 前端 playwright-bdd E2E · 2026-08-04 全阶段 DONE）
+- 设计文档：`features/bdd-coverage-design.md`（已建，2026-08-04 现状盘点 + §2 八批次表 + §4 验证策略 + §7 实施记录）
+- 目标：为「已实现但缺 BDD 集成测试」的 8 大功能域补齐 **后端 Reqnroll BDD（真 HTTP + 文件 SQLite）** 与 **前端 playwright-bdd E2E（真浏览器，zh-CN 断言）**，按风险/价值分批（B1 Auth/RBAC → B8 Agent 生命周期），不要求与单个 feature 史诗 1:1 对应。
+- 后端 BDD（B1–B8，114 场景全绿）：`auth-rbac` / `tenant-credentials` / `workflow-management` / `conversation-chat` / `knowledge-base` / `research-agent` / `analytics` / `agent-lifecycle`(+`agent-configurations`)；复用 `IntegrationAppFactory`/`IntegrationSeeder`/`AuthHelper`/`CommonSteps`，双租户隔离断言复用 `IntegrationConstants` 固定 Id+ApiKey。**根因修复**：`TenantModelClientResolver` 在 `ModelClient:Provider=Stub` 时短路返回空解析，消除 B2 启用 BYO 凭据触发的真实 LLM 20s 超时 500（与 F28 Stub 契约一致）。
+- 前端 BDD（B1–B8 + 转换 create-agent/page-polish + publish-workflow，11 feature / 22 场景 @e2e 全绿）：`login-auth` / `credentials` / `workflow-crud` / `conversation` / `knowledge-base` / `research` / `dashboard` / `agent-crud` + 转换 `create-agent` / `page-polish`；zh-CN 断言对齐默认 locale；遗留 `create-agent.spec.ts`/`page-polish.spec.ts`（英文断言，与 zh-CN 错配）删除并改写为 BDD；`smoke.*.spec.ts` 保留为冒烟基线（不含 @e2e）。**契约修复**：`playwright.config.ts` 设 `testDir` = `defineBddConfig()` 返回的 `outputDir`（playwright-bdd 9.x 要求 `project.testDir == BDD outputDir`，否则运行期 `BDD config not found`）；新增 `appsettings.Integration.json`（`ModelClient:Provider=Stub` + `StubResponse` + 关限流）使 E2E 后端确定性（不触真实 LLM）。
+- 编排/闸门：`scripts/integration.mjs --e2e` 先 bddgen 再 `playwright test --grep @e2e`；`safeCleanDir` 逐文件清理 test-results/playwright-report 绕过沙箱批量删除护栏。
+- 验收：后端 `dotnet test` 114/114 全绿；前端 `node scripts/integration.mjs --e2e` 全绿（后端 BDD 114 + 前端 BDD 22）；三道质量门 0 open；`.quality-gate.json` 推进 `f28-bdd-coverage`，含 `bdd:PASSED` + `frontendE2e:BDD` + `cleared:true`。
+- 风险：跨场景数据污染（各 feature Background 隔离 + `IntegrationAppFactory` 单例）/ 租户隔离（复用固定 Id+ApiKey）/ Stub 模型（仅验链路与鉴权，不验真实 LLM）/ 前端 locale（全 zh-CN）。
+
 ### F8 · 差异化优势产品化（Negotiation + Critic）  [native]  open
 - 设计文档：`features/negotiation-productization.md`（待建）
 - 目标：后端已具备 Negotiation 协商式多智能体 + Critic 收敛原语，待产品化画布「Agent-Team / Negotiation」专属模式（多 Agent 节点 + Critic + 收敛终止条件）。

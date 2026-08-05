@@ -37,6 +37,18 @@ public static class IntegrationSeeder
                 "Admin"));
         }
 
+        // ── T1 非 Admin 用户（RBAC 403 负向场景用，role=development）──
+        if (await db.Users.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(u => u.Email == IntegrationConstants.NonAdminEmail, ct) is null)
+        {
+            db.Users.Add(new User(
+                Guid.NewGuid(),
+                IntegrationConstants.Tenant1Id,
+                IntegrationConstants.NonAdminEmail,
+                hasher.Hash(IntegrationConstants.NonAdminPassword),
+                "development"));
+        }
+
         // ── T1 ApiKey（明文经加密服务落库）──
         if (await db.ApiKeys.IgnoreQueryFilters()
                 .FirstOrDefaultAsync(k => k.Id == IntegrationConstants.T1ApiKeyId, ct) is null)

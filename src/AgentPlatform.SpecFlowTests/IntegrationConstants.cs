@@ -22,6 +22,11 @@ public static class IntegrationConstants
 
     public const string Tenant2UserPassword = "Integration@123456";
 
+    /// <summary>T1 非 Admin 用户（role=development，测试 RBAC 403 用）。</summary>
+    public const string NonAdminEmail = "integration-member@acme.io";
+
+    public const string NonAdminPassword = "Member@123456";
+
     /// <summary>T1 绑定密钥明文（种子落库经加密服务）。</summary>
     public const string T1ApiKeyPlaintext = "test-integration-key-t1";
 

@@ -84,6 +84,15 @@ public sealed class IntegrationAppFactory : WebApplicationFactory<Program>, IAsy
 
             services.AddSingleton<ConfigurableStepExecutor>();
             services.AddSingleton<IStepExecutor>(sp => sp.GetRequiredService<ConfigurableStepExecutor>());
+
+            // 禁用后台托管服务（执行日志清理 / ApiKey 过期 / 工作流调度定时任务）：
+            // 它们会周期性写同一文件 SQLite，与 BDD 场景并发写引发 database is locked → 21s 忙等 → 偶发 500。
+            // 功能 BDD 不依赖这些定时器，关闭即可消除该并发变量（设计文档 §11 风险 3）。
+            var hostedDescriptors = services
+                .Where(d => d.ServiceType == typeof(Microsoft.Extensions.Hosting.IHostedService))
+                .ToList();
+            foreach (var d in hostedDescriptors)
+                services.Remove(d);
         });
     }
 
@@ -95,7 +104,10 @@ public sealed class IntegrationAppFactory : WebApplicationFactory<Program>, IAsy
 
         // CreateClient 触发宿主构建；Program.cs 在 Integration 环境运行 DatabaseInitializer
         // （MigrateAsync + 基础种子）。
-        Api = CreateClient();
+        // 关闭自动 cookie 处理：IntegrationHost.Api 是单例 HttpClient，若沿用默认 HandleCookies=true，
+        // 任一响应写入的 ap_access_token cookie 会被后续「匿名」请求自动重放，导致鉴权泄漏
+        // （匿名/越权场景误判为已认证）。认证统一由 AuthHelper 显式提取 JWT 经 WithBearer 附加。
+        Api = CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
 
         // 在基础种子之上追加集成专用数据（T2 用户 / T1·T2 ApiKey / 示例工作流）。
         await IntegrationSeeder.SeedAsync(Services);

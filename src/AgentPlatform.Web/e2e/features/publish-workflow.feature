@@ -1,3 +1,4 @@
+@e2e
 Feature: Publish workflow via UI and invoke its API endpoint
   As a tenant admin
   I want to publish a completed workflow from the UI
