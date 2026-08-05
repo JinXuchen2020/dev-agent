@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Playwright BDD 生成测试（由 e2e/features + e2e/steps 在配置加载时生成）
+e2e/.features-gen/

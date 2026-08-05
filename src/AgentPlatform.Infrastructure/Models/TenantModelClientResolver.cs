@@ -4,6 +4,7 @@ using AgentPlatform.Domain.Aggregates.TenantCredentials;
 using AgentPlatform.Domain.Enums;
 using AgentPlatform.Infrastructure.Models;
 using AgentPlatform.Infrastructure.Models.RoutingMiddleware;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace AgentPlatform.Infrastructure.Models;
@@ -20,21 +21,29 @@ internal sealed class TenantModelClientResolver : ITenantModelClientResolver
     private readonly IApiKeyEncryptionService _encryption;
     private readonly ILogger<TenantModelClientResolver> _logger;
     private readonly ILogger<ModelTelemetryDecorator> _telemetryLogger;
+    private readonly IConfiguration _configuration;
 
     public TenantModelClientResolver(
         ITenantCredentialResolver credentialResolver,
         IApiKeyEncryptionService encryption,
         ILogger<TenantModelClientResolver> logger,
-        ILogger<ModelTelemetryDecorator> telemetryLogger)
+        ILogger<ModelTelemetryDecorator> telemetryLogger,
+        IConfiguration configuration)
     {
         _credentialResolver = credentialResolver;
         _encryption = encryption;
         _logger = logger;
         _telemetryLogger = telemetryLogger;
+        _configuration = configuration;
     }
 
     public async Task<IReadOnlyList<TenantModelResolution>> ResolveAsync(Guid tenantId, CancellationToken ct = default)
     {
+        // Stub 模式（本地/演示/集成测试）下，BYO 凭据也一律不发起真实 LLM 调用：
+        // 直接回退到平台 stub 客户端，避免任何测试/演示数据触发真实网络请求导致超时（F28 集成环境契约）。
+        if (string.Equals(_configuration["ModelClient:Provider"], "Stub", StringComparison.Ordinal))
+            return Array.Empty<TenantModelResolution>();
+
         var settings = await _credentialResolver.ResolveAsync(tenantId, CredentialCategory.Model, ct);
         var enabled = settings.Where(s => s.IsEnabled).ToList();
         if (enabled.Count == 0)

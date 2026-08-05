@@ -313,14 +313,14 @@ public sealed class WorkflowsController : ControllerBase
     [HttpPost("{id:guid}/publish")]
     public async Task<IActionResult> PublishWorkflow(
         Guid id,
-        [FromBody] PublishWorkflowRequest request,
+        [FromBody] PublishWorkflowRequest dto,
         CancellationToken ct = default)
     {
-        if (request is null)
+        if (dto is null)
             return BadRequest("Request body is required.");
 
         var command = new PublishWorkflowCommand(
-            id, request.Mode, request.ApiKeyId, request.InputSchemaJson, _tenant.GetTenantId());
+            id, dto.Mode, dto.ApiKeyId, dto.InputSchemaJson, _tenant.GetTenantId());
         var result = await _mediator.Send(command, ct);
         return Ok(result);
     }

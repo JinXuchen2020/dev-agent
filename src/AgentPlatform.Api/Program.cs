@@ -56,8 +56,9 @@ if (string.IsNullOrEmpty(jwtKey) || jwtKey == "dev-secret-key-min-32-chars-long!
 
 var app = builder.Build();
 
-// ── Database initialization (development only) ────────────────────
-if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("QuickStart"))
+// ── Database initialization (development / QuickStart / Integration) ─
+if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("QuickStart")
+    || app.Environment.IsEnvironment("Integration"))
 {
     using var scope = app.Services.CreateScope();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
@@ -97,7 +98,8 @@ app.UseMiddleware<MetricsMiddleware>();
 app.UseMiddleware<PromptInjectionMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseRateLimiter();
+if (app.Configuration.GetValue<bool>("Security:RateLimitingEnabled", true))
+    app.UseRateLimiter();
 
 if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("QuickStart"))
     app.UseHttpsRedirection();

@@ -1,5 +1,5 @@
 using AgentPlatform.Application.Abstractions;
-using TechTalk.SpecFlow;
+using Reqnroll;
 using Xunit;
 
 namespace AgentPlatform.SpecFlowTests.Steps;

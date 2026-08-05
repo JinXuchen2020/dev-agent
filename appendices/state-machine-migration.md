@@ -178,7 +178,7 @@ public class Workflow
 2. 自研工作流模板迁移为 CoreWF 定义
 3. 移除 CustomStateMachine.cs 和 CustomWorkflowEngine.cs
 4. DI 注册只保留 CoreWFWorkflowEngine
-5. BDD 验收用例全量回归（已写的 SpecFlow 场景不用改）
+5. BDD 验收用例全量回归（已写的 Reqnroll 场景不用改——F27 将 SpecFlow 迁移至 Reqnroll，Gherkin 语法 100% 兼容，`.feature` 文件无需改写）
 ```
 
 ### B.4 零修改清单

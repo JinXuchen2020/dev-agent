@@ -99,7 +99,7 @@ internal sealed class ExecutionLogRepository : IExecutionLogRepository
 
     /// <summary>
     /// Queries execution log entries (steps) with server-side pagination and optional status filter.
-    /// Queries the <c>ExecutionLogEntries</c> table directly without loading the parent aggregate.
+    /// Reaches the owned <c>Entries</c> collection through the parent <see cref="ExecutionLog"/> aggregate.
     /// Returns <c>null</c> if the parent <see cref="ExecutionLog"/> does not exist.
     /// </summary>
     public async Task<(IReadOnlyList<ExecutionLogEntry> Items, int TotalCount)?> QueryStepsAsync(
@@ -116,9 +116,14 @@ internal sealed class ExecutionLogRepository : IExecutionLogRepository
         if (!logExists)
             return null;
 
-        // Query the ExecutionLogEntries table directly via the owned entity's shadow FK
-        var query = _context.Set<ExecutionLogEntry>()
-            .Where(BuildEntryLogIdFilter(executionLogId))
+        // Query the owned Entries collection through the parent aggregate navigation.
+        // Owned entities cannot be queried via a DbSet, so we reach them via SelectMany.
+        // AsNoTracking is required because projecting an owned entity without its owner
+        // is not allowed in a tracking query.
+        var query = _context.Set<ExecutionLog>()
+            .Where(x => x.Id == executionLogId)
+            .SelectMany(x => x.Entries)
+            .AsNoTracking()
             .AsQueryable();
 
         if (status.HasValue)
@@ -133,10 +138,5 @@ internal sealed class ExecutionLogRepository : IExecutionLogRepository
             .ToListAsync(ct);
 
         return (items, totalCount);
-    }
-
-    private static Expression<Func<ExecutionLogEntry, bool>> BuildEntryLogIdFilter(Guid executionLogId)
-    {
-        return e => EF.Property<Guid>(e, "ExecutionLogId") == executionLogId;
     }
 }

@@ -2,11 +2,14 @@ using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Domain.Aggregates.AgentConfigurations;
 using AgentPlatform.Domain.Aggregates.Agents;
 using AgentPlatform.Domain.Aggregates.AgentRoleDefinitions;
+using AgentPlatform.Domain.Aggregates.ApiKeys;
 using AgentPlatform.Domain.Aggregates.Users;
+using AgentPlatform.Domain.Aggregates.Workflows;
 using AgentPlatform.Domain.ValueObjects;
 using AgentPlatform.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -21,21 +24,31 @@ internal sealed class DatabaseInitializer : IDatabaseInitializer
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<DatabaseInitializer> _logger;
     private readonly TenantSettings _tenantSettings;
+    private readonly IHostEnvironment _environment;
 
     // Default tenant GUID used when no tenant is configured — all-zeros is explicit sentinel.
     // Configure via Tenant:DefaultTenantId in appsettings or user-secrets.
     private static readonly Guid DefaultTenantIdSeed = Guid.Parse("00000000-0000-0000-0000-000000000001");
 
+    // 集成测试固定夹具：仅 Integration 环境播种，供前端 E2E（Playwright）与手动集成验证复用。
+    // 明文为 dev-only 固定值，与前端 e2e/publish-workflow.spec.ts 约定一致，绝不用于生产。
+    private static readonly Guid IntegrationApiKeyId = Guid.Parse("11111111-1111-1111-1111-111111111101");
+    private static readonly Guid IntegrationWorkflowId = Guid.Parse("11111111-1111-1111-1111-111111111102");
+    private const string IntegrationApiKeyPlaintext = "integration-fixture-key-0001";
+    private const string IntegrationWorkflowName = "Integration Fixture Workflow";
+
     public DatabaseInitializer(
         AppDbContext context,
         IServiceProvider serviceProvider,
         ILogger<DatabaseInitializer> logger,
-        IOptions<TenantSettings> tenantSettings)
+        IOptions<TenantSettings> tenantSettings,
+        IHostEnvironment environment)
     {
         _context = context;
         _serviceProvider = serviceProvider;
         _logger = logger;
         _tenantSettings = tenantSettings.Value;
+        _environment = environment;
     }
 
     public async Task InitializeAsync(CancellationToken ct = default)
@@ -55,6 +68,10 @@ internal sealed class DatabaseInitializer : IDatabaseInitializer
 
             // 初始化种子数据
             await SeedDataAsync(ct);
+
+            // 集成测试夹具（仅 Integration 环境）：供前端 E2E 与手动集成验证复用。
+            if (_environment.IsEnvironment("Integration"))
+                await SeedIntegrationFixturesAsync(ct);
         }
         catch (Exception ex)
         {
@@ -246,6 +263,56 @@ internal sealed class DatabaseInitializer : IDatabaseInitializer
         {
             _logger.LogWarning(ex, "Failed to seed data, but continuing with startup");
             _logger.LogWarning("This may cause issues when querying tables. Please check the database initialization.");
+        }
+    }
+
+    /// <summary>
+    /// 集成测试夹具：仅在 <c>Integration</c> 环境播种，供前端 E2E（Playwright）与手动集成验证复用。
+    /// 播种一个已知明文 ApiKey 与一个 Completed 示例工作流，与后端 BDD（Reqnroll）的
+    /// <c>IntegrationSeeder</c> 对齐理念一致，但落于生产 Infrastructure 以避免测试工程耦合。
+    /// 幂等：依赖固定 Guid 主键 + <c>IgnoreQueryFilters</c> 判重。
+    /// </summary>
+    private async Task SeedIntegrationFixturesAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var defaultTenantId = _tenantSettings.DefaultTenantId != Guid.Empty
+                ? _tenantSettings.DefaultTenantId
+                : DefaultTenantIdSeed;
+
+            // ── 已知明文 ApiKey ──
+            if (await _context.ApiKeys.IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(k => k.Id == IntegrationApiKeyId, ct) is null)
+            {
+                var encryption = _serviceProvider.GetRequiredService<IApiKeyEncryptionService>();
+                var (encrypted, prefix) = encryption.EncryptKey(IntegrationApiKeyPlaintext);
+                _context.ApiKeys.Add(new ApiKey(
+                    IntegrationApiKeyId,
+                    defaultTenantId,
+                    encrypted,
+                    prefix,
+                    "Integration Fixture Key",
+                    "Admin",
+                    null));
+                _logger.LogInformation("Seeded integration fixture ApiKey (plaintext dev-only).");
+            }
+
+            // ── Completed 示例工作流（发布 / 运行场景）──
+            if (await _context.Workflows.IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(w => w.Id == IntegrationWorkflowId, ct) is null)
+            {
+                var wf = new Workflow(IntegrationWorkflowId, IntegrationWorkflowName, defaultTenantId);
+                wf.ReplaceSteps(new[] { "Generate content" });
+                wf.Complete();
+                _context.Workflows.Add(wf);
+                _logger.LogInformation("Seeded integration fixture workflow '{Name}'.", IntegrationWorkflowName);
+            }
+
+            await _context.SaveChangesAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to seed integration fixtures, but continuing with startup");
         }
     }
 }

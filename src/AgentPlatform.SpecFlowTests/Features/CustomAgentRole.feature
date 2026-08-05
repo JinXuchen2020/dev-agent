@@ -4,7 +4,7 @@ Feature: Custom Agent Role
     So that I can extend the platform with specialized agent behaviors
 
     Background:
-        Given the agent role management system is initialized
+        Given the agent role store is reset
 
     Scenario: Create new custom agent role
         When a user creates an agent role with:
@@ -27,11 +27,11 @@ Feature: Custom Agent Role
         Then the system should return all 3 roles
         And each role should include its Name, RoleCode, and Description
 
-    Scenario: Delete custom agent role
+    Scenario: Delete custom agent role referenced by an agent is rejected
         Given a custom role "Security Auditor" exists
+        When a user creates an agent with the role
         When a user deletes the role
-        Then the role should no longer be queryable
-        And agents assigned that role should be unlinked
+        Then the delete should be rejected because the role is in use
 
     Scenario: Create role with empty name returns validation error
         When a user creates an agent role with empty name

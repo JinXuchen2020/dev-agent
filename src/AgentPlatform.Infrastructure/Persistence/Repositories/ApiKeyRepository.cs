@@ -37,7 +37,12 @@ internal sealed class ApiKeyRepository : IApiKeyRepository
     public async Task<IReadOnlyList<ApiKey>> GetAllActiveKeysAsync(CancellationToken ct = default)
     {
         var now = DateTime.UtcNow;
+        // 跨租户查询：API-Key 认证本身不预知租户（请求仅带 X-API-Key，无 JWT / X-Tenant-Id），
+        // 必须绕过 AppDbContext 的全局租户查询过滤器（该过滤器在此时会按 DefaultTenantId 收窄，
+        // 导致非默认租户的密钥永远无法被匹配 → 401）。此方法是全局密钥扫描的唯一入口，
+        // 仅被 ApiKeyAuthenticationHandler 使用，忽略过滤器不会破坏任何租户隔离语义。
         return await _context.Set<ApiKey>()
+            .IgnoreQueryFilters()
             .Where(k => k.IsActive
                 && (k.ExpiresAt == null || k.ExpiresAt > now)
                 && k.RevokedAt == null)

@@ -27,7 +27,7 @@
 | [**一、项目定位**](#一项目定位) | 平台能力覆盖 + 非功能目标 |
 | [**二、技术栈选型对照表**](#二技术栈选型对照表) | Python vs C# 替换方案及匹配度 |
 | [**三、DDD 分层架构（目录脚手架）**](#三ddd-分层架构目录脚手架) | 6 项目目录结构 + 关键代码示例 |
-| [**四、BDD/TDD 工程化**](#四bddtdd-工程化) | SpecFlow Gherkin 验收 + xUnit 单元测试 |
+| [**四、BDD/TDD 工程化**](#四bddtdd-工程化) | Reqnroll (SpecFlow 继任者) Gherkin 验收 + 文件 SQLite 集成层 + **前端 E2E 以 playwright-bdd 驱动** + xUnit 单元测试 |
 | [**五、分阶段任务清单**](#五分阶段任务清单可直接作为-vibe-coding-提示词) | 阶段一~四可执行 checklist |
 | [**六、避坑清单**](#六避坑清单c-做-ai-的-4-个短板--对策) | C# 做 AI 的 4 个短板 + 对策 |
 | [**七、关键设计原则**](#七关键设计原则喂给-ai-agent-的全局约束) | 6 条喂给 AI Agent 的全局约束 |
@@ -89,7 +89,7 @@
 | 前端 | Streamlit | **React** (TypeScript + Vite) + Ant Design；桌面形态可选 **Tauri 2.0**（详见附录 G） | 100% |
 | 代码沙箱 | 进程级真实执行 + Docker 桩(未接入) | ProcessCodeSandbox(真实) / DockerCodeSandbox(显式抛异常) | 进程 100% / Docker 0% |
 | 缓存 / 短期记忆 | Redis | StackExchange.Redis 最新稳定版（兼容 .NET 9，目标 net10.0） | 100% |
-| BDD 验收 | behave | **SpecFlow 3.9** + xUnit (Gherkin 语法) | 100% |
+| BDD 验收 | behave | **Reqnroll 3.x**（SpecFlow 继任者，Gherkin 语法 100% 兼容）+ xUnit；真 HTTP + 文件 SQLite 集成层 | 100% |
 | CQRS / 领域事件 | — | **MediatR 12.4**（v12+ 内置 DI 注册 `AddMediatR`，无需独立包） | 100% |
 
 ---
@@ -211,7 +211,7 @@ src/
 │   ├── Persistence/                       # ← Phase 2 填充
 │   └── Extensions/                        # ← Phase 2 填充
 │
-├── AgentPlatform.SpecFlowTests/           # BDD 验收测试 (SpecFlow + xUnit)
+├── AgentPlatform.SpecFlowTests/           # BDD 验收测试 (Reqnroll + xUnit，真 HTTP + 文件 SQLite 集成层)
 │   ├── Features/
 │   │   └── AgentRouting.feature
 │   └── Steps/
@@ -247,7 +247,7 @@ src/
 <a name="四bddtdd-工程化"></a>
 ## 四、BDD / TDD 工程化
 
-### SpecFlow BDD（Gherkin 直接生成测试）
+### Reqnroll BDD（Gherkin 直接生成测试，SpecFlow 继任者）
 
 ```gherkin
 # Features/AgentRouting.feature
@@ -267,14 +267,25 @@ Scenario Outline: 主模型超时后降级到备用模型
   | deepseek    | gpt-4o      |
 ```
 
-- SpecFlow 自动绑定 `[Binding]` 步骤，与业务实现一一对应
-- 接入 CI/CD：每次构建自动跑全量 BDD 验收用例（阶段二实现）
+- Reqnroll 自动绑定 `[Binding]` 步骤（与 SpecFlow 语法 100% 兼容），与业务实现一一对应
+- 接入 CI/CD：每次构建自动跑全量 BDD 验收用例（F27 已将 BDD 重定义为「最终集成测试层」= 真 HTTP + 文件 SQLite，经 `scripts/integration.mjs` + `ci.yml` integration job 作为合并前闸门）
+
+### 前端 E2E（playwright-bdd，Gherkin 驱动）
+
+> F27 收尾（2026-08-04）：前端 E2E 由裸 `@playwright/test` 的 `.spec.ts` 升级为 **playwright-bdd** 驱动的 Gherkin BDD，与后端 Reqnroll 同属「BDD 集成层」。
+
+- 工具：**playwright-bdd**（`createBdd(test)`，`test` 须 `extend` 自 `playwright-bdd` 自带 `test`）+ `@playwright/test` 运行器 + 本机 Edge（`channel:'msedge'`）。
+- 目录：`src/AgentPlatform.Web/e2e/features/*.feature`（Gherkin 场景）+ `e2e/steps/*.steps.ts`（步骤）+ `e2e/steps/fixtures.ts`（自定义 fixture）。
+- 运行链路：先 `bddgen`（生成测试到 `e2e/.features-gen`，已被 .gitignore 忽略）→ 再 `playwright test`（脚本 `npm run e2e` = `bddgen && playwright test`）。
+- 与后端 BDD 共用同一套 `Integration` 后端夹具（集成租户 + ApiKey + 示例工作流），经顶层闸门 `node scripts/integration.mjs --e2e` 一并跑（真 HTTP + 文件 SQLite + 真实浏览器）。
+- **约定（feature-builder 硬约束 #7）**：任何触及 UI 的 feature 必须配套 BDD 前端 E2E，至少覆盖一条核心用户路径；禁止再写裸 `.spec.ts` 作 feature E2E（既有 `smoke.*.spec.ts` 属冒烟基线，除外）。
 
 ### TDD 栈
 
 - 单元测试：**xUnit**
 - Mock：**NSubstitute**（领域层纯单元测试，无 IO 依赖）
 - 集成测试：**WebApplicationFactory**（接口级，无需额外工具）
+- BDD 集成层：**Reqnroll** + `IntegrationAppFactory : WebApplicationFactory<Program>`（环境 `Integration` + 文件 SQLite `test-integration.db`），全量经真 HTTP 走完整管线（认证/限流/异常处理器/MediatR+UoW/EF），零 mock Repository、零 in-memory（Api.Tests 的 in-memory SQLite 仅作轻量 HTTP 契约测，不计入 BDD 层）
 
 ---
 
@@ -731,7 +742,7 @@ set OpenAI__Key=sk-your-key-here
 
 - 单元测试：xUnit + NSubstitute，测试类名 `{TargetClass}Tests`，方法名 `{Method}_{Scenario}_{Expected}`
 - 集成测试：`WebApplicationFactory`，按资源域分组（`WorkflowIntegrationTests`）
-- BDD 验收：SpecFlow，`Features/` 目录下一 feature 一个 `.feature` 文件，`Steps/` 目录下一对一绑定
+- BDD 验收：Reqnroll（SpecFlow 继任者），`Features/` 目录下一 feature 一个 `.feature` 文件，`Steps/` 目录下一对一绑定；经 `IntegrationAppFactory`（文件 SQLite）跑真 HTTP 集成层
 - **测试项目位置**：验收测试 / 集成测试放在 `src/` 目录（如 `src/AgentPlatform.AcceptanceTests`），单元测试放在对应项目下的 `Tests/` 目录或独立 `src/` 目录。与被测业务项目同属 `src/` 目录。
 
 ### 11.5 文档维护约定

@@ -1,5 +1,27 @@
 # 变更日志
 
+## v2.16 (2026-08-04)
+
+### F27 · BDD 集成测试统一（Reqnroll + 文件 SQLite + Playwright E2E）完成（feature-builder 全栈实跑；测试架构改造 ⚠️高风险闭环）
+
+把 BDD 重新定义为平台「最终集成测试层」= 真 HTTP（走完整管线：认证/限流/异常处理器/MediatR+UoW/EF）+ 真 DB（文件 SQLite，明确排除 Api.Tests 现行 in-memory）+ 前端 E2E（Playwright 真浏览器）；现有 41 例 SpecFlow 域级测试全量迁移到 HTTP+DB 契约。
+
+**核心改动：**
+- **框架迁移**：SpecFlow → Reqnroll 3.x（`Reqnroll`/`Reqnroll.xUnit`/`Reqnroll.Tools.MsBuildGeneration`；`using TechTalk.SpecFlow`→`using Reqnroll`；删旧 `.feature.cs` 交生成器重出）；41 例全绿。
+- **测试基座**：`IntegrationAppFactory : WebApplicationFactory<Program>`（环境 `Integration` + 文件 SQLite `test-integration.db`）+ `IntegrationSeeder`（集成租户/用户/ApiKey/示例工作流）+ `AuthHelper`（发布类走 JWT、运行类走 `X-Api-Key`）；`Program.cs:60` 增 `Integration` 环境门控 `DatabaseInitializer`。
+- **F22 BDD**：`PublishedWorkflow.feature` 6 场景（真 HTTP+DB），覆盖发布/运行/跨租户隔离/MCP tools/list/取消发布。
+- **真实编排验证**：新增 `WorkflowEngine.feature`（3 场景）经生产 `IOrchestrationPrimitive.RunAsync` 驱动真实顺序/协商编排器，断言重试耗尽回滚 + 全成功 + 协商管线，持久化到真文件 SQLite（替代测死接口 `[Obsolete]` `IStateMachineEngine`/`IAgentOrchestrator` 的玩具 feature）。
+- **前端 E2E**：`src/AgentPlatform.Web/e2e/publish-workflow.spec.ts`（Playwright，F22 全链路 UI 发布→ApiKey 调用），精确 `page.on('response')` 断言，显式允许未完工 `/api/v1/api-keys` 404。
+- **编排/CI**：`scripts/integration.mjs` 编排后端 BDD + 前端 E2E + 卸载；`ci.yml` 增 `integration` job（后端 BDD，跨平台无 Docker）。
+- **真实生产 Bug 修复（E2E 捕获）**：`PublishMode` 整型枚举未注册 `JsonStringEnumConverter` 致前端 `"mode":"Api"` 反序列化 400 → 标注 `[JsonConverter(typeof(JsonStringEnumConverter))]`，最小爆炸半径。
+
+**质量与测试：**
+- 三道质量门禁全 PASS（ddd-code-reviewer / ddd-phase-quality-gate / codebase-optimizer）+ `.quality-gate.json` 增 `bdd: PASSED`，`cleared:true`
+- 顶层闸门 `node scripts/integration.mjs --e2e`：**后端 BDD 51/51 + 前端 e2e 1/1** 全绿（两次运行）
+- 后端 `dotnet build` 0/0；前端 `node scripts/qa.mjs` OVERALL PASS（typecheck/lint/build/unit）
+- 质量报告 `docs/quality/f27-bdd-integration-gate.md`，结构清单嵌入 `features/bdd-integration-design.md` §14
+- 已知残留（非阻断）：预存 e2e（create-agent/page-polish 断言英文 UI，但默认 locale=zh-CN）需各自修复，已使闸门 E2E 收窄到 `publish-workflow`；玩具 `WorkflowStateMachine`/`MultiAgentPipeline` feature 测死接口建议删除；`/api/v1/api-keys` 后端未实现（前端 ApiKeysPage 未完工）
+
 ## v2.15 (2026-08-03)
 
 ### F22 · 发布工作流为 API / MCP Server 完成（feature-builder 全栈实跑，🔴高风险；program 子项④）

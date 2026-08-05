@@ -12,6 +12,8 @@
 
 代码基现状（2026-07-22 全量走查）：React 19 + Vite 8 + TS（strict）+ Antd 5 + @xyflow/react + zustand；`typecheck/lint/build/unit/e2e` 五道闸门当前全绿。优点：严格 TS、0 处 `any`、0 TODO/FIXME、lint 净。问题集中于「前端数据真实性 / 鉴权态 / 错误兜底 / 工程化」与「后端行动层（工具·代码·调研）空心」两类。
 
+> **测试约定（2026-08-04 确立，feature-builder 硬约束 #7）**：**前端 E2E 必须 BDD 驱动**——凡触及 UI 的 feature，须配套 `playwright-bdd` 风格的 Gherkin E2E（`src/AgentPlatform.Web/e2e/features/*.feature` + `e2e/steps/*.steps.ts`，`createBdd(test)` 的 `test` 须 `extend` 自 `playwright-bdd` 自带 `test`），运行链路 `bddgen && playwright test`。禁止写裸 `@playwright/test` `.spec.ts` 作 feature E2E（既有 `smoke.*.spec.ts` 属冒烟基线，除外）。F27 已落地示范：`e2e/features/publish-workflow.feature`。
+
 ---
 
 ## Feature 史诗（Tier 1 —— feature-builder 消费单元）
@@ -246,6 +248,28 @@
 - 目标：① 用量仪表盘（复用 F18 扩工作流维度）② 工作流 diff（复用 F7 ① 快照比对两版本）③ 多工作空间隔离切换（二级维度）。
 - 风险：🔴 多工作空间破坏性极大（全部聚合加 WorkspaceId + query filter + TenantProvider 体系）；建议 v1 **仅做用量仪表盘 + diff（低风险纯增量）**，多工作空间独立排期。实现前须锁定 §6（S1 是否含 Workspace / S2 数据模型）。
 
+
+### F27 · BDD 集成测试统一（Reqnroll + 文件 SQLite + Playwright E2E）  [P1]  done  ⚠️高风险（测试架构改造 + SpecFlow→Reqnroll 迁移 + 新增前端 E2E 基建 · 2026-08-04 全阶段 DONE）
+- 设计文档：`features/bdd-integration-design.md`（已建，2026-08-03 确认设计 + §7 例外默认 B）
+- 目标：把 **BDD 重新定义为「最终集成测试层」** = 真 HTTP（走完整管线）+ 真 DB（**文件 SQLite，明确排除 Api.Tests 现行 in-memory**）+ 前端 E2E（Playwright 真浏览器）；**现有 41 例 SpecFlow 域级测试（假 Repository/域内对象）全量迁移到 HTTP+DB 契约**。
+- 核心改造：
+  - 测试基座：`IntegrationAppFactory : WebApplicationFactory<Program>`（环境 `Integration` + 文件 SQLite `test-integration.db`）+ `IntegrationSeeder`（集成租户/用户/ApiKey/示例工作流）+ `AuthHelper`（发布类走 JWT、运行类走 `X-Api-Key`）。
+  - SpecFlow→Reqnroll（`Reqnroll` + `Reqnroll.xUnit` + `Reqnroll.Tools.MsBuildGeneration`；`using TechTalk.SpecFlow`→`using Reqnroll`；删旧 `.feature.cs` 交生成器重出）。
+  - 前端 E2E：新增 `src/AgentPlatform.Web/e2e/`（Playwright + `publish-workflow.spec.ts`，全链路 UI 发布→调用）。
+  - 编排：`scripts/integration` + `deploy/*.yml` 增 `integration` job 作合并前最终闸门；`.quality-gate.json` 增 `bdd: PASSED`。
+- 决策（2026-08-03 锁定）：框架 Reqnroll / 集成 DB 文件 SQLite / 前端 E2E Playwright / 旧 41 例全迁移；**§7 例外默认 B**：`WorkflowStateMachine` 重试/回滚内部无公开 HTTP 表面 → 走「域集成」连真 DB 但经应用层命令驱动（不为测试加生产端点；若坚持全 HTTP 才走方案 A 受控测试端点）。
+- 验收子项：所有 BDD 经真 HTTP+文件 SQLite 全绿（零 mock Repository、零 in-memory）；41 例 + F22 新场景全绿（Reqnroll 报告）；Playwright E2E 覆盖 F22 前端全链路绿（HTML 报告 + trace）；`scripts/integration` 一键编排后端 BDD + 前端 E2E + 卸载；CI 合并前闸门通过。
+- 风险：🔴 测试架构改造 + 41 例迁移工作量大；`WorkflowStateMachine` 内部行为 HTTP 不可达（已定例外 B）；限流（`PerApiKey`）干扰 → 基座移除/白名单测试 key；种子 ApiKey 明文须经 `IApiKeyEncryptionService` 加密落库（复用 F13 基件）；前端 E2E 与后端种子一致性（共用 `IntegrationSeeder` 常量）。
+- 分阶段：A 基座（Reqnroll+文件 SQLite+种子+AuthHelper）/ B 迁移 41 例 / C F22 BDD 6 场景 / D 前端 E2E / E 编排+CI（详见设计文档 §9）。
+
+### F28 · 历史 feature BDD 测试覆盖补全（按功能域分组，全量）  [P0]  done  ⚠️高风险（全 8 功能域后端 Reqnroll BDD + 前端 playwright-bdd E2E · 2026-08-04 全阶段 DONE）
+- 设计文档：`features/bdd-coverage-design.md`（已建，2026-08-04 现状盘点 + §2 八批次表 + §4 验证策略 + §7 实施记录）
+- 目标：为「已实现但缺 BDD 集成测试」的 8 大功能域补齐 **后端 Reqnroll BDD（真 HTTP + 文件 SQLite）** 与 **前端 playwright-bdd E2E（真浏览器，zh-CN 断言）**，按风险/价值分批（B1 Auth/RBAC → B8 Agent 生命周期），不要求与单个 feature 史诗 1:1 对应。
+- 后端 BDD（B1–B8，114 场景全绿）：`auth-rbac` / `tenant-credentials` / `workflow-management` / `conversation-chat` / `knowledge-base` / `research-agent` / `analytics` / `agent-lifecycle`(+`agent-configurations`)；复用 `IntegrationAppFactory`/`IntegrationSeeder`/`AuthHelper`/`CommonSteps`，双租户隔离断言复用 `IntegrationConstants` 固定 Id+ApiKey。**根因修复**：`TenantModelClientResolver` 在 `ModelClient:Provider=Stub` 时短路返回空解析，消除 B2 启用 BYO 凭据触发的真实 LLM 20s 超时 500（与 F28 Stub 契约一致）。
+- 前端 BDD（B1–B8 + 转换 create-agent/page-polish + publish-workflow，11 feature / 22 场景 @e2e 全绿）：`login-auth` / `credentials` / `workflow-crud` / `conversation` / `knowledge-base` / `research` / `dashboard` / `agent-crud` + 转换 `create-agent` / `page-polish`；zh-CN 断言对齐默认 locale；遗留 `create-agent.spec.ts`/`page-polish.spec.ts`（英文断言，与 zh-CN 错配）删除并改写为 BDD；`smoke.*.spec.ts` 保留为冒烟基线（不含 @e2e）。**契约修复**：`playwright.config.ts` 设 `testDir` = `defineBddConfig()` 返回的 `outputDir`（playwright-bdd 9.x 要求 `project.testDir == BDD outputDir`，否则运行期 `BDD config not found`）；新增 `appsettings.Integration.json`（`ModelClient:Provider=Stub` + `StubResponse` + 关限流）使 E2E 后端确定性（不触真实 LLM）。
+- 编排/闸门：`scripts/integration.mjs --e2e` 先 bddgen 再 `playwright test --grep @e2e`；`safeCleanDir` 逐文件清理 test-results/playwright-report 绕过沙箱批量删除护栏。
+- 验收：后端 `dotnet test` 114/114 全绿；前端 `node scripts/integration.mjs --e2e` 全绿（后端 BDD 114 + 前端 BDD 22）；三道质量门 0 open；`.quality-gate.json` 推进 `f28-bdd-coverage`，含 `bdd:PASSED` + `frontendE2e:BDD` + `cleared:true`。
+- 风险：跨场景数据污染（各 feature Background 隔离 + `IntegrationAppFactory` 单例）/ 租户隔离（复用固定 Id+ApiKey）/ Stub 模型（仅验链路与鉴权，不验真实 LLM）/ 前端 locale（全 zh-CN）。
 
 ### F8 · 差异化优势产品化（Negotiation + Critic）  [native]  open
 - 设计文档：`features/negotiation-productization.md`（待建）

@@ -1,0 +1,130 @@
+using System.Collections.Generic;
+using System.IO;
+using System.Net.Http;
+using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Infrastructure.Persistence;
+using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+
+namespace AgentPlatform.SpecFlowTests;
+
+/// <summary>
+/// 集成测试 WebApplicationFactory：以真实 HTTP 管线 + 真实文件 SQLite 数据库运行
+/// AgentPlatform.Api。对应 BDD 集成层（设计文档 features/bdd-integration-design.md §4.2）。
+///
+/// 与 Api.Tests 的 in-memory SQLite 不同，本工厂使用独立磁盘文件 test-integration.db，
+/// 仍走 EF 迁移 + 磁盘 I/O（满足「真 DB」契约）；并使用 Integration 环境令 DatabaseInitializer
+/// 在启动时跑迁移 + 基础种子（角色 / agent 配置 / admin 用户）。
+/// </summary>
+public sealed class IntegrationAppFactory : WebApplicationFactory<Program>, IAsyncLifetime
+{
+    /// <summary>真实磁盘 SQLite 文件，每次运行重建，仍具真实磁盘 I/O。</summary>
+    private const string DbPath = "test-integration.db";
+
+    /// <summary>测试 JWT 密钥（≥32 字符且非 dev 默认值，满足 Program.cs 启动守卫）。</summary>
+    private const string TestJwtSecretKey = "test-only-secret-key-at-least-32-chars!!";
+
+    /// <summary>已配置好基础地址的 HttpClient（真实管线）。</summary>
+    public HttpClient Api { get; private set; } = null!;
+
+    /// <inheritdoc />
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.UseEnvironment("Integration");
+
+        builder.ConfigureAppConfiguration((_, config) =>
+        {
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                // 真实文件 SQLite（非 in-memory）。Pooling=false 确保连接关闭后立即释放文件句柄，
+                // 否则 AfterFeature 删除磁盘文件会因仍被连接池占用而抛 IOException。
+                ["ConnectionStrings:DefaultConnection"] = $"Data Source={DbPath};Pooling=false",
+                ["Database:Type"] = "sqlite",
+
+                // 钉死默认租户，使种子 admin 用户、TenantProvider 解析、JWT 声明三方一致
+                ["Tenant:DefaultTenantId"] = IntegrationConstants.Tenant1Id.ToString(),
+
+                // 合法 JWT 密钥（非 dev 默认）
+                ["Security:JwtSecretKey"] = TestJwtSecretKey,
+                ["Security:DevLoginEnabled"] = "false",
+                ["Security:EnforceAuthentication"] = "true",
+
+                // Integration 环境关闭限流，避免令牌桶干扰 BDD 真 HTTP 验收场景
+                // （features/bdd-integration-design.md §11 风险 2）。
+                ["Security:RateLimitingEnabled"] = "false",
+
+                // 内存缓存避免 Redis 依赖；Stub 模型避免真实 LLM 调用
+                ["Cache:Provider"] = "Memory",
+                ["ModelClient:Provider"] = "Stub",
+                ["ModelClient:StubResponse"] = "Integration test stub response.",
+
+                // 非空 Key，避免 embedding 服务注册抛错
+                ["OpenAI:Key"] = "test-openai-key-not-empty",
+            });
+        });
+
+        // 用文件 SQLite 覆盖默认 DbContext 注册（与 ApiContractTestFactory 同法，已验证）。
+        builder.ConfigureServices(services =>
+        {
+            var dbDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(DbContextOptions<AppDbContext>));
+            if (dbDescriptor is not null)
+                services.Remove(dbDescriptor);
+
+            services.AddDbContext<AppDbContext>(options => options.UseSqlite($"Data Source={DbPath};Pooling=false"));
+
+            // 用可控执行器替换全部真实 IStepExecutor（仅隔离外部 LLM 步骤行为，真实引擎 + 真实 DB 不变）。
+            // 见 ConfigurableStepExecutor：这是 WorkflowStateMachine / MultiAgentPipeline 旧玩具假实现的诚实替代。
+            var executorDescriptors = services.Where(d => d.ServiceType == typeof(IStepExecutor)).ToList();
+            foreach (var d in executorDescriptors)
+                services.Remove(d);
+
+            services.AddSingleton<ConfigurableStepExecutor>();
+            services.AddSingleton<IStepExecutor>(sp => sp.GetRequiredService<ConfigurableStepExecutor>());
+
+            // 禁用后台托管服务（执行日志清理 / ApiKey 过期 / 工作流调度定时任务）：
+            // 它们会周期性写同一文件 SQLite，与 BDD 场景并发写引发 database is locked → 21s 忙等 → 偶发 500。
+            // 功能 BDD 不依赖这些定时器，关闭即可消除该并发变量（设计文档 §11 风险 3）。
+            var hostedDescriptors = services
+                .Where(d => d.ServiceType == typeof(Microsoft.Extensions.Hosting.IHostedService))
+                .ToList();
+            foreach (var d in hostedDescriptors)
+                services.Remove(d);
+        });
+    }
+
+    /// <inheritdoc />
+    public async Task InitializeAsync()
+    {
+        if (File.Exists(DbPath))
+            File.Delete(DbPath);
+
+        // CreateClient 触发宿主构建；Program.cs 在 Integration 环境运行 DatabaseInitializer
+        // （MigrateAsync + 基础种子）。
+        // 关闭自动 cookie 处理：IntegrationHost.Api 是单例 HttpClient，若沿用默认 HandleCookies=true，
+        // 任一响应写入的 ap_access_token cookie 会被后续「匿名」请求自动重放，导致鉴权泄漏
+        // （匿名/越权场景误判为已认证）。认证统一由 AuthHelper 显式提取 JWT 经 WithBearer 附加。
+        Api = CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+
+        // 在基础种子之上追加集成专用数据（T2 用户 / T1·T2 ApiKey / 示例工作流）。
+        await IntegrationSeeder.SeedAsync(Services);
+    }
+
+    /// <inheritdoc />
+    public new async Task DisposeAsync()
+    {
+        await base.DisposeAsync();
+        // 尽力删除磁盘 SQLite 文件；若仍被连接占用（极端时序），忽略以免掩盖真实测试结果。
+        try
+        {
+            if (File.Exists(DbPath))
+                File.Delete(DbPath);
+        }
+        catch (IOException)
+        {
+        }
+    }
+}
