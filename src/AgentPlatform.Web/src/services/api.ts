@@ -43,6 +43,10 @@ import type {
   ScheduleTriggerView,
   WorkflowBindingDto,
   TriggerRunResult,
+  WorkflowTemplate,
+  WorkflowTemplateDetail,
+  WorkflowTemplateCategory,
+  WorkflowTemplateCategoryOption,
 } from '../types';
 
 const api = axios.create({
@@ -364,6 +368,29 @@ export const uploadDocument = (id: string, file: File) => {
     })
     .then((r) => r.data);
 };
+
+// F23 · 模板市场（平台级工作流模板，只读 + 一键克隆）。
+// 列表/分类/详情仅需登录；克隆为 Admin,Operator（后端 [Authorize(Roles=...)]）。
+// params 仅包含非 null 键，避免 axios 将 null 序列化为 "null" 字符串导致后端误过滤（空列表）。
+export const getWorkflowTemplates = (opts?: {
+  category?: WorkflowTemplateCategory | null;
+  keyword?: string | null;
+}) => {
+  const params: Record<string, string | number> = {};
+  if (opts?.category != null) params.category = opts.category;
+  if (opts?.keyword) params.keyword = opts.keyword;
+  return api.get<WorkflowTemplate[]>('/workflow-templates', { params }).then((r) => r.data ?? []);
+};
+
+export const getWorkflowTemplateCategories = () =>
+  api.get<WorkflowTemplateCategoryOption[]>('/workflow-templates/categories').then((r) => r.data ?? []);
+
+export const getWorkflowTemplate = (id: string) =>
+  api.get<WorkflowTemplateDetail>(`/workflow-templates/${id}`).then((r) => r.data);
+
+// 克隆后返回新工作流的详情（WorkflowDetail），可直接跳转到 /workflows/:id。
+export const cloneWorkflowTemplate = (id: string) =>
+  api.post<WorkflowDetail>(`/workflow-templates/${id}/clone`).then((r) => r.data);
 
 // Auth (F2: cookie-based; identity via GET /auth/me, no client-side JWT decode)
 export const loginRequest = (data: LoginRequest) =>

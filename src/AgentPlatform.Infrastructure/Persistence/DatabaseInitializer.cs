@@ -1,10 +1,13 @@
 using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Application.Workflows.Versioning;
 using AgentPlatform.Domain.Aggregates.AgentConfigurations;
 using AgentPlatform.Domain.Aggregates.Agents;
 using AgentPlatform.Domain.Aggregates.AgentRoleDefinitions;
 using AgentPlatform.Domain.Aggregates.ApiKeys;
 using AgentPlatform.Domain.Aggregates.Users;
+using AgentPlatform.Domain.Aggregates.WorkflowTemplates;
 using AgentPlatform.Domain.Aggregates.Workflows;
+using AgentPlatform.Domain.Enums;
 using AgentPlatform.Domain.ValueObjects;
 using AgentPlatform.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
@@ -206,7 +209,104 @@ internal sealed class DatabaseInitializer : IDatabaseInitializer
 
             await _context.SaveChangesAsync(ct);
             _logger.LogInformation("Remapped {Count} legacy agent role codes", orphanAgents.Count);
+
+        // ── 模板市场种子（F23）── 平台级共享模板，固定 Guid + IgnoreQueryFilters 幂等。
+        // 仅 v1 平台内置种子（决策 S1）；用户发布 UGC 留待后续 feature。
+        try
+        {
+            var templateSeeds = new (Guid Id, string Name, WorkflowTemplateCategory Category,
+                string Description, string[] Tags, IReadOnlyList<(StepType Type, string Name, string Config)> Nodes)[]
+            {
+                (Guid.Parse("22222222-2222-2222-2222-222222222201"), "知识库智能问答",
+                    WorkflowTemplateCategory.KnowledgeQa,
+                    "基于知识库检索结果生成精准问答，适合企业知识助手。",
+                    new[] { "知识库", "RAG", "问答" },
+                    new (StepType, string, string)[]
+                    {
+                        (StepType.Knowledge, "检索知识", "{}"),
+                        (StepType.LLM, "生成回答", "{\"systemPrompt\":\"根据检索到的知识片段，用中文准确回答用户问题；如知识不足请明确说明。\"}"),
+                    }),
+                (Guid.Parse("22222222-2222-2222-2222-222222222202"), "长文档摘要",
+                    WorkflowTemplateCategory.Summarization,
+                    "将长文档提炼为结构化要点摘要。",
+                    new[] { "摘要", "文档" },
+                    new (StepType, string, string)[]
+                    {
+                        (StepType.LLM, "生成摘要", "{\"systemPrompt\":\"将输入文档压缩为不超过 5 条的要点摘要，保留关键结论与数据。\"}"),
+                    }),
+                (Guid.Parse("22222222-2222-2222-2222-222222222203"), "定时网页抓取摘要",
+                    WorkflowTemplateCategory.WebScraping,
+                    "抓取指定网页内容并生成中文摘要，可配合触发器定时运行。",
+                    new[] { "抓取", "定时", "网页" },
+                    new (StepType, string, string)[]
+                    {
+                        (StepType.Http, "抓取网页", "{\"method\":\"GET\",\"url\":\"https://example.com\"}"),
+                        (StepType.LLM, "摘要内容", "{\"systemPrompt\":\"将抓取的网页正文翻译并摘要为中文要点。\"}"),
+                    }),
+                (Guid.Parse("22222222-2222-2222-2222-222222222204"), "多 Agent 评审",
+                    WorkflowTemplateCategory.MultiAgentReview,
+                    "由起草 Agent 生成初稿，评审 Agent 给出修改意见，迭代收敛。",
+                    new[] { "评审", "多Agent", "协作" },
+                    new (StepType, string, string)[]
+                    {
+                        (StepType.LLM, "起草初稿", "{\"systemPrompt\":\"围绕主题撰写一份结构完整的初稿。\"}"),
+                        (StepType.Critic, "评审收敛", "{\"maxRounds\":2}"),
+                    }),
+                (Guid.Parse("22222222-2222-2222-2222-222222222205"), "客服智能分流",
+                    WorkflowTemplateCategory.CustomerSupport,
+                    "理解用户诉求并给出分类与应答建议，提升客服效率。",
+                    new[] { "客服", "分流" },
+                    new (StepType, string, string)[]
+                    {
+                        (StepType.LLM, "分类与应答", "{\"systemPrompt\":\"判断用户意图类别，并给出标准应答话术或转人工建议。\"}"),
+                    }),
+                (Guid.Parse("22222222-2222-2222-2222-222222222206"), "营销文案生成",
+                    WorkflowTemplateCategory.ContentGeneration,
+                    "根据产品要点批量生成多平台营销文案。",
+                    new[] { "文案", "营销", "内容" },
+                    new (StepType, string, string)[]
+                    {
+                        (StepType.LLM, "生成文案", "{\"systemPrompt\":\"根据产品卖点生成适合社交媒体传播的营销文案，语气活泼。\"}"),
+                    }),
+                (Guid.Parse("22222222-2222-2222-2222-222222222207"), "数据分析报告",
+                    WorkflowTemplateCategory.DataAnalysis,
+                    "运行代码做数据处理，再由模型生成可读分析报告。",
+                    new[] { "数据", "分析", "代码" },
+                    new (StepType, string, string)[]
+                    {
+                        (StepType.Code, "运行分析", "{\"language\":\"python\"}"),
+                        (StepType.LLM, "撰写报告", "{\"systemPrompt\":\"将代码输出整理为图表结论与关键洞察的中文分析报告。\"}"),
+                    }),
+                (Guid.Parse("22222222-2222-2222-2222-222222222208"), "通用对话助手",
+                    WorkflowTemplateCategory.General,
+                    "最基础的单节点对话模板，开箱即用、便于上手改造。",
+                    new[] { "通用", "对话" },
+                    new (StepType, string, string)[]
+                    {
+                        (StepType.LLM, "对话", "{\"systemPrompt\":\"你是一个乐于助人的智能助手。\"}"),
+                    }),
+            };
+
+            foreach (var seed in templateSeeds)
+            {
+                if (await _context.WorkflowTemplates.IgnoreQueryFilters()
+                        .FirstOrDefaultAsync(t => t.Id == seed.Id, ct) is null)
+                {
+                    var snapshotJson = BuildTemplateSnapshot(seed.Nodes);
+                    _context.WorkflowTemplates.Add(new WorkflowTemplate(
+                        seed.Id, seed.Name, seed.Category, seed.Description, snapshotJson, seed.Tags));
+                }
+            }
+
+            await _context.SaveChangesAsync(ct);
+            _logger.LogInformation("Seeded {Count} workflow templates", templateSeeds.Length);
         }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to seed workflow templates, but continuing with startup");
+        }
+        } // closes outer SeedDataAsync try
+
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to seed data, but continuing with startup");
@@ -314,5 +414,37 @@ internal sealed class DatabaseInitializer : IDatabaseInitializer
         {
             _logger.LogWarning(ex, "Failed to seed integration fixtures, but continuing with startup");
         }
+    }
+
+    /// <summary>
+    /// 由一组中间节点构造合法的工作流图快照（Start → 中间节点… → End）。
+    /// 用于模板种子：保证克隆时 <see cref="Workflow.ReplaceGraph"/> 的 <see cref="Workflow.ValidateGraph"/>
+    /// 必然通过（恰好 1 个 Start、≥1 个 End、无环、从 Start 连通、节点名唯一）。
+    /// 所有节点 <c>AssignedAgentId=null</c>（决策 S3：平台模板不绑定租户 Agent）。
+    /// </summary>
+    private static string BuildTemplateSnapshot(
+        IReadOnlyList<(StepType Type, string Name, string Config)> middleNodes)
+    {
+        var nodes = new List<WorkflowVersionNode>();
+        var edges = new List<WorkflowVersionEdge>();
+
+        var startId = Guid.NewGuid();
+        nodes.Add(new WorkflowVersionNode(startId, StepType.Start, "Start", 0, 0, "{}", null));
+        var prev = startId;
+        var y = 120;
+        foreach (var (type, name, config) in middleNodes)
+        {
+            var id = Guid.NewGuid();
+            nodes.Add(new WorkflowVersionNode(id, type, name, 0, y, config, null));
+            edges.Add(new WorkflowVersionEdge(Guid.NewGuid(), prev, id, null));
+            prev = id;
+            y += 120;
+        }
+
+        var endId = Guid.NewGuid();
+        nodes.Add(new WorkflowVersionNode(endId, StepType.End, "End", 0, y, "{}", null));
+        edges.Add(new WorkflowVersionEdge(Guid.NewGuid(), prev, endId, null));
+
+        return new WorkflowGraphSnapshot("{}", nodes, edges).ToJson();
     }
 }

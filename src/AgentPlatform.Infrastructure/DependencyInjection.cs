@@ -101,6 +101,9 @@ public static class DependencyInjection
         services.AddScoped<IConversationRepository, ConversationRepository>();
         services.AddScoped<IWorkflowRepository, WorkflowRepository>();
         services.AddScoped<IWorkflowVersionRepository, WorkflowVersionRepository>();
+        // ── F23 模板市场（平台级，非租户隔离）仓储 ──
+        services.AddScoped<AgentPlatform.Domain.Repositories.IWorkflowTemplateRepository,
+            AgentPlatform.Infrastructure.Persistence.Repositories.WorkflowTemplateRepository>();
         services.AddScoped<IExecutionLogRepository, ExecutionLogRepository>();
         // ── F22 已发布工作流（API / MCP 暴露）仓储 ──
         services.AddScoped<AgentPlatform.Domain.Repositories.IPublishedWorkflowRepository,

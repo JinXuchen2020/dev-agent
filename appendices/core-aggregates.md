@@ -86,6 +86,19 @@ public enum CredentialCategory
     Search   // 搜索凭据（SerpApi）
 }
 
+// Domain/Enums/WorkflowTemplateCategory.cs（F23 模板市场）
+public enum WorkflowTemplateCategory
+{
+    General = 0,          // 通用 / 未分类
+    KnowledgeQa = 1,      // 知识库问答
+    Summarization = 2,    // 文档摘要
+    WebScraping = 3,      // 定时 / 网页抓取
+    MultiAgentReview = 4, // 多 Agent 评审
+    CustomerSupport = 5,  // 客服分流
+    ContentGeneration = 6,// 内容生成
+    DataAnalysis = 7      // 数据分析
+}
+
 ### A.2 聚合根
 
 ```csharp
@@ -233,6 +246,20 @@ public enum PublishMode
     Api,    // 受 API Key 鉴权的 HTTP 端点
     Mcp     // 平台内 MCP tool（JSON-RPC 2.0 tools/list + tools/call）
 }
+
+// Domain/Aggregates/WorkflowTemplates/WorkflowTemplate.cs（F23 模板市场 / 示例库）
+public sealed class WorkflowTemplate : IAggregateRoot   // 平台级共享模板（刻意不 ITenantScoped）
+{
+    public Guid Id { get; private init; }               // 种子固定 Guid（22222222-…-201..208），EF ValueGeneratedNever
+    public string Name { get; private set; } = null!;    // 展示名（ctor 非空校验）
+    public WorkflowTemplateCategory Category { get; private set; } // 硬编码枚举（决策 S4）
+    public string? Description { get; private set; }     // 模板市场描述
+    public string SnapshotJson { get; private set; } = null!; // 工作流图快照（context+nodes+edges），克隆复用（非空校验）
+    public string? TagsJson { get; private set; }        // 标签原始 JSON 数组，用于关键词过滤
+    public IReadOnlyList<string> Tags { get; }           // 由 TagsJson 反序列化（容错空/坏 JSON）
+    public DateTime CreatedAt { get; private init; }     // 种子时间（UTC）
+    // 注：模板为只读种子，DomainEvents 恒空、ClearDomainEvents 为 no-op
+}
 ```
 
 ### A.3 实体（非聚合根）
@@ -378,6 +405,15 @@ public interface IPublishedWorkflowRepository
         Guid tenantId, PublishMode mode, bool enabledOnly, CancellationToken ct = default);
     void Add(PublishedWorkflow publishedWorkflow);
     void Delete(PublishedWorkflow publishedWorkflow);
+}
+
+// Domain/Repositories/IWorkflowTemplateRepository.cs（F23 模板市场）
+public interface IWorkflowTemplateRepository
+{
+    Task<WorkflowTemplate?> GetByIdAsync(Guid id, CancellationToken ct = default);
+    Task<IReadOnlyList<WorkflowTemplate>> ListAsync(
+        WorkflowTemplateCategory? category, string? keyword, CancellationToken ct = default);
+    void Add(WorkflowTemplate template);   // 仅 DatabaseInitializer 种子使用
 }
 ```
 

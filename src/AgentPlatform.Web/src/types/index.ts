@@ -364,6 +364,48 @@ export interface ImportWorkflowRequest {
   edges?: WorkflowEdgeRequest[] | null;
 }
 
+// ── F23 模板市场（平台级工作流模板，只读 + 一键克隆）──
+// 字段名镜像 AgentPlatform.Application.WorkflowTemplates.*（System.Text.Json 默认 camelCase）。
+// WorkflowTemplateCategory 为整数枚举（与后端枚举值一致），用 const 对象镜像（tsconfig erasableSyntaxOnly）。
+export const WorkflowTemplateCategory = {
+  General: 0,
+  KnowledgeQa: 1,
+  Summarization: 2,
+  WebScraping: 3,
+  MultiAgentReview: 4,
+  CustomerSupport: 5,
+  ContentGeneration: 6,
+  DataAnalysis: 7,
+} as const;
+export type WorkflowTemplateCategory =
+  (typeof WorkflowTemplateCategory)[keyof typeof WorkflowTemplateCategory];
+
+export interface WorkflowTemplate {
+  id: string;
+  name: string;
+  category: WorkflowTemplateCategory;
+  description: string | null;
+  tags: string[];
+}
+
+// 详情复用的节点/边视图与 WorkflowVersionNodeView / WorkflowVersionEdgeView 同构
+// （后端 WorkflowVersionNode/Edge 字段完全一致），避免重复类型。
+export interface WorkflowTemplateDetail {
+  id: string;
+  name: string;
+  category: WorkflowTemplateCategory;
+  description: string | null;
+  tags: string[];
+  context: string;
+  nodes: WorkflowVersionNodeView[];
+  edges: WorkflowVersionEdgeView[];
+}
+
+export interface WorkflowTemplateCategoryOption {
+  value: number;
+  name: string;
+}
+
 export interface ExecutionLog {
   id: string;
   workflowId: string;
