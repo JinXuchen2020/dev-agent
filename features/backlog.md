@@ -245,10 +245,10 @@
 - 目标：调试运行模式——变量监视（跨节点累积 Blackboard 持久化）+ 单节点运行/重跑（override）+ 错误分支恢复 + 状态/变量查看 + 会话重置。复用 F24 Trace。
 - 风险：🟡 变量持久化需 Workflow 新增 `DebugVariablesJson` 列 + 一次 EF 迁移（最小）；API 暴露既有引擎能力，无内核改动。v1 不做引擎级单步全链（列 v2）。
 
-### F26 · 企业增强（多工作空间 / 用量仪表盘 / 工作流 diff）  [P2]  open  ⚠️极高风险（多工作空间 = 第二租户维度，全仓破坏性；diff/仪表盘低风险）
-- 设计文档：`features/enterprise-enhancements.md`（已建骨架，§6 决策待锁定）
-- 目标：① 用量仪表盘（复用 F18 扩工作流维度）② 工作流 diff（复用 F7 ① 快照比对两版本）③ 多工作空间隔离切换（二级维度）。
-- 风险：🔴 多工作空间破坏性极大（全部聚合加 WorkspaceId + query filter + TenantProvider 体系）；建议 v1 **仅做用量仪表盘 + diff（低风险纯增量）**，多工作空间独立排期。实现前须锁定 §6（S1 是否含 Workspace / S2 数据模型）。
+### F26 · 企业增强（多工作空间 / 用量仪表盘 / 工作流 diff）  [P2]  done  🟢低风险（**v1 仅用量仪表盘 + 工作流 diff 已闭环**；多工作空间 = 第二租户维度独立排期，未触碰 ITenantScoped/TenantProvider · 2026-08-06 起 feat/f26-enterprise-enhancements · 2026-08-06 全栈闭环）
+- 设计文档：`features/enterprise-enhancements.md`（§6 决策锁定：v1 仅仪表盘+diff；状态 done v1）
+- 目标：① 用量仪表盘（per-workflow 执行/成功率/token/时延，7/14/30 天）✅ ② 工作流 diff（稳定键 Name/边端点比对两版本）✅ ③ 多工作空间隔离切换（二级维度）⏸ 独立排期。
+- 风险：🟢 v1 纯增量低风险（无引擎/租户体系侵入）；多工作空间仍 🔴 破坏性极大（全聚合加 WorkspaceId + query filter + TenantProvider 体系），独立排期。
 
 
 ### F27 · BDD 集成测试统一（Reqnroll + 文件 SQLite + Playwright E2E）  [P1]  done  ⚠️高风险（测试架构改造 + SpecFlow→Reqnroll 迁移 + 新增前端 E2E 基建 · 2026-08-04 全阶段 DONE）

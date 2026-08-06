@@ -13,6 +13,7 @@ using AgentPlatform.Application.Workflows.Commands.UnpublishWorkflow;
 using AgentPlatform.Application.Workflows.Queries.GetPublishStatus;
 using AgentPlatform.Application.Workflows.Versioning;
 using AgentPlatform.Application.WorkflowTriggers;
+using AgentPlatform.Application.Workflows.Versioning.DiffWorkflow;
 using AgentPlatform.Application.Debug.Commands.StartDebugSession;
 using AgentPlatform.Application.Debug.Commands.ResetDebugSession;
 using AgentPlatform.Application.Debug.Commands.DebugStep;
@@ -549,6 +550,26 @@ public sealed class WorkflowsController : ControllerBase
         var result = await _mediator.Send(new ResetDebugSessionCommand(id, _tenant.GetTenantId()), ct);
         return Ok(result);
     }
+
+    /// <summary>
+    /// 计算工作流定义的差异（F26）：当前图 vs 指定版本对（fromVersionId/toVersionId）或另一工作流当前图
+    /// （otherWorkflowId）；两者均未提供时默认对比「当前图 vs 最新保存版本」。读操作继承类级 [Authorize]。
+    /// </summary>
+    [HttpPost("{id:guid}/diff")]
+    public async Task<IActionResult> DiffWorkflow(
+        Guid id,
+        [FromBody] DiffWorkflowRequest? request,
+        CancellationToken ct = default)
+    {
+        var query = new DiffWorkflowQuery(
+            id,
+            request?.FromVersionId,
+            request?.ToVersionId,
+            request?.OtherWorkflowId,
+            _tenant.GetTenantId());
+        var result = await _mediator.Send(query, ct);
+        return result == null ? NotFound() : Ok(result);
+    }
 }
 
 /// <summary>
@@ -634,4 +655,14 @@ public sealed record DebugRetryNodeRequest(
 public sealed record DebugRollbackRequest(
     Guid SessionId,
     int TargetStepOrder);
+
+/// <summary>
+/// Request model for computing a workflow definition diff (F26). All members optional:
+/// supply a version pair, or an <see cref="OtherWorkflowId"/>, or neither (defaults to
+/// current graph vs latest saved version).
+/// </summary>
+public sealed record DiffWorkflowRequest(
+    Guid? FromVersionId = null,
+    Guid? ToVersionId = null,
+    Guid? OtherWorkflowId = null);
 

@@ -14,12 +14,16 @@ public sealed record WorkflowGraphSnapshot(
     IReadOnlyList<WorkflowVersionEdge> Edges)
 {
     /// <summary>Captures the current definition of a workflow.</summary>
-    public static WorkflowGraphSnapshot FromWorkflow(Workflow wf) => new(
-        wf.Context,
-        wf.Nodes.Select(n => new WorkflowVersionNode(
-            n.Id, n.Type, n.Name, n.PositionX, n.PositionY, n.ConfigJson, n.AssignedAgentId)).ToList(),
-        wf.Edges.Select(e => new WorkflowVersionEdge(
-            e.Id, e.SourceNodeId, e.TargetNodeId, e.Label)).ToList());
+    public static WorkflowGraphSnapshot FromWorkflow(Workflow wf)
+    {
+        var (nodes, edges) = wf.GetEffectiveGraph();
+        return new WorkflowGraphSnapshot(
+            wf.Context,
+            nodes.Select(n => new WorkflowVersionNode(
+                n.Id, n.Type, n.Name, n.PositionX, n.PositionY, n.ConfigJson, n.AssignedAgentId)).ToList(),
+            edges.Select(e => new WorkflowVersionEdge(
+                e.Id, e.SourceNodeId, e.TargetNodeId, e.Label)).ToList());
+    }
 
     /// <summary>Serializes the snapshot to JSON.</summary>
     public string ToJson() => JsonSerializer.Serialize(this);
