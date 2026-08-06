@@ -278,7 +278,7 @@
 - 目标：后端已具备 Negotiation 协商式多智能体 + Critic 收敛原语，待产品化画布「Agent-Team / Negotiation」专属模式（多 Agent 节点 + Critic + 收敛终止条件）。
 - 说明：**保留，勿稀释**——Dify/n8n 无此原生原语，是本平台差异化壁垒。
 
-### F9 · 代码沙箱容器隔离（DockerCodeSandbox 真实化）  [P2]  open  ⚠️中风险（Phase 6 行动层 / 新增 Docker SDK 依赖）
+### F9 · 代码沙箱容器隔离（DockerCodeSandbox 真实化）  [P2]  done  ✅（Phase 6 行动层 / Docker.DotNet 真实容器执行；分支 feat/f9-docker-sandbox，设计文档 features/sandbox-docker.md；质量门 docs/quality/f9-docker-sandbox-gate.md）
 - 设计文档：`features/sandbox-docker.md`（待建）
 - 来源：F5 残留 ①（A2 进程沙箱已真实化；`src/AgentPlatform.Infrastructure/Sandbox/DockerCodeSandbox.cs` 现为显式抛异常占位，需补真实容器执行）。
 - 目标：在有 Docker 守护进程的环境，用 `Docker.DotNet` 真实拉起隔离容器执行用户代码，提供比进程沙箱更强的文件系统 / 网络 / 资源边界。
