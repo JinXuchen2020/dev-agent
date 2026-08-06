@@ -42,7 +42,9 @@ src/.vs/
 *.VC.db
 *.VC.opendb
 *.csproj.user
-[Dd]ebug/
+# NOTE: 不再使用 [Dd]ebug/ —— 它会误伤源码目录 src/AgentPlatform.Domain/Aggregates/Debug
+# 与 src/AgentPlatform.Application/Debug（F25 调试器特性）。构建输出 bin/Debug、obj/Debug
+# 已由上面的 bin/ 与 obj/ 规则覆盖，故此处删除以避免吞掉源码文件夹。
 [Rr]elease/
 x64/
 x86/
@@ -143,3 +145,9 @@ qa-report.json
 # SQLite WAL/SHM runtime artifacts
 *.db-shm
 *.db-wal
+
+# integration.mjs 用 rename 移走的带 PID 备份（绕过沙箱删除保护）
+# 这些是无后缀规则的变体，须单独覆盖，否则每次 e2e 都会污染工作树
+test-results.bak-*/
+playwright-report.bak-*/
+*.bak-*/

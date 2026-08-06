@@ -6,6 +6,7 @@ using AgentPlatform.Domain.Aggregates.Agents;
 using AgentPlatform.Domain.Aggregates.Evaluation;
 using AgentPlatform.Domain.Aggregates.AuditLogs;
 using AgentPlatform.Domain.Aggregates.Conversations;
+using AgentPlatform.Domain.Aggregates.Debug;
 using AgentPlatform.Domain.Aggregates.ApiKeys;
 using AgentPlatform.Domain.Aggregates.KnowledgeBases;
 using AgentPlatform.Domain.Aggregates.TenantCredentials;
@@ -139,6 +140,11 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
     /// </summary>
     public DbSet<AgentPlatform.Domain.Aggregates.WorkflowTemplates.WorkflowTemplate> WorkflowTemplates =>
         Set<AgentPlatform.Domain.Aggregates.WorkflowTemplates.WorkflowTemplate>();
+
+    /// <summary>
+    /// Gets the <see cref="DbSet{TEntity}"/> providing access to workflow debug sessions (F25).
+    /// </summary>
+    public DbSet<DebugSession> DebugSessions => Set<DebugSession>();
 
     /// <summary>
     /// Returns all aggregate roots currently tracked by the change tracker, used for dispatching domain events on save.

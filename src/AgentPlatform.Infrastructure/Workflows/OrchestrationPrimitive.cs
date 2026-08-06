@@ -281,6 +281,35 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
             stepSnapshots);
     }
 
+    public async Task<DebugStepResult> DebugStepAsync(Guid workflowId, Blackboard blackboard, CancellationToken ct = default)
+    {
+        var workflow = await LoadWorkflowAsync(workflowId, ct);
+        // Block only when a real (non-debug) run is in flight; debug stepping is allowed
+        // even though the workflow shows Running between steps.
+        if (s_runningCts.ContainsKey(workflowId))
+            throw new InvalidOperationException($"Workflow {workflowId} is currently running; debug-step is not allowed.");
+
+        return await _sequential.DebugStepAsync(workflow, blackboard, ct);
+    }
+
+    public async Task<WorkflowState> DebugResumeAsync(Guid workflowId, Blackboard blackboard, CancellationToken ct = default)
+    {
+        var workflow = await LoadWorkflowAsync(workflowId, ct);
+        if (s_runningCts.ContainsKey(workflowId))
+            throw new InvalidOperationException($"Workflow {workflowId} is currently running; debug-resume is not allowed.");
+
+        return await _sequential.DebugResumeAsync(workflow, blackboard, ct);
+    }
+
+    public async Task<DebugStepResult> DebugRetryNodeAsync(Guid workflowId, Guid nodeId, Blackboard blackboard, CancellationToken ct = default)
+    {
+        var workflow = await LoadWorkflowAsync(workflowId, ct);
+        if (s_runningCts.ContainsKey(workflowId))
+            throw new InvalidOperationException($"Workflow {workflowId} is currently running; debug-retry is not allowed.");
+
+        return await _sequential.DebugRetryNodeAsync(workflow, nodeId, blackboard, ct);
+    }
+
     // ──────────── Preset Resolution ────────────
 
     private OrchestrationPreset ResolvePreset(Workflow workflow, Guid workflowId)

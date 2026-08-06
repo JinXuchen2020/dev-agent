@@ -51,24 +51,96 @@ internal sealed class SequentialOrchestrator
 
     public async Task RunSequentialAsync(Workflow workflow, CancellationToken ct)
     {
+        var (executionOrder, loopBodyIds, skip) = PrepareContext(workflow);
+        var blackboard = SeedTriggerBlackboard(workflow, Blackboard.Empty);
+        await RunToCompletionAsync(workflow, executionOrder, blackboard, skip, loopBodyIds, ct);
+    }
+
+    // ──────────── F25 调试能力（复用既有拓扑/分支/循环逻辑） ────────────
+
+    /// <summary>
+    /// Executes the next Pending node of a debugged workflow, then stops (manual continue).
+    /// The supplied <paramref name="blackboard"/> is mutated in place by node executors.
+    /// </summary>
+    public async Task<DebugStepResult> DebugStepAsync(Workflow workflow, Blackboard blackboard, CancellationToken ct)
+    {
+        var (executionOrder, loopBodyIds, skip) = PrepareContext(workflow);
+        var (executed, node, _) = await ExecuteNextPendingNodeAsync(workflow, blackboard, skip, loopBodyIds, executionOrder, ct);
+
+        if (!executed)
+        {
+            // No more pending nodes — finalize if still running.
+            if (workflow.CurrentState == WorkflowState.Running)
+            {
+                workflow.Complete();
+                _repository.Update(workflow);
+                await _unitOfWork.SaveChangesAsync(ct);
+                await _eventBus.PublishAsync(
+                    new WorkflowCompleted(workflow.Id, workflow.Name, workflow.Nodes.Count, workflow.TenantId), ct);
+            }
+
+            return new DebugStepResult(false, workflow.CurrentState, null);
+        }
+
+        var snapshot = node is null
+            ? null
+            : new StepSnapshot(node.Id, node.Order, node.Name, node.State, node.Result, node.ErrorDetail);
+        return new DebugStepResult(true, workflow.CurrentState, snapshot);
+    }
+
+    /// <summary>
+    /// Continues a debugged workflow to completion from its current state, persisting the
+    /// caller-supplied <paramref name="blackboard"/> across steps.
+    /// </summary>
+    public async Task<WorkflowState> DebugResumeAsync(Workflow workflow, Blackboard blackboard, CancellationToken ct)
+    {
+        var (executionOrder, loopBodyIds, skip) = PrepareContext(workflow);
+        await RunToCompletionAsync(workflow, executionOrder, blackboard, skip, loopBodyIds, ct);
+        return workflow.CurrentState;
+    }
+
+    /// <summary>
+    /// Re-runs a specific node within a debug session (reset to Pending before execution).
+    /// </summary>
+    public async Task<DebugStepResult> DebugRetryNodeAsync(
+        Workflow workflow, Guid nodeId, Blackboard blackboard, CancellationToken ct)
+    {
+        var (executionOrder, loopBodyIds, skip) = PrepareContext(workflow);
+        var node = executionOrder.FirstOrDefault(n => n.Id == nodeId)
+            ?? throw new InvalidOperationException($"Node '{nodeId}' not found in workflow '{workflow.Id}'.");
+
+        // Reset to Pending so the retry re-runs cleanly (executor re-sets Running/result).
+        node.SetState(WorkflowState.Pending);
+
+        if (node.Type == StepType.Loop && node is WorkflowNode loopNode)
+        {
+            await RunLoopBodyAsync(workflow, loopNode, executionOrder, blackboard, skip, ct);
+            var snap = new StepSnapshot(node.Id, node.Order, node.Name, node.State, node.Result, node.ErrorDetail);
+            return new DebugStepResult(true, workflow.CurrentState, snap);
+        }
+
+        await RunSingleNodeAsync(workflow, node, blackboard, executionOrder, skip, ct);
+        var snapshot = new StepSnapshot(node.Id, node.Order, node.Name, node.State, node.Result, node.ErrorDetail);
+        return new DebugStepResult(true, workflow.CurrentState, snapshot);
+    }
+
+    // ──────────── 执行上下文准备 ────────────
+
+    /// <summary>
+    /// Computes the execution order, loop-body skip set, and branch skip set for a workflow
+    /// (shared by full runs and debug steps). Honors continuation: completed Condition nodes
+    /// recompute their branch skip (the in-memory branch decision is lost after a restart).
+    /// </summary>
+    private (IReadOnlyList<IWorkflowExecutable> ExecutionOrder, HashSet<Guid> LoopBodyIds, HashSet<Guid> Skip)
+        PrepareContext(Workflow workflow)
+    {
         workflow.EnsureGraphSynced();
 
-        // Legacy workflows execute over the ordered Steps projection (order 0,1,2, no
-        // Start/End markers). Explicit DAGs execute over topological node order, skipping
-        // the Start entry marker and the End terminal sink.
         IReadOnlyList<IWorkflowExecutable> executionOrder = workflow.IsDag
             ? DagExecutionOrder(workflow)
             : workflow.Steps.Cast<IWorkflowExecutable>().ToList();
 
-        // F20：单次运行维护单一共享 Blackboard，使 Variable/Loop 跨节点读写生效。
-        var blackboard = Blackboard.Empty;
-
-        // F21：若工作流共享 Context 含 `trigger` 信封（由触发器注入），将其落入 Blackboard，
-        // 使节点可通过 {{trigger}} / {{trigger.*}} 占位符消费触发载荷（Webhook body / Chat 消息 / 调度元数据）。
-        // 仅当 `trigger` 键存在时生效，遗留工作流（Context 为 {}）完全不受影响。
-        blackboard = SeedTriggerBlackboard(workflow, blackboard);
-
-        // F20：Loop body 节点仅由各自 Loop 节点内联执行，主线性遍历需跳过（避免脱离循环上下文重复执行）。
+        // F20：Loop body 节点仅由各自 Loop 节点内联执行，主线性遍历需跳过。
         var loopBodyIds = new HashSet<Guid>();
         foreach (var n in executionOrder)
         {
@@ -83,10 +155,8 @@ internal sealed class SequentialOrchestrator
             }
         }
 
-        // F20：条件分支跳过集合（非选中分支的可达子图，排除与选中分支/join 重叠的节点）。
+        // F20：条件分支跳过集合（非选中分支的可达子图）。续跑场景：已完成的 Condition 需重算 skip。
         var skip = new HashSet<Guid>();
-
-        // 续跑场景：已完成的 Condition 节点需重算 skip（暂停前的分支决策在内存中已丢失）。
         foreach (var n in executionOrder)
         {
             if (n.Type == StepType.Condition && n.State == WorkflowState.Completed
@@ -97,6 +167,52 @@ internal sealed class SequentialOrchestrator
             }
         }
 
+        return (executionOrder, loopBodyIds, skip);
+    }
+
+    /// <summary>
+    /// Runs all pending nodes to completion, then marks the workflow Completed if still Running.
+    /// Drives <see cref="ExecuteNextPendingNodeAsync"/> in a loop, stopping on terminal outcomes.
+    /// </summary>
+    private async Task RunToCompletionAsync(
+        Workflow workflow,
+        IReadOnlyList<IWorkflowExecutable> executionOrder,
+        Blackboard blackboard,
+        HashSet<Guid> skip,
+        HashSet<Guid> loopBodyIds,
+        CancellationToken ct)
+    {
+        bool executed;
+        StepExecutionResult? last;
+        do
+        {
+            (executed, _, last) = await ExecuteNextPendingNodeAsync(workflow, blackboard, skip, loopBodyIds, executionOrder, ct);
+        } while (executed && last is not { Outcome: StepOutcome.FailedRetry or StepOutcome.FailedRollback or StepOutcome.NeedsIntervention });
+
+        // F20：完成判定——循环结束后若仍 Running（所有非跳过节点均已执行），标记 Completed。
+        if (workflow.CurrentState == WorkflowState.Running)
+        {
+            workflow.Complete();
+            _repository.Update(workflow);
+            await _unitOfWork.SaveChangesAsync(ct);
+            await _eventBus.PublishAsync(
+                new WorkflowCompleted(workflow.Id, workflow.Name, workflow.Nodes.Count, workflow.TenantId), ct);
+        }
+    }
+
+    /// <summary>
+    /// Finds and executes the next Pending node (respecting topology / branch / loop skip),
+    /// returning whether a node was executed, the node, and its result. Loop nodes are executed
+    /// inline (their bodies run via <see cref="RunLoopBodyAsync"/>).
+    /// </summary>
+    public async Task<(bool Executed, IWorkflowExecutable? Node, StepExecutionResult? Result)> ExecuteNextPendingNodeAsync(
+        Workflow workflow,
+        Blackboard blackboard,
+        HashSet<Guid> skip,
+        HashSet<Guid> loopBodyIds,
+        IReadOnlyList<IWorkflowExecutable> executionOrder,
+        CancellationToken ct)
+    {
         foreach (var node in executionOrder)
         {
             if (node.State == WorkflowState.Completed)
@@ -109,7 +225,7 @@ internal sealed class SequentialOrchestrator
                 continue;
             }
 
-            // F20：非选中分支的节点跳过（保持 Pending；工作流完成判定在循环结束后统一处理）。
+            // F20：非选中分支的节点跳过（保持 Pending）。
             if (skip.Contains(node.Id))
             {
                 _logger.LogDebug("跳过非选中分支节点 {NodeName}", node.Name);
@@ -118,74 +234,83 @@ internal sealed class SequentialOrchestrator
 
             ct.ThrowIfCancellationRequested();
 
-            // F20：Loop 节点在编排器内联执行 body（共享 Blackboard 注入 itemVariable），
-            // 不经由独立执行器（类比 Start/End 这类结构型节点，仅承载语义、不产生自身 artifact 副作用）。
+            // F20：Loop 节点在编排器内联执行 body（共享 Blackboard 注入 itemVariable）。
             if (node.Type == StepType.Loop && node is WorkflowNode loopNode)
             {
                 await RunLoopBodyAsync(workflow, loopNode, executionOrder, blackboard, skip, ct);
-                continue;
+                return (true, node, null);
             }
 
-            var ctx = await BuildWorkflowContext(workflow, node, executionOrder, blackboard, ct);
-            var result = await ExecuteStepWithRetryAsync(workflow, node, ctx, ct);
-
-            switch (result.Outcome)
-            {
-                case StepOutcome.Success:
-                    node.SetResult(result.Output ?? "");
-                    workflow.SetState(WorkflowState.Running);
-                    _repository.Update(workflow);
-                    await _unitOfWork.SaveChangesAsync(ct);
-                    await _eventBus.PublishAsync(
-                        new StepCompleted(workflow.Id, node.Id, node.Name, node.Order, result.Output, result.Duration,
-                            node.Type, result.Tokens), ct);
-
-                    // F20：Condition 分支——执行成功后按结果计算非选中分支的 skip 集合。
-                    if (node.Type == StepType.Condition)
-                        ApplyBranchSkip(workflow, node.Id, node.Result!, skip);
-
-                    // Reflect node state in the legacy Steps projection for explicit DAGs.
-                    if (workflow.IsDag) workflow.SyncStepsFromGraph();
-                    break;
-
-                case StepOutcome.FailedRetry:
-                    await _eventBus.PublishAsync(
-                        new StepFailed(workflow.Id, node.Id, node.Name, node.Order,
-                            result.ErrorMessage ?? "Retry exhausted", result.Duration,
-                            node.Type, result.Tokens), ct);
-                    await RollbackCompletedStepsAsync(workflow, node.Order, node.Name,
-                        result.ErrorMessage ?? "Retry exhausted", ct);
-                    return;
-
-                case StepOutcome.FailedRollback:
-                    await _eventBus.PublishAsync(
-                        new StepFailed(workflow.Id, node.Id, node.Name, node.Order,
-                            result.ErrorMessage, result.Duration,
-                            node.Type, result.Tokens), ct);
-                    await RollbackCompletedStepsAsync(workflow, node.Order, node.Name,
-                        result.ErrorMessage ?? "Unrecoverable error", ct);
-                    return;
-
-                case StepOutcome.NeedsIntervention:
-                    workflow.SetState(WorkflowState.Paused);
-                    _repository.Update(workflow);
-                    await _unitOfWork.SaveChangesAsync(ct);
-                    _logger.LogWarning("Workflow {WorkflowId} paused for intervention at node {NodeName}",
-                        workflow.Id, node.Name);
-                    return;
-            }
+            var result = await RunSingleNodeAsync(workflow, node, blackboard, executionOrder, skip, ct);
+            return (true, node, result);
         }
 
-        // F20：完成判定——循环结束后若仍 Running（所有非跳过节点均已执行），标记 Completed。
-        // 此前「最后一个节点即完成」的逻辑在分支跳过末端节点时会漏判，故改为循环后统一判定。
-        if (workflow.CurrentState == WorkflowState.Running)
+        return (false, null, null);
+    }
+
+    /// <summary>
+    /// Builds context for and executes a single node, persisting per-step state, publishing
+    /// domain events, and applying branch/loop side effects. Terminal outcomes (Failed*/NeedsIntervention)
+    /// leave the workflow in a recoverable state (RolledBack / Paused).
+    /// </summary>
+    private async Task<StepExecutionResult?> RunSingleNodeAsync(
+        Workflow workflow,
+        IWorkflowExecutable node,
+        Blackboard blackboard,
+        IReadOnlyList<IWorkflowExecutable> executionOrder,
+        HashSet<Guid> skip,
+        CancellationToken ct)
+    {
+        var ctx = await BuildWorkflowContext(workflow, node, executionOrder, blackboard, ct);
+        var result = await ExecuteStepWithRetryAsync(workflow, node, ctx, ct);
+
+        switch (result.Outcome)
         {
-            workflow.Complete();
-            _repository.Update(workflow);
-            await _unitOfWork.SaveChangesAsync(ct);
-            await _eventBus.PublishAsync(
-                new WorkflowCompleted(workflow.Id, workflow.Name, workflow.Nodes.Count, workflow.TenantId), ct);
+            case StepOutcome.Success:
+                node.SetResult(result.Output ?? "");
+                workflow.SetState(WorkflowState.Running);
+                _repository.Update(workflow);
+                await _unitOfWork.SaveChangesAsync(ct);
+                await _eventBus.PublishAsync(
+                    new StepCompleted(workflow.Id, node.Id, node.Name, node.Order, result.Output, result.Duration,
+                        node.Type, result.Tokens), ct);
+
+                // F20：Condition 分支——执行成功后按结果计算非选中分支的 skip 集合。
+                if (node.Type == StepType.Condition)
+                    ApplyBranchSkip(workflow, node.Id, node.Result!, skip);
+
+                // Reflect node state in the legacy Steps projection for explicit DAGs.
+                if (workflow.IsDag) workflow.SyncStepsFromGraph();
+                break;
+
+            case StepOutcome.FailedRetry:
+                await _eventBus.PublishAsync(
+                    new StepFailed(workflow.Id, node.Id, node.Name, node.Order,
+                        result.ErrorMessage ?? "Retry exhausted", result.Duration,
+                        node.Type, result.Tokens), ct);
+                await RollbackCompletedStepsAsync(workflow, node.Order, node.Name,
+                    result.ErrorMessage ?? "Retry exhausted", ct);
+                break;
+
+            case StepOutcome.FailedRollback:
+                await _eventBus.PublishAsync(
+                    new StepFailed(workflow.Id, node.Id, node.Name, node.Order,
+                        result.ErrorMessage, result.Duration,
+                        node.Type, result.Tokens), ct);
+                await RollbackCompletedStepsAsync(workflow, node.Order, node.Name,
+                    result.ErrorMessage ?? "Unrecoverable error", ct);
+                break;
+
+            case StepOutcome.NeedsIntervention:
+                workflow.SetState(WorkflowState.Paused);
+                _repository.Update(workflow);
+                await _unitOfWork.SaveChangesAsync(ct);
+                _logger.LogWarning("Workflow {WorkflowId} paused for intervention at node {NodeName}",
+                    workflow.Id, node.Name);
+                break;
         }
+
+        return result;
     }
 
     /// <summary>
@@ -524,6 +649,12 @@ internal sealed class SequentialOrchestrator
                             bodyNode.Type, result.Tokens), ct);
                         await RollbackCompletedStepsAsync(workflow, bodyNode.Order, bodyNode.Name,
                             result.ErrorMessage ?? "Loop body 失败", ct);
+                        // 关键修复（F25 审查 P1）：失败分支必须把 Loop 节点本身置为 Completed，
+                        // 否则 RunToCompletionAsync 的 while 条件（last 为 null）恒真 → Loop 节点被反复重选 → 活锁。
+                        // 工作流整体态已由 RollbackCompletedStepsAsync 置为 RolledBack，不会被误判完成。
+                        loopNode.SetResult($"loop: body 节点 {bodyNode.Name} 失败并回滚");
+                        _repository.Update(workflow);
+                        await _unitOfWork.SaveChangesAsync(ct);
                         return;
                 }
             }

@@ -127,5 +127,11 @@ public enum AuditActionType
     UpdateEvaluationDataset,
 
     /// <summary>An evaluation dataset was deleted (F24).</summary>
-    DeleteEvaluationDataset
+    DeleteEvaluationDataset,
+
+    /// <summary>A workflow debug session was started/reset (F25).</summary>
+    DebugRun,
+
+    /// <summary>A node was retried during a debug session (F25).</summary>
+    StepRetry
 }

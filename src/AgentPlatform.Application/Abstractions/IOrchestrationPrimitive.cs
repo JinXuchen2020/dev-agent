@@ -42,7 +42,38 @@ public interface IOrchestrationPrimitive
     /// Gets a snapshot of the workflow's current execution state from persistent storage.
     /// </summary>
     Task<WorkflowStateSnapshot> GetStateAsync(Guid workflowId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Executes the next Pending node of a debugged workflow (respecting topology / branch /
+    /// loop), then pauses. The supplied <paramref name="blackboard"/> is mutated in place by
+    /// the node executors (e.g. Variable nodes) and should be persisted by the caller.
+    /// </summary>
+    Task<DebugStepResult> DebugStepAsync(Guid workflowId, Blackboard blackboard, CancellationToken ct = default);
+
+    /// <summary>
+    /// Continues a debugged workflow to completion from its current state, persisting the
+    /// <paramref name="blackboard"/> across steps. Equivalent to a full run driven by the
+    /// caller-supplied blackboard (rather than the engine's private one).
+    /// </summary>
+    Task<WorkflowState> DebugResumeAsync(Guid workflowId, Blackboard blackboard, CancellationToken ct = default);
+
+    /// <summary>
+    /// Re-runs a specific node within a debug session (the node is reset to Pending before
+    /// execution). The supplied <paramref name="blackboard"/> is mutated in place.
+    /// </summary>
+    Task<DebugStepResult> DebugRetryNodeAsync(Guid workflowId, Guid nodeId, Blackboard blackboard, CancellationToken ct = default);
 }
+
+/// <summary>
+/// Outcome of a single debug step (F25).
+/// </summary>
+/// <param name="Executed">Whether a node was executed (false when no Pending node remains).</param>
+/// <param name="WorkflowState">The workflow's state after the step.</param>
+/// <param name="Node">The snapshot of the executed node, or <c>null</c> when nothing executed.</param>
+public record DebugStepResult(
+    bool Executed,
+    WorkflowState WorkflowState,
+    StepSnapshot? Node);
 
 /// <summary>
 /// Represents a point-in-time snapshot of a workflow's overall state.

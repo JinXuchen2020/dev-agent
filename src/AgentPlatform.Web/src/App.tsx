@@ -21,6 +21,7 @@ const AgentsPage = lazy(() => import('./pages/AgentsPage'));
 const WorkflowsPage = lazy(() => import('./pages/WorkflowsPage'));
 const WorkflowDetailPage = lazy(() => import('./pages/WorkflowDetailPage'));
 const WorkflowCanvasPage = lazy(() => import('./pages/WorkflowCanvasPage'));
+const WorkflowDebugPage = lazy(() => import('./pages/WorkflowDebugPage'));
 const AgentRolesPage = lazy(() => import('./pages/AgentRolesPage'));
 const AgentConfigurationsPage = lazy(() => import('./pages/AgentConfigurationsPage'));
 const CredentialSettingsPage = lazy(() => import('./pages/CredentialSettingsPage'));
@@ -110,6 +111,7 @@ const App: React.FC = () => {
                   <Route path="/workflows" element={<WorkflowsPage />} />
                   <Route path="/workflows/new" element={<WorkflowCanvasPage />} />
                   <Route path="/workflows/:id" element={<WorkflowDetailPage />} />
+                  <Route path="/workflows/:id/debug" element={<WorkflowDebugPage />} />
                   <Route path="/workflows/:id/edit" element={<WorkflowCanvasPage />} />
                   <Route path="/agent-roles" element={<AgentRolesPage />} />
                   <Route path="/agent-configurations" element={<AgentConfigurationsPage />} />

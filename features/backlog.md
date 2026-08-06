@@ -240,10 +240,10 @@
 - 落地：ExecutionLogEntry 增 TokensIn/TokensOut/NodeType 三列（迁移 ExtendExecutionLogEntry）+ ExecutionLogDetailPage 三列；EvaluationDataset(ITenantScoped) 聚合 + 6 端点 + RunEvaluation（克隆工作流逐 case 跑编排、Exact/Contains 比对、汇总通过率/逐 case 报告）+ 前端 EvaluationDatasetsPage（CRUD+运行+报告）+ i18n 中/en 对称。
 - 已知残留（非阻断）：①节点级 Input 采集 v1 不做；②Token 实际落库依赖编排器对评估克隆工作流产生 ExecutionLog（与 F20 Trace 共用管线，单测 mock 验证求和）；③BDD e2e（评估门控）属增强。
 
-### F25 · 工作流调试器（变量监视 + 单步重跑 + 错误分支）  [P1]  open  ⚠️高风险（执行引擎支持暂停/单步/局部重跑，侵入大）
-- 设计文档：`features/workflow-debugger.md`（已建骨架，§6 决策待锁定）
-- 目标：调试运行模式——变量监视 + 单步执行 + 单节点重跑（override）+ 错误分支恢复。复用 F24 Trace 数据。
-- 风险：🔴 orchestrator 需支持暂停/单步/局部重算下游。实现前须锁定 §6（S1 引擎介入深度 / S3 重跑影响范围）。建议先做变量监视+错误重跑（低风险），单步全链作增强。
+### F25 · 工作流调试器（变量监视 + 单步重跑 + 错误分支）  [P1]  done  🟡中风险（变量持久化需新增列+迁移；引擎能力 Pause/Resume/RetryStep/RollbackTo/GetState+RunNode 已存在，零引擎侵入 · 2026-08-06 起 feat/f25-workflow-debugger · 2026-08-06 全栈闭环）
+- 设计文档：`features/workflow-debugger.md`（§6 决策已锁定初稿，待用户确认；实测引擎已具备调试内核）
+- 目标：调试运行模式——变量监视（跨节点累积 Blackboard 持久化）+ 单节点运行/重跑（override）+ 错误分支恢复 + 状态/变量查看 + 会话重置。复用 F24 Trace。
+- 风险：🟡 变量持久化需 Workflow 新增 `DebugVariablesJson` 列 + 一次 EF 迁移（最小）；API 暴露既有引擎能力，无内核改动。v1 不做引擎级单步全链（列 v2）。
 
 ### F26 · 企业增强（多工作空间 / 用量仪表盘 / 工作流 diff）  [P2]  open  ⚠️极高风险（多工作空间 = 第二租户维度，全仓破坏性；diff/仪表盘低风险）
 - 设计文档：`features/enterprise-enhancements.md`（已建骨架，§6 决策待锁定）

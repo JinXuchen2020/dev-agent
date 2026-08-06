@@ -13,6 +13,14 @@ using AgentPlatform.Application.Workflows.Commands.UnpublishWorkflow;
 using AgentPlatform.Application.Workflows.Queries.GetPublishStatus;
 using AgentPlatform.Application.Workflows.Versioning;
 using AgentPlatform.Application.WorkflowTriggers;
+using AgentPlatform.Application.Debug.Commands.StartDebugSession;
+using AgentPlatform.Application.Debug.Commands.ResetDebugSession;
+using AgentPlatform.Application.Debug.Commands.DebugStep;
+using AgentPlatform.Application.Debug.Commands.DebugResume;
+using AgentPlatform.Application.Debug.Commands.DebugRetryNode;
+using AgentPlatform.Application.Debug.Commands.DebugRollback;
+using AgentPlatform.Application.Debug.Queries.GetDebugState;
+using AgentPlatform.Application.Debug.Queries.GetDebugVariables;
 using AgentPlatform.Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -419,6 +427,128 @@ public sealed class WorkflowsController : ControllerBase
             return NotFound();
         return Ok(result);
     }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // F25 · Workflow Debugger (变量监视 + 单步重跑 + 错误分支)
+    // 写操作仅 Admin/Operator；读操作继承类级 [Authorize]。
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 启动（或重置）一个工作流的调试会话：重置所有节点为 Pending，并新建一条 DebugSession。
+    /// 可选携带 initialContext 作为调试初始上下文。
+    /// </summary>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpPost("{id:guid}/debug/run")]
+    public async Task<IActionResult> StartDebugSession(
+        Guid id,
+        [FromBody] StartDebugSessionRequest? request,
+        CancellationToken ct = default)
+    {
+        var command = new StartDebugSessionCommand(
+            id, _tenant.GetTenantId(), request?.InitialContext);
+        var result = await _mediator.Send(command, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// 单步执行：运行当前调试会话中下一个 Pending 节点，然后暂停并回写变量快照。
+    /// </summary>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpPost("{id:guid}/debug/step")]
+    public async Task<IActionResult> DebugStep(
+        Guid id,
+        [FromBody] DebugSessionRequest request,
+        CancellationToken ct = default)
+    {
+        var command = new DebugStepCommand(id, request.SessionId, _tenant.GetTenantId());
+        var result = await _mediator.Send(command, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// 续跑：从当前调试状态继续运行至完成（绕过人工审批门时的调试用）。
+    /// </summary>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpPost("{id:guid}/debug/resume")]
+    public async Task<IActionResult> DebugResume(
+        Guid id,
+        [FromBody] DebugSessionRequest request,
+        CancellationToken ct = default)
+    {
+        var command = new DebugResumeCommand(id, request.SessionId, _tenant.GetTenantId());
+        var result = await _mediator.Send(command, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// 单节点重跑：在调试会话中重新执行指定节点（可携带覆盖配置）。
+    /// </summary>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpPost("{id:guid}/debug/retry-node")]
+    public async Task<IActionResult> DebugRetryNode(
+        Guid id,
+        [FromBody] DebugRetryNodeRequest request,
+        CancellationToken ct = default)
+    {
+        var command = new DebugRetryNodeCommand(
+            id, request.SessionId, request.NodeId, _tenant.GetTenantId(), request.OverriddenConfig);
+        var result = await _mediator.Send(command, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// 错误分支/精确回滚：将调试中的工作流回滚到指定步骤序（将后续节点置回 Pending）。
+    /// </summary>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpPost("{id:guid}/debug/rollback")]
+    public async Task<IActionResult> DebugRollback(
+        Guid id,
+        [FromBody] DebugRollbackRequest request,
+        CancellationToken ct = default)
+    {
+        var command = new DebugRollbackCommand(
+            id, request.SessionId, request.TargetStepOrder, _tenant.GetTenantId());
+        var result = await _mediator.Send(command, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// 查询调试中工作流的当前执行状态快照（各节点状态/结果）。仅鉴权用户可见。
+    /// </summary>
+    [HttpGet("{id:guid}/debug/state")]
+    public async Task<IActionResult> GetDebugState(
+        Guid id,
+        CancellationToken ct = default)
+    {
+        var result = await _mediator.Send(new GetDebugStateQuery(id, _tenant.GetTenantId()), ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// 查询调试会话累积的黑板变量（变量监视）。仅鉴权用户可见。
+    /// </summary>
+    [HttpGet("{id:guid}/debug/variables")]
+    public async Task<IActionResult> GetDebugVariables(
+        Guid id,
+        [FromQuery] Guid sessionId,
+        CancellationToken ct = default)
+    {
+        var result = await _mediator.Send(new GetDebugVariablesQuery(sessionId, _tenant.GetTenantId()), ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// 重置调试会话与工作流到干净初始态（复用启动逻辑）。
+    /// </summary>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpPost("{id:guid}/debug/reset")]
+    public async Task<IActionResult> ResetDebugSession(
+        Guid id,
+        CancellationToken ct = default)
+    {
+        var result = await _mediator.Send(new ResetDebugSessionCommand(id, _tenant.GetTenantId()), ct);
+        return Ok(result);
+    }
 }
 
 /// <summary>
@@ -477,4 +607,31 @@ public sealed record PutScheduleTriggerRequest(
     string Cron,
     string? Timezone = null,
     bool Enabled = true);
+
+/// <summary>
+/// Request model for starting a debug session (F25). <see cref="InitialContext"/> 为可选的
+/// 调试初始上下文；为空则沿用工作流既有 initialContext。
+/// </summary>
+public sealed record StartDebugSessionRequest(string? InitialContext = null);
+
+/// <summary>
+/// Request model referencing an active debug session (F25). 多数调试写操作都需要 <see cref="SessionId"/>。
+/// </summary>
+public sealed record DebugSessionRequest(Guid SessionId);
+
+/// <summary>
+/// Request model for re-running a single node in a debug session (F25).
+/// <see cref="OverriddenConfig"/> 可选，覆盖该节点的运行配置后再重跑。
+/// </summary>
+public sealed record DebugRetryNodeRequest(
+    Guid SessionId,
+    Guid NodeId,
+    string? OverriddenConfig = null);
+
+/// <summary>
+/// Request model for rolling back a debugged workflow to a target step order (F25).
+/// </summary>
+public sealed record DebugRollbackRequest(
+    Guid SessionId,
+    int TargetStepOrder);
 

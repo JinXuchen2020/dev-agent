@@ -51,6 +51,12 @@ import type {
   WorkflowTemplateDetail,
   WorkflowTemplateCategory,
   WorkflowTemplateCategoryOption,
+  StartDebugSessionResponse,
+  DebugStepResponse,
+  DebugResumeResponse,
+  DebugRetryResponse,
+  DebugVariablesResponse,
+  DebugWorkflowStateSnapshot,
 } from '../types';
 
 const api = axios.create({
@@ -204,6 +210,62 @@ export const resolveApproval = (
 export const runWorkflowNode = (id: string, nodeId: string) =>
   api
     .post<WorkflowNodeRunResult>(`/workflows/${id}/nodes/${nodeId}/run`)
+    .then((r) => r.data);
+
+// ── F25 Workflow Debugger ──
+// 调试写操作后端限 Admin,Operator；读操作继承类级 [Authorize]。
+export const startDebugSession = (workflowId: string, initialContext?: string) =>
+  api
+    .post<StartDebugSessionResponse>(`/workflows/${workflowId}/debug/run`, {
+      initialContext: initialContext ?? null,
+    })
+    .then((r) => r.data);
+
+export const resetDebugSession = (workflowId: string) =>
+  api
+    .post<StartDebugSessionResponse>(`/workflows/${workflowId}/debug/reset`)
+    .then((r) => r.data);
+
+export const debugStep = (workflowId: string, sessionId: string) =>
+  api
+    .post<DebugStepResponse>(`/workflows/${workflowId}/debug/step`, { sessionId })
+    .then((r) => r.data);
+
+export const debugResume = (workflowId: string, sessionId: string) =>
+  api
+    .post<DebugResumeResponse>(`/workflows/${workflowId}/debug/resume`, { sessionId })
+    .then((r) => r.data);
+
+export const debugRetryNode = (
+  workflowId: string,
+  sessionId: string,
+  nodeId: string,
+  overriddenConfig?: string,
+) =>
+  api
+    .post<DebugRetryResponse>(`/workflows/${workflowId}/debug/retry-node`, {
+      sessionId,
+      nodeId,
+      overriddenConfig: overriddenConfig ?? null,
+    })
+    .then((r) => r.data);
+
+export const debugRollback = (workflowId: string, sessionId: string, targetStepOrder: number) =>
+  api
+    .post<DebugResumeResponse>(`/workflows/${workflowId}/debug/rollback`, {
+      sessionId,
+      targetStepOrder,
+    })
+    .then((r) => r.data);
+
+export const getDebugState = (workflowId: string) =>
+  api.get<DebugWorkflowStateSnapshot>(`/workflows/${workflowId}/debug/state`).then((r) => r.data);
+
+export const getDebugVariables = (workflowId: string, sessionId: string) =>
+  api
+    .get<DebugVariablesResponse>(`/workflows/${workflowId}/debug/variables`, {
+      params: { sessionId },
+    })
     .then((r) => r.data);
 
 // F7 工作流版本管理 + 导入导出
