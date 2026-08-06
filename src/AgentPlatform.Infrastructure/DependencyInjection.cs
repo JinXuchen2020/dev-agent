@@ -112,6 +112,8 @@ public static class DependencyInjection
         services.AddScoped<IAgentConfigurationRepository, AgentConfigurationRepository>();
         // ── F24 评估数据集（租户隔离）仓储 ──
         services.AddScoped<IEvaluationDatasetRepository, EvaluationDatasetRepository>();
+        // ── F25 工作流调试会话（租户隔离）仓储 ──
+        services.AddScoped<IDebugSessionRepository, DebugSessionRepository>();
         services.AddSingleton<IYamlConfigurationParser, YamlConfigurationParserService>();
         services.AddSingleton<IToolRegistry, InMemoryToolRegistry>();
 

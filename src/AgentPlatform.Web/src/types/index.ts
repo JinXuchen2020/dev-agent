@@ -265,6 +265,60 @@ export interface WorkflowDetail {
   updatedAt: string;
 }
 
+// ── F25 Workflow Debugger ──
+// 后端枚举以 int 序列化（System.Text.Json 默认）。保持与后端一致的值：
+// DebugSessionStatus: Initialized=0, Running=1, Paused=2, Completed=3, Failed=4, RolledBack=5
+// WorkflowState:      Pending=0, Running=1, Paused=2, Completed=3, Failed=4, RolledBack=5
+export type DebugSessionStatus = number;
+export type WorkflowExecutionState = number;
+
+// 后端 StepSnapshot 的前端镜像（IOrchestrationPrimitive.StepSnapshot）。
+export interface DebugStepSnapshot {
+  stepId: string;
+  order: number;
+  stepName: string;
+  state: WorkflowExecutionState;
+  result: string | null;
+  errorDetail: string | null;
+}
+
+// 后端 WorkflowStateSnapshot 的前端镜像（GetDebugStateQuery 响应）。
+export interface DebugWorkflowStateSnapshot {
+  workflowId: string;
+  currentState: WorkflowExecutionState;
+  currentStepOrder: number;
+  steps: DebugStepSnapshot[];
+}
+
+export interface StartDebugSessionResponse {
+  sessionId: string;
+  workflowId: string;
+  status: DebugSessionStatus;
+}
+
+export interface DebugStepResponse {
+  executed: boolean;
+  workflowState: WorkflowExecutionState;
+  node: DebugStepSnapshot | null;
+  variables: Record<string, string>;
+}
+
+export interface DebugResumeResponse {
+  workflowState: WorkflowExecutionState;
+  variables: Record<string, string>;
+}
+
+export interface DebugRetryResponse {
+  executed: boolean;
+  workflowState: WorkflowExecutionState;
+  node: DebugStepSnapshot | null;
+  variables: Record<string, string>;
+}
+
+export interface DebugVariablesResponse {
+  variables: Record<string, string>;
+}
+
 // F20 S3 — HITL 人工审批门（与 HumanApprovalDto 字段镜像；Status 为整数枚举：
 // Pending=0 / Approved=1 / Rejected=2，见 AgentPlatform.Domain.Enums.HumanApprovalStatus）。
 export interface ApprovalDto {

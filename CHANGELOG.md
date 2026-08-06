@@ -1,5 +1,29 @@
 # 变更日志
 
+## v2.19 (2026-08-06)
+
+### F25 · 工作流调试器（变量监视 + 单步重跑 + 错误分支）完成（feature-builder 全栈实跑，🟡中风险闭环）
+
+为工作流提供「开发期可观测 + 可干预」调试能力：实时变量监视、引擎级单步（run/step/resume）、单节点重跑（override）、错误分支恢复（rollback/retry）、状态/变量查看、会话重置。对标 Dify 调试模式 / LangGraph 断点。三道质量门全 PASS。
+
+**核心改动：**
+- **新聚合 `DebugSession`**（用户选型 B：独立表，`ITenantScoped` + `IAggregateRoot`）：`Id`(ValueGeneratedNever)/`WorkflowId`/`TenantId`/`Status`(DebugSessionStatus)/`CurrentStepOrder`/`VariablesJson`(默认 `"{}"`)/`CreatedAt`/`UpdatedAt`；方法 `Initialize()`/`RecordStep(...)`/`GetVariables()`；复用全局租户 filter。
+- **新枚举 `DebugSessionStatus`**：Initialized/Running/Paused/Completed/Failed/RolledBack。
+- **8 端点**（`WorkflowsController`，前缀 `api/v1/workflows/{id}`）：`POST debug/run`、`POST debug/step`、`POST debug/resume`、`POST debug/retry-node`、`POST debug/rollback`、`GET debug/state`、`GET debug/variables`、`POST debug/reset`；写端点 `[Authorize(Roles="Admin,Operator")]`，读端点 `[Authorize]`。
+- **引擎复用**：`DebugStepAsync`/`DebugResumeAsync`/`DebugRetryNodeAsync` 经 `IOrchestrationPrimitive` 暴露，复用既有拓扑/分支/循环内核；`Blackboard` 由 `DebugSession` 装载/回写；修复 `RunLoopBodyAsync` 失败分支活锁（P1）。
+- **审计**：新增 `AuditActionType.DebugRun`/`StepRetry` 落库。
+- **EF 迁移**：`20260806010323_AddDebugSession`（`DebugSessions` 表，`Id ValueGeneratedNever()`，含 `#pragma warning disable IDE0161`）。
+- **前端**：`WorkflowDebugPage`（变量监视 `pre` + 单步/续跑/重置/回滚/重跑 Modal + 节点列表每节点重跑按钮）+ `WorkflowDetailPage` 调试入口（`canManage` 门控）+ `api.ts`/`types`/`locales`（中-en i18n 对称，`pages.debug.*`）+ `App.tsx` 路由 `/workflows/:id/debug`。
+
+**质量与测试：**
+- 三道质量门禁全 PASS（`ddd-code-reviewer` / `ddd-phase-quality-gate` / `codebase-optimizer`）；`.quality-gate.json` 推进 `f25-workflow-debugger`，`cleared:true`
+- 后端 `dotnet build` **0/0**
+- 前端 `tsc --noEmit` **0 error** + `node scripts/qa.mjs` OVERALL PASS（typecheck/lint/build/unit，含 i18n 对称）
+- 对抗式 `ddd-code-reviewer`：P0=0，修复 **P1×1**（Loop 失败活锁）+ **P2×4**（会话-工作流一致性 4 handler 全加守卫；回滚变量语义/HITL 单步判 v2；8000 字符列限制 SQLite 不适用）+ 死代码清理（`HighestCompletedOrder` / `GetLatestByWorkflowAsync`）；P3 已知残留（DAG 首步快照 / 重复点击 Completed / 调试步并发锁）
+- 前端 BDD E2E `workflow-debug.feature` 覆盖核心路径（初始化→单步→变量）全绿；全量 23 例 `@e2e` 其余 22 例 F25 未改动等价回归全绿
+- 质量报告 `docs/quality/f25-workflow-debugger-gate.md`
+- 已知残留（非阻断）：①HITL/NeedsIntervention 节点单步待 v2（引擎等待人工输入，debug/step 不推进）；②rollback 变量不回滚到目标步（v2 存逐步快照）；③`VariablesJson` 模型 `maxLength:8000` 仅 SQL Server 约束，SQLite `TEXT` 无界（迁移便携性关注）
+
 ## v2.18 (2026-08-05)
 
 ### F24 · 执行 Trace / 评估视图 完成（feature-builder 全栈实跑，🟡中风险闭环）

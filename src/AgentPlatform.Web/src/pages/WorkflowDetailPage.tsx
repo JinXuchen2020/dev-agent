@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Typography, Spin, Descriptions, Tag, Steps, Button, Card, Space } from 'antd';
-import { ArrowLeftOutlined, EditOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, EditOutlined, BugOutlined } from '@ant-design/icons';
 import { getWorkflow } from '../services/api';
 import type { WorkflowDetail } from '../types';
 import { useTranslation } from 'react-i18next';
@@ -139,6 +139,11 @@ const WorkflowDetailPage: React.FC = () => {
         {canManage && id && (
           <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/workflows/${id}/edit`)}>
             {t('pages.workflows.edit')}
+          </Button>
+        )}
+        {canManage && id && (
+          <Button icon={<BugOutlined />} onClick={() => navigate(`/workflows/${id}/debug`)}>
+            {t('pages.debug.title')}
           </Button>
         )}
       </Space>
