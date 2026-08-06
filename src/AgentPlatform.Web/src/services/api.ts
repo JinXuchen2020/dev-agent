@@ -42,6 +42,9 @@ import type {
   PlatformModelDto,
   ProviderModelInfo,
   DashboardSummary,
+  WorkflowUsageList,
+  WorkflowDiffDto,
+  DiffWorkflowRequest,
   WorkflowTriggersResponse,
   ScheduleTriggerRequest,
   ScheduleTriggerView,
@@ -539,6 +542,26 @@ export const getDashboardSummary = (opts?: {
     .get<DashboardSummary>('/analytics/summary', { params, signal })
     .then((r) => r.data);
 };
+
+// F26 工作流用量（GET /analytics/workflows）。按工作流聚合执行数 / 成功率 / 延迟 / Token。
+// 不传 from/to 时后端默认返回最近 14 天；范围上限 366 天。
+export const getWorkflowUsage = (opts?: {
+  from?: string;
+  to?: string;
+  signal?: AbortSignal;
+}) => {
+  const { signal, ...params } = opts ?? {};
+  return api
+    .get<WorkflowUsageList>('/analytics/workflows', { params, signal })
+    .then((r) => r.data);
+};
+
+// F26 工作流定义 diff（POST /workflows/{id}/diff）。只读查询，对比两个工作流定义
+// （版本对 / 某版本 vs 当前 / 另一工作流 / 当前 vs 最新版本）。返回结构化增删改。
+export const diffWorkflow = (workflowId: string, req: DiffWorkflowRequest) =>
+  api
+    .post<WorkflowDiffDto>(`/workflows/${workflowId}/diff`, req)
+    .then((r) => r.data);
 
 // Normalize an unknown thrown value into a human-readable message.
 // Preserves axios-style `response.data.title` / `response.data.message` when present,

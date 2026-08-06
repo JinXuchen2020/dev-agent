@@ -1,5 +1,26 @@
 # 变更日志
 
+## v2.20 (2026-08-06)
+
+### F26 · 企业增强 v1（用量仪表盘 + 工作流 diff）完成（feature-builder 全栈实跑，🟢低风险闭环）
+
+F26 按用户决策 **v1 仅做低风险纯增量（用量仪表盘 + 工作流 diff）**，多工作空间（第二租户维度）独立排期、不触碰 `ITenantScoped`/`TenantProvider`。三道质量门全 PASS。
+
+**核心改动：**
+- **用量仪表盘（后端）**：`GetWorkflowUsageQuery`（`Analytics`）按工作流聚合执行数 / 成功率 / token / 平均时延，支持 7/14/30 天范围（`AnalyticsController` 做上限校验）；端点 `GET /api/v1/analytics/workflows`。
+- **工作流 diff（后端）**：`DiffWorkflowQuery`（`Versioning`）`POST /api/v1/workflows/{id}/diff`，以**稳定键**比对两版本——节点按 `Name`、边按「端点名 + label」（修复快照 id 每次保存重生导致 id-based diff 全错）；`WorkflowGraphSnapshot.FromWorkflow` 改用 `Workflow.GetEffectiveGraph()`（兼容 `_steps`-only 旧工作流空快照）。
+- **用量仪表盘（前端）**：`WorkflowUsagePage`（`/usage`）KPI 卡片（执行数/成功率/token/平均时延）+ 竖向 `BarChart` 执行数 + 可排序 Table + `Segmented` 7/14/30 天切换；`App.tsx` 路由 + `AppLayout.tsx`「用量」菜单（`BarChartOutlined`）。
+- **工作流 diff（前端）**：`WorkflowDiffModal`——概览标签 + 上下文变更 `Descriptions` + 新增/移除/变更节点 `Collapse` + 边新增/移除段；`WorkflowsPage` 版本抽屉「对比」按钮拉取并打开；`api.ts`/`types`/`locales`（中-en i18n 对称，`pages.usage.*` / `pages.workflows.diff.*`）。
+- **BDD E2E**：`e2e/features/workflow-usage.feature` 覆盖用量页渲染 + 版本历史抽屉打开（全绿）；`bddgen` 绑定生成 `e2e/.features-gen/.../workflow-usage.feature.spec.js`。
+
+**质量与测试：**
+- 三道质量门禁全 PASS（`ddd-code-reviewer` / `ddd-phase-quality-gate` / `codebase-optimizer`）；`.quality-gate.json` 推进 `f26-enterprise-enhancements`，`cleared:true`
+- 后端 `dotnet build` **0/0**；`Application.Tests 188` / `ArchitectureTests 9` / `Api.Tests 35` / `Infrastructure.Tests 124` 全绿
+- 前端 `tsc --noEmit` **0 error** + `node scripts/qa.mjs` OVERALL PASS（typecheck/lint/build/unit，含 i18n 对称，vitest 44）+ `eslint 0`
+- 对抗式 `ddd-code-reviewer`：修复 **P1×3**（边「changed」误报——快照 id 重生、移除 changedEdges 概念；`NodeEquals` 运算符笔误 `x.X==y.Y`→`x.X==y.X`；旧式 `_steps` 工作流空快照——`GetEffectiveGraph`）+ **P2×1**（重复节点名 `ToDictionary`→`ToNameMap` 首名优先）+ **P3×1**（删死 const `MaxRangeDays`）
+- 质量报告 `docs/quality/f26-enterprise-enhancements-gate.md`
+- 已知残留（非阻断）：①多工作空间（第二租户维度）不在 v1，独立排期；②`pages.workflows.diff.changedEdges` i18n key 保留未消费（未来清理）
+
 ## v2.19 (2026-08-06)
 
 ### F25 · 工作流调试器（变量监视 + 单步重跑 + 错误分支）完成（feature-builder 全栈实跑，🟡中风险闭环）

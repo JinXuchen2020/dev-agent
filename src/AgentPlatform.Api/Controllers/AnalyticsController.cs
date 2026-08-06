@@ -1,4 +1,5 @@
 using AgentPlatform.Application.Analytics.Queries.GetDashboardSummary;
+using AgentPlatform.Application.Analytics.Queries.GetWorkflowUsage;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -50,6 +51,30 @@ public sealed class AnalyticsController : ControllerBase
             return BadRequest($"date range cannot exceed {MaxRangeDays} days.");
 
         var result = await _mediator.Send(new GetDashboardSummaryQuery(from, to), ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Returns per-workflow usage metrics (executions, success rate, average latency, tokens)
+    /// for the current tenant within an optional date range. Any authenticated tenant user
+    /// may read it.
+    /// </summary>
+    /// <param name="from">Optional inclusive start date (UTC, ISO-8601). Defaults to 14 days before <paramref name="to"/>.</param>
+    /// <param name="to">Optional inclusive end date (UTC, ISO-8601). Defaults to now (UTC).</param>
+    /// <param name="ct">A cancellation token.</param>
+    [HttpGet("workflows")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetWorkflowUsage(
+        [FromQuery] DateTime? from, [FromQuery] DateTime? to, CancellationToken ct = default)
+    {
+        if (from.HasValue && to.HasValue && from.Value > to.Value)
+            return BadRequest("from must be earlier than or equal to to.");
+
+        if (from.HasValue && to.HasValue && (to.Value - from.Value).TotalDays > MaxRangeDays)
+            return BadRequest($"date range cannot exceed {MaxRangeDays} days.");
+
+        var result = await _mediator.Send(new GetWorkflowUsageQuery(from, to), ct);
         return Ok(result);
     }
 }

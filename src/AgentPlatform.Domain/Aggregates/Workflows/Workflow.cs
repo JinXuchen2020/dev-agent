@@ -304,6 +304,13 @@ public sealed class Workflow : ITenantScoped, IAggregateRoot
     public bool HasGraph => _nodes.Count > 0;
 
     /// <summary>
+    /// 返回用于快照/对比的有效图（节点+边）。当工作流仅有遗留 <see cref="WorkflowStep"/> 而无显式
+    /// DAG 时，自动回退到由步骤重建的链式视图，使版本快照与定义 diff 对遗留工作流同样有效。
+    /// </summary>
+    public (IReadOnlyList<WorkflowNode> Nodes, IReadOnlyList<WorkflowEdge> Edges) GetEffectiveGraph()
+        => (EffectiveNodes, EffectiveEdges);
+
+    /// <summary>
     /// 惰性地将仅有遗留步骤的工作流提升为 DAG（Start → LLM… → End），
     /// 以便无需数据迁移即可执行旧工作流或进行拓扑排序。
     /// </summary>

@@ -733,6 +733,73 @@ export interface DashboardSummary {
   topWorkflows: WorkflowCount[];
 }
 
+// ── F26 工作流用量（GET /analytics/workflows）──
+// 字段名镜像 AgentPlatform.Application.Analytics.Queries.GetWorkflowUsage，
+// 后端 System.Text.Json 默认 camelCase 序列化。
+export interface WorkflowUsageDto {
+  workflowId: string;
+  workflowName: string;
+  executions: number;
+  completed: number;
+  failed: number;
+  /** 成功率（%），completed / (completed + failed)。 */
+  successRate: number;
+  /** 平均单执行延迟（ms）。 */
+  avgLatencyMs: number;
+  totalTokens: number;
+}
+
+export interface WorkflowUsageList {
+  from: string;
+  to: string;
+  items: WorkflowUsageDto[];
+}
+
+// ── F26 工作流定义 diff（POST /workflows/{id}/diff）──
+// 字段名镜像 AgentPlatform.Application.Workflows.Versioning.DiffWorkflow。
+// 节点/边以「名称」为稳定标识（ReplaceGraph 每次编辑都会重新生成 Guid，Id 不可靠）。
+export interface WorkflowDiffNode {
+  id: string;
+  type: number;
+  name: string;
+  x: number;
+  y: number;
+  configJson: string | null;
+  assignedAgentId: string | null;
+}
+
+export interface WorkflowDiffEdge {
+  sourceName: string;
+  targetName: string;
+  label: string | null;
+}
+
+export interface WorkflowDiffChangedNode {
+  id: string;
+  before: WorkflowDiffNode;
+  after: WorkflowDiffNode;
+}
+
+export interface WorkflowDiffDto {
+  workflowId: string;
+  fromLabel: string;
+  toLabel: string;
+  addedNodes: WorkflowDiffNode[];
+  removedNodes: WorkflowDiffNode[];
+  changedNodes: WorkflowDiffChangedNode[];
+  addedEdges: WorkflowDiffEdge[];
+  removedEdges: WorkflowDiffEdge[];
+  contextChanged: boolean;
+  contextBefore: string | null;
+  contextAfter: string | null;
+}
+
+export interface DiffWorkflowRequest {
+  fromVersionId?: string | null;
+  toVersionId?: string | null;
+  otherWorkflowId?: string | null;
+}
+
 // ── F21 工作流触发器（Webhook / 定时 / Chat）──
 // 字段名镜像 AgentPlatform.Application.WorkflowTriggers.*（System.Text.Json 默认 camelCase）。
 

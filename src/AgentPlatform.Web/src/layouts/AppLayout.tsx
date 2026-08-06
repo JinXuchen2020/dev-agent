@@ -18,6 +18,7 @@ import {
   KeyOutlined,
   AppstoreOutlined,
   ExperimentOutlined,
+  BarChartOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '../stores/appStore';
@@ -55,6 +56,7 @@ const AppLayout: React.FC = () => {
     { key: '/research', icon: <GlobalOutlined />, label: t('nav.research') },
     { key: '/template-market', icon: <AppstoreOutlined />, label: t('nav.templateMarket') },
     { key: '/evaluation-datasets', icon: <ExperimentOutlined />, label: t('nav.evaluationDatasets') },
+    { key: '/usage', icon: <BarChartOutlined />, label: t('nav.usage') },
   ];
   if (!isAdminOrOperator) {
     // 仅 Admin/Operator 可见「我的凭据」（与后端 RBAC 对齐）。

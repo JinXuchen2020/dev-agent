@@ -34,6 +34,7 @@ const ConversationDetailPage = lazy(() => import('./pages/ConversationDetailPage
 const ResearchPage = lazy(() => import('./pages/ResearchPage'));
 const TemplateMarketPage = lazy(() => import('./pages/TemplateMarketPage'));
 const EvaluationDatasetsPage = lazy(() => import('./pages/EvaluationDatasetsPage'));
+const WorkflowUsagePage = lazy(() => import('./pages/WorkflowUsagePage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 const App: React.FC = () => {
@@ -125,6 +126,7 @@ const App: React.FC = () => {
                   <Route path="/research" element={<ResearchPage />} />
                   <Route path="/template-market" element={<TemplateMarketPage />} />
                   <Route path="/evaluation-datasets" element={<EvaluationDatasetsPage />} />
+                  <Route path="/usage" element={<WorkflowUsagePage />} />
                   <Route path="*" element={<NotFoundPage />} />
                 </Route>
               </Route>

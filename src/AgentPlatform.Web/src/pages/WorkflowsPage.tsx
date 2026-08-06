@@ -17,8 +17,9 @@ import {
 } from 'antd';
 import { HistoryOutlined, DownloadOutlined, EditOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import type { Workflow, WorkflowVersionSummary, PublishStatus, PublishWorkflowRequest, ApiKey } from '../types';
+import type { Workflow, WorkflowVersionSummary, PublishStatus, PublishWorkflowRequest, ApiKey, WorkflowDiffDto } from '../types';
 import WorkflowTriggersDrawer from '../components/WorkflowTriggersDrawer';
+import WorkflowDiffModal from '../components/WorkflowDiffModal';
 import {
   getWorkflows,
   runWorkflow,
@@ -32,6 +33,7 @@ import {
   publishWorkflow,
   unpublishWorkflow,
   getApiKeys,
+  diffWorkflow,
 } from '../services/api';
 import { useAppStore } from '../stores/appStore';
 import { mapWorkflowStatus, WORKFLOW_STATUS_FILTER_OPTIONS } from '../status';
@@ -67,6 +69,11 @@ const WorkflowsPage: React.FC = () => {
   const [versionsLoading, setVersionsLoading] = useState(false);
   const [saveNote, setSaveNote] = useState('');
   const [savingVersion, setSavingVersion] = useState(false);
+
+  // ── F26 工作流定义 diff（版本对比弹窗）──
+  const [diffOpen, setDiffOpen] = useState(false);
+  const [diffLoading, setDiffLoading] = useState(false);
+  const [diffData, setDiffData] = useState<WorkflowDiffDto | null>(null);
 
   // ── F21 触发器设置抽屉 ──
   const [triggerDrawerOpen, setTriggerDrawerOpen] = useState(false);
@@ -176,6 +183,23 @@ const WorkflowsPage: React.FC = () => {
       loadVersions(drawerWfId);
     } catch (e) {
       message.error(getErrorMessage(e));
+    }
+  };
+
+  // F26 · 对比某历史版本与当前工作流定义，打开结构化 diff 弹窗。
+  const handleCompare = async (v: WorkflowVersionSummary) => {
+    if (!drawerWfId) return;
+    setDiffLoading(true);
+    setDiffData(null);
+    setDiffOpen(true);
+    try {
+      const d = await diffWorkflow(drawerWfId, { fromVersionId: v.id });
+      setDiffData(d);
+    } catch (e) {
+      message.error(getErrorMessage(e));
+      setDiffOpen(false);
+    } finally {
+      setDiffLoading(false);
     }
   };
 
@@ -439,6 +463,9 @@ const WorkflowsPage: React.FC = () => {
                 actions={
                   canManage
                     ? [
+                        <Button key="compare" size="small" onClick={() => handleCompare(v)}>
+                          {t('pages.workflows.diff.action')}
+                        </Button>,
                         <Button key="restore" size="small" onClick={() => handleRestore(v)}>
                           {t('pages.workflows.versions.restore')}
                         </Button>,
@@ -482,6 +509,13 @@ const WorkflowsPage: React.FC = () => {
           />
         )}
       </Drawer>
+
+      <WorkflowDiffModal
+        open={diffOpen}
+        loading={diffLoading}
+        data={diffData}
+        onClose={() => setDiffOpen(false)}
+      />
 
       <Drawer
         title={t('pages.workflows.publish.drawerTitle', { name: pubWfName })}
