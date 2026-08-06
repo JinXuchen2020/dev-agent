@@ -99,6 +99,13 @@ public enum WorkflowTemplateCategory
     DataAnalysis = 7      // 数据分析
 }
 
+// Domain/Enums/EvaluationMatchMode.cs（F24 评估）
+public enum EvaluationMatchMode
+{
+    Exact = 0,    // 精确匹配：string.Equals(Ordinal)
+    Contains = 1  // 包含匹配：actual.Contains(expected, OrdinalIgnoreCase)
+}
+
 ### A.2 聚合根
 
 ```csharp
@@ -260,6 +267,18 @@ public sealed class WorkflowTemplate : IAggregateRoot   // 平台级共享模板
     public DateTime CreatedAt { get; private init; }     // 种子时间（UTC）
     // 注：模板为只读种子，DomainEvents 恒空、ClearDomainEvents 为 no-op
 }
+
+// Domain/Aggregates/Evaluation/EvaluationDataset.cs（F24 执行 Trace / 评估视图）
+public sealed class EvaluationDataset : ITenantScoped, IAggregateRoot   // 评估数据集聚合（租户隔离，自动全局过滤）
+{
+    public Guid Id { get; private init; }                 // 调用方生成；EF 配置 ValueGeneratedNever（避 GUID 陷阱）
+    public Guid TenantId { get; private init; }            // 租户 ID（HasQueryFilter 隔离）
+    public string Name { get; private set; } = null!;      // 展示名（ctor 非空校验）
+    public string? Description { get; private set; }       // 可选描述
+    public DateTime CreatedAt { get; private init; }
+    public DateTime UpdatedAt { get; private set; }
+    public IReadOnlyList<EvaluationCase> Cases { get; }    // 拥有的评估用例集合（OwnsMany，EvaluationCases 表）
+}
 ```
 
 ### A.3 实体（非聚合根）
@@ -300,6 +319,15 @@ public class AuditLog
     public string Detail { get; init; }                            // JSON 操作上下文
     public string IpAddress { get; init; }
     public DateTime CreatedAt { get; init; }
+}
+
+// Domain/Aggregates/Evaluation/EvaluationCase.cs（F24 拥有实体）
+public sealed class EvaluationCase                          // 拥有实体（属于 EvaluationDataset，OwnsMany）
+{
+    public Guid Id { get; private init; }                 // EF OwnsMany 主键，ValueGeneratedNever（避 GUID 陷阱）
+    public string Input { get; private init; } = null!;    // 重放为工作流初始 context（ctor 非空校验）
+    public string ExpectedOutput { get; private init; } = null!; // 期望输出（ctor 非空校验）
+    public EvaluationMatchMode MatchMode { get; private init; } // 0=Exact, 1=Contains
 }
 ```
 

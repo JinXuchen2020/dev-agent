@@ -1,6 +1,7 @@
 using AgentPlatform.Domain.Abstractions;
 using AgentPlatform.Domain.Aggregates.Workflows;
 using AgentPlatform.Domain.Enums;
+using AgentPlatform.Domain.ValueObjects;
 
 namespace AgentPlatform.Application.Abstractions;
 
@@ -40,21 +41,25 @@ public record StepExecutionResult(
     string? Output,
     string? Artifact,
     string? ErrorMessage,
-    TimeSpan Duration = default)
+    TimeSpan Duration = default,
+    TokenUsage? TokenUsage = null)
 {
-    /// <summary>Creates a successful result with optional artifact.</summary>
-    public static StepExecutionResult Success(string? output = null, string? artifact = null, TimeSpan duration = default)
-        => new(StepOutcome.Success, output, artifact, null, duration);
+    /// <summary>Token usage of the step, if the underlying executor reported it (F24 trace).</summary>
+    public Domain.ValueObjects.TokenUsage? Tokens => TokenUsage;
+
+    /// <summary>Creates a successful result with optional artifact and token usage.</summary>
+    public static StepExecutionResult Success(string? output = null, string? artifact = null, TimeSpan duration = default, TokenUsage? tokenUsage = null)
+        => new(StepOutcome.Success, output, artifact, null, duration, tokenUsage);
 
     /// <summary>Creates a retryable failure result.</summary>
-    public static StepExecutionResult RetryableFailure(string errorMessage, TimeSpan duration = default)
-        => new(StepOutcome.FailedRetry, null, null, errorMessage, duration);
+    public static StepExecutionResult RetryableFailure(string errorMessage, TimeSpan duration = default, TokenUsage? tokenUsage = null)
+        => new(StepOutcome.FailedRetry, null, null, errorMessage, duration, tokenUsage);
 
     /// <summary>Creates an unrecoverable failure result that triggers rollback.</summary>
-    public static StepExecutionResult FatalFailure(string errorMessage, TimeSpan duration = default)
-        => new(StepOutcome.FailedRollback, null, null, errorMessage, duration);
+    public static StepExecutionResult FatalFailure(string errorMessage, TimeSpan duration = default, TokenUsage? tokenUsage = null)
+        => new(StepOutcome.FailedRollback, null, null, errorMessage, duration, tokenUsage);
 
     /// <summary>Creates a result requesting human intervention.</summary>
-    public static StepExecutionResult NeedsIntervention(string errorMessage, TimeSpan duration = default)
-        => new(StepOutcome.NeedsIntervention, null, null, errorMessage, duration);
+    public static StepExecutionResult NeedsIntervention(string errorMessage, TimeSpan duration = default, TokenUsage? tokenUsage = null)
+        => new(StepOutcome.NeedsIntervention, null, null, errorMessage, duration, tokenUsage);
 }

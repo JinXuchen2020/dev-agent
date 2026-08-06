@@ -110,6 +110,8 @@ public static class DependencyInjection
             AgentPlatform.Infrastructure.Persistence.Repositories.PublishedWorkflowRepository>();
         services.AddScoped<IAgentRoleDefinitionRepository, AgentRoleDefinitionRepository>();
         services.AddScoped<IAgentConfigurationRepository, AgentConfigurationRepository>();
+        // ── F24 评估数据集（租户隔离）仓储 ──
+        services.AddScoped<IEvaluationDatasetRepository, EvaluationDatasetRepository>();
         services.AddSingleton<IYamlConfigurationParser, YamlConfigurationParserService>();
         services.AddSingleton<IToolRegistry, InMemoryToolRegistry>();
 
@@ -349,6 +351,10 @@ public static class DependencyInjection
             SseEnabled = bool.TryParse(elSection["SseEnabled"], out var sse) && sse
         };
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(executionLogSettings));
+
+        // ── F24 评估运行上限配置（可经 "Evaluation" 配置节覆盖）──
+        services.Configure<AgentPlatform.Application.Evaluation.EvaluationSettings>(
+            configuration.GetSection("Evaluation"));
 
         // Register SSE progress broadcaster as singleton (manages per-workflow channels)
         services.AddSingleton<IExecutionProgressBroadcaster, ExecutionProgressBroadcaster>();

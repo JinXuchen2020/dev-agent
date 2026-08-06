@@ -12,6 +12,10 @@ import type {
   WorkflowDetail,
   ExecutionLog,
   ExecutionLogDetail,
+  EvaluationDatasetSummary,
+  EvaluationDatasetDetail,
+  EvaluationReport,
+  EvaluationMatchMode,
   ApiKey,
   Conversation,
   WorkflowNodeRequest,
@@ -303,6 +307,34 @@ export const getExecutionLogDetail = (id: string) =>
   api.get<ExecutionLogDetail>(`/execution-logs/${id}`).then((r) => r.data);
 export const getExecutionLogSteps = (id: string, params?: { status?: string; skip?: number; take?: number }) =>
   api.get<{ items: ExecutionLogDetail['entries']; totalCount: number }>(`/execution-logs/${id}/steps`, { params }).then((r) => r.data);
+
+// ── 评估数据集 / 回归评估（F24）──
+export const getEvaluationDatasets = (keyword?: string) =>
+  api.get<EvaluationDatasetSummary[]>('/evaluation-datasets', { params: keyword ? { keyword } : undefined }).then((r) => r.data);
+
+export const getEvaluationDataset = (id: string) =>
+  api.get<EvaluationDatasetDetail>(`/evaluation-datasets/${id}`).then((r) => r.data);
+
+export const createEvaluationDataset = (req: {
+  name: string;
+  description?: string | null;
+  cases: { input: string; expectedOutput: string; matchMode: EvaluationMatchMode }[];
+}) => api.post<EvaluationDatasetDetail>('/evaluation-datasets', req).then((r) => r.data);
+
+export const updateEvaluationDataset = (
+  id: string,
+  req: {
+    name: string;
+    description?: string | null;
+    cases: { input: string; expectedOutput: string; matchMode: EvaluationMatchMode }[];
+  },
+) => api.put<EvaluationDatasetDetail>(`/evaluation-datasets/${id}`, req).then((r) => r.data);
+
+export const deleteEvaluationDataset = (id: string) =>
+  api.delete(`/evaluation-datasets/${id}`).then((r) => r.data);
+
+export const runEvaluation = (id: string, workflowId: string) =>
+  api.post<EvaluationReport>(`/evaluation-datasets/${id}/run`, { workflowId }).then((r) => r.data);
 
 export default api;
 

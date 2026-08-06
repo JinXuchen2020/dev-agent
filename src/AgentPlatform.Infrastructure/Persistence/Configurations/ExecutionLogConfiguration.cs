@@ -77,6 +77,16 @@ internal sealed class ExecutionLogConfiguration : IEntityTypeConfiguration<Execu
             entryBuilder.Property(x => x.ErrorDetail)
                 .HasMaxLength(2000);
 
+            // F24 trace: token accounting + node type
+            entryBuilder.Property(x => x.TokensIn)
+                .IsRequired();
+
+            entryBuilder.Property(x => x.TokensOut)
+                .IsRequired();
+
+            entryBuilder.Property(x => x.NodeType)
+                .HasConversion<int?>();
+
             entryBuilder.Property(x => x.StartedAt)
                 .IsRequired();
 

@@ -349,4 +349,67 @@ data: {}
 
 > 注：模板为平台级共享资源，`WorkflowTemplate` **不实现** `ITenantScoped`（不受租户查询过滤器约束，决策 S2）；克隆出的 `Workflow` 才带当前租户。`ListAsync` 的 `keyword` 走 `EF.Functions.Like` 参数化（无 SQL 注入）。
 
-> **一句话总结**：前端通过统一前缀 `/api/v1/` 的 REST API 与后端通信，9 个资源域（认证 / 工作流 / 模板市场 / Agent / 模型 / 对话 / 调研 / 管理 / 监控），对话与调研流均走 SSE 流式输出，权限按 RBAC 粒度控制。Agent 角色类型 API（`/agents/types`）支持动态加载自定义角色。完整 Swagger 文档在开发环境 `{host}/swagger` 实时生成。
+### I.10 评估 API（F24 · 执行 Trace / 评估视图）
+
+> **用途**：节点级可观测性（Trace）与数据集回归评估。Trace 基于既有 `ExecutionLog`（通用、不依赖特定 `StepType`）；评估为租户隔离的数据集回归，对标 LangSmith / Langfuse。
+
+#### I.10.1 执行日志 Trace 字段扩展（F24）
+
+既有 `GET /api/v1/execution-logs/{id}` 与 `GET /api/v1/execution-logs/{id}/steps` 的 `entries[]` 每项新增三字段（仅扩响应模型，不改路由与鉴权）：
+
+```json
+// ExecutionLogStepEntry 增量字段
+{
+  "tokensIn": 128,        // 该节点输入 token（复用模型层已算 TokenUsage）
+  "tokensOut": 42,        // 该节点输出 token
+  "nodeType": 0           // StepType?：0=Start,1=End,2=Agent,3=Condition,4=Loop,5=Tool,6=Manual,7=Parallel,8=SubWorkflow,9=Message,10=Transform（其余节点类型通用）
+}
+```
+
+> 注：`ExecutionLog` 保持非 `ITenantScoped`（手动过滤，不破坏既有）；**节点级 Input（入参）v1 不采集**（已知残留，需编排器额外 plumbing）。
+
+#### I.10.2 评估数据集 API
+
+| 方法 | 路径 | 说明 | 权限 |
+| :--- | :--- | :--- | :--- |
+| GET | `/api/v1/evaluation-datasets` | 列出当前租户数据集，支持 `?keyword=` 过滤 | authenticated |
+| GET | `/api/v1/evaluation-datasets/{id:guid}` | 数据集详情（含 `cases[]`） | authenticated |
+| POST | `/api/v1/evaluation-datasets` | 新建数据集（body：`name, description?, cases[]`） | Admin, Operator |
+| PUT | `/api/v1/evaluation-datasets/{id:guid}` | 改名 / 描述 / 替换 `cases[]`（PUT 语义） | Admin, Operator |
+| DELETE | `/api/v1/evaluation-datasets/{id:guid}` | 删除（tenant-scoped 级联删 cases） | Admin, Operator |
+| POST | `/api/v1/evaluation-datasets/{id:guid}/run` | 对该数据集跑评估（body：`{ workflowId }`）→ `EvaluationReport` | Admin, Operator |
+
+```json
+// POST /api/v1/evaluation-datasets 请求
+{
+  "name": "客服意图回归集",
+  "description": "可选",
+  "cases": [
+    { "input": "我要退款", "expectedOutput": "已为您发起退款", "matchMode": 1 }  // 0=Exact,1=Contains
+  ]
+}
+
+// GET /api/v1/evaluation-datasets/{id} 响应（EvaluationDatasetDetailResponse）
+{
+  "id": "guid", "name": "客服意图回归集", "description": "可选",
+  "cases": [
+    { "id": "guid", "input": "我要退款", "expectedOutput": "已为您发起退款", "matchMode": 1 }
+  ],
+  "createdAt": "2026-08-05T10:00:00Z"
+}
+
+// POST /api/v1/evaluation-datasets/{id}/run 响应（EvaluationReport）
+{
+  "total": 3, "passed": 2, "score": 0.6667,
+  "cases": [
+    {
+      "input": "我要退款", "expectedOutput": "已为您发起退款", "actualOutput": "已为您发起退款流程",
+      "passed": true, "durationMs": 1820, "tokensIn": 128, "tokensOut": 42, "errorDetail": null
+    }
+  ]
+}
+```
+
+> 注：`EvaluationDataset` 实现 `ITenantScoped`（自动全局过滤）；`RunEvaluation` 每 case 克隆全新 `Workflow`（new Guid）避免污染源工作流，逐 case 复用编排器 step 超时 bounding，硬上限 `EvaluationSettings.MaxCases`（默认 10，可配）；`matchMode`：`Exact=string.Equals(Ordinal)` / `Contains=actual.Contains(expected, OrdinalIgnoreCase)`；缺失 dataset / workflow → 404。
+
+> **一句话总结**：前端通过统一前缀 `/api/v1/` 的 REST API 与后端通信，10 个资源域（认证 / 工作流 / 模板市场 / Agent / 模型 / 对话 / 调研 / 管理 / 监控 / 评估），对话与调研流均走 SSE 流式输出，权限按 RBAC 粒度控制。Agent 角色类型 API（`/agents/types`）支持动态加载自定义角色。完整 Swagger 文档在开发环境 `{host}/swagger` 实时生成。

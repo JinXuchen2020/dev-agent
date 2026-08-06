@@ -137,7 +137,8 @@ internal sealed class SequentialOrchestrator
                     _repository.Update(workflow);
                     await _unitOfWork.SaveChangesAsync(ct);
                     await _eventBus.PublishAsync(
-                        new StepCompleted(workflow.Id, node.Id, node.Name, node.Order, result.Output, result.Duration), ct);
+                        new StepCompleted(workflow.Id, node.Id, node.Name, node.Order, result.Output, result.Duration,
+                            node.Type, result.Tokens), ct);
 
                     // F20：Condition 分支——执行成功后按结果计算非选中分支的 skip 集合。
                     if (node.Type == StepType.Condition)
@@ -150,7 +151,8 @@ internal sealed class SequentialOrchestrator
                 case StepOutcome.FailedRetry:
                     await _eventBus.PublishAsync(
                         new StepFailed(workflow.Id, node.Id, node.Name, node.Order,
-                            result.ErrorMessage ?? "Retry exhausted", result.Duration), ct);
+                            result.ErrorMessage ?? "Retry exhausted", result.Duration,
+                            node.Type, result.Tokens), ct);
                     await RollbackCompletedStepsAsync(workflow, node.Order, node.Name,
                         result.ErrorMessage ?? "Retry exhausted", ct);
                     return;
@@ -158,7 +160,8 @@ internal sealed class SequentialOrchestrator
                 case StepOutcome.FailedRollback:
                     await _eventBus.PublishAsync(
                         new StepFailed(workflow.Id, node.Id, node.Name, node.Order,
-                            result.ErrorMessage, result.Duration), ct);
+                            result.ErrorMessage, result.Duration,
+                            node.Type, result.Tokens), ct);
                     await RollbackCompletedStepsAsync(workflow, node.Order, node.Name,
                         result.ErrorMessage ?? "Unrecoverable error", ct);
                     return;
@@ -499,7 +502,8 @@ internal sealed class SequentialOrchestrator
                         _repository.Update(workflow);
                         await _unitOfWork.SaveChangesAsync(ct);
                         await _eventBus.PublishAsync(new StepCompleted(
-                            workflow.Id, bodyNode.Id, bodyNode.Name, bodyNode.Order, result.Output, result.Duration), ct);
+                            workflow.Id, bodyNode.Id, bodyNode.Name, bodyNode.Order, result.Output, result.Duration,
+                            bodyNode.Type, result.Tokens), ct);
                         completedBodySteps++;
                         break;
 
@@ -516,7 +520,8 @@ internal sealed class SequentialOrchestrator
                     default: // FailedRetry / FailedRollback
                         await _eventBus.PublishAsync(new StepFailed(
                             workflow.Id, bodyNode.Id, bodyNode.Name, bodyNode.Order,
-                            result.ErrorMessage ?? "Loop body 失败", result.Duration), ct);
+                            result.ErrorMessage ?? "Loop body 失败", result.Duration,
+                            bodyNode.Type, result.Tokens), ct);
                         await RollbackCompletedStepsAsync(workflow, bodyNode.Order, bodyNode.Name,
                             result.ErrorMessage ?? "Loop body 失败", ct);
                         return;
@@ -529,7 +534,8 @@ internal sealed class SequentialOrchestrator
         _repository.Update(workflow);
         await _unitOfWork.SaveChangesAsync(ct);
         await _eventBus.PublishAsync(new StepCompleted(
-            workflow.Id, loopNode.Id, loopNode.Name, loopNode.Order, loopNode.Result, TimeSpan.Zero), ct);
+            workflow.Id, loopNode.Id, loopNode.Name, loopNode.Order, loopNode.Result, TimeSpan.Zero,
+            loopNode.Type, null), ct);
     }
 
     /// <summary>解析 Loop 节点配置（<c>itemsSource</c> / <c>itemVariable</c> / <c>bodyNodeNames</c>）。</summary>
