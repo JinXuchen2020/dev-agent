@@ -42,7 +42,9 @@ src/.vs/
 *.VC.db
 *.VC.opendb
 *.csproj.user
-[Dd]ebug/
+# NOTE: 不再使用 [Dd]ebug/ —— 它会误伤源码目录 src/AgentPlatform.Domain/Aggregates/Debug
+# 与 src/AgentPlatform.Application/Debug（F25 调试器特性）。构建输出 bin/Debug、obj/Debug
+# 已由上面的 bin/ 与 obj/ 规则覆盖，故此处删除以避免吞掉源码文件夹。
 [Rr]elease/
 x64/
 x86/
