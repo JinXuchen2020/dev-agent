@@ -143,3 +143,9 @@ qa-report.json
 # SQLite WAL/SHM runtime artifacts
 *.db-shm
 *.db-wal
+
+# integration.mjs 用 rename 移走的带 PID 备份（绕过沙箱删除保护）
+# 这些是无后缀规则的变体，须单独覆盖，否则每次 e2e 都会污染工作树
+test-results.bak-*/
+playwright-report.bak-*/
+*.bak-*/
