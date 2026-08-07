@@ -21,6 +21,28 @@ F26 按用户决策 **v1 仅做低风险纯增量（用量仪表盘 + 工作流 
 - 质量报告 `docs/quality/f26-enterprise-enhancements-gate.md`
 - 已知残留（非阻断）：①多工作空间（第二租户维度）不在 v1，独立排期；②`pages.workflows.diff.changedEdges` i18n key 保留未消费（未来清理）
 
+### F9 · 代码沙箱容器隔离（DockerCodeSandbox 真实化）完成（feature-builder 全栈实跑，⚠️中风险闭环）
+
+解决 F5 质量报告记录的 `DockerCodeSandbox` 空心类 waiver：由「显式抛异常」改为经 `Docker.DotNet` 3.125.15 **真实拉起隔离容器**执行代码 / 命令，Agent 的 Code 节点在容器化部署下具备 OS 级隔离。三道质量门全 PASS。
+
+**核心改动（纯后端，无前端契约变更）：**
+- `DockerCodeSandbox` 重写：写临时代码文件 → 只读 bind 挂载 `/sandbox/code.<ext>` → `CreateContainer` → `StartContainer` → `WaitContainer`（与 `Task.Delay(timeout)` 竞速，超时即 `KillContainer`）→ `GetContainerLogs` 捕获 stdout/ExitCode → `RemoveContainer(Force)` 清理。镜像缺失经 `Images.CreateImageAsync` 自动拉取。
+- 语言映射 `python:3.12-slim` / `node:20-slim`；`RunCommandAsync` 以 `alpine:3.20` 跑 `sh -c`。`AllowedLanguages` 白名单外拒绝；`csscript` 在 Docker 模式不支持。
+- 安全边界：代码只读挂载、默认 `NetworkEnabled=false` → `NetworkMode=none` 真禁网、内存上限 256MB、输出截断 `MaxOutputBytes`、超时强制 kill。默认 `Provider=Process` 不变，无 Docker 环境回退 `ProcessCodeSandbox`。
+
+**质量与测试：**
+- 三道质量门禁全 PASS（`ddd-code-reviewer` / `ddd-phase-quality-gate` / `codebase-optimizer`）；`.quality-gate.json` 推进 `f9-docker-sandbox`，`cleared:true`
+- 后端 `dotnet build` **0/0**；`Infrastructure.Tests 129 通过 / 3 跳过（Docker 集成，本沙箱守护进程未启动）` / `ArchitectureTests 9` 全绿
+- 对抗式 `ddd-code-reviewer`：修复 **P2×2**（调用方取消被静默吞掉→改向上传播 `OperationCanceledException`；超时 kill 路径无测试→补 `RunCodeAsync_Timeout_KillsLongRunningContainer`）+ **P3×2**（镜像拉取不受 timeoutSeconds 约束→记为后续增强 waiver；`MemoryBytes` 硬编码→设计文档记录可由 `SandboxSettings` 暴露）
+- 设计文档 `features/sandbox-docker.md` 原引用的 `NanoCpus` CPU 配额因 `Docker.DotNet` 3.125 `HostConfig` 无该 API 表面，已修正为「后续增强」，消除蓝图漂移
+- 质量报告 `docs/quality/f9-docker-sandbox-gate.md`
+- 已知残留（非阻断）：①Docker 守护进程——真实路径需含 Docker 的 CI（3 例集成测试经 `SkippableFact` 守卫自动跳过）；②CPU 配额（NanoCpus）列为后续增强；③stdout/stderr 合并（`Tty=true`）为设计选择，后续可改 `MultiplexedStream` 解帧分离
+
+**补丁 (2026-08-07) · 修复 CI 集成测试 stdout 为空：**
+- 根因：`SafeReadLogsAsync` 调 `GetContainerLogsAsync(id, false, …)` 的 `tty` 参数与容器 `Tty=true` 不一致，导致 `MultiplexedStream` 按多路复用帧解析纯文本 → 输出被截断为空，2 例容器集成测试（`RunCodeAsync_Python_Runs_In_Isolated_Container` / `RunCommandAsync_ShellCommand_Runs_In_Alpine`）在 ubuntu-latest（含 Docker）CI 上断言失败。
+- 修复：日志读取 `tty` 参数改为 `true`（与容器配置一致，裸流正确捕获）；集成测试断言补充 `Stdout/Stderr/ExitCode` 失败诊断信息，便于 CI 排查。
+- 注：本沙箱无 Docker 守护进程，集成测试本地仍走 `SkippableFact` 跳过路径，修复仅能在含 Docker 的 CI 真正验证。
+
 ## v2.19 (2026-08-06)
 
 ### F25 · 工作流调试器（变量监视 + 单步重跑 + 错误分支）完成（feature-builder 全栈实跑，🟡中风险闭环）

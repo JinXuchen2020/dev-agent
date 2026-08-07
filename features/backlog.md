@@ -278,7 +278,7 @@
 - 目标：后端已具备 Negotiation 协商式多智能体 + Critic 收敛原语，待产品化画布「Agent-Team / Negotiation」专属模式（多 Agent 节点 + Critic + 收敛终止条件）。
 - 说明：**保留，勿稀释**——Dify/n8n 无此原生原语，是本平台差异化壁垒。
 
-### F9 · 代码沙箱容器隔离（DockerCodeSandbox 真实化）  [P2]  open  ⚠️中风险（Phase 6 行动层 / 新增 Docker SDK 依赖）
+### F9 · 代码沙箱容器隔离（DockerCodeSandbox 真实化）  [P2]  done  ✅（Phase 6 行动层 / Docker.DotNet 真实容器执行；分支 feat/f9-docker-sandbox，设计文档 features/sandbox-docker.md；质量门 docs/quality/f9-docker-sandbox-gate.md）
 - 设计文档：`features/sandbox-docker.md`（待建）
 - 来源：F5 残留 ①（A2 进程沙箱已真实化；`src/AgentPlatform.Infrastructure/Sandbox/DockerCodeSandbox.cs` 现为显式抛异常占位，需补真实容器执行）。
 - 目标：在有 Docker 守护进程的环境，用 `Docker.DotNet` 真实拉起隔离容器执行用户代码，提供比进程沙箱更强的文件系统 / 网络 / 资源边界。
@@ -319,6 +319,62 @@
   - 纳入 CI e2e 阶段；本沙箱无 Docker 仍可跑（python/node 子进程 + 本地 HTTP 端点均可用）。
 
 ---
+
+## 第二期 · 真 Agent Harness 升级（阻塞于第一期全部完成）
+
+> ⛔ **第二期 = 真 Harness 升级路线图**：源于 `docs/agent-harness-blueprint.md`（Phase 7–11）与 `phases/phase-7-*.md`～`phases/phase-11-*.md`。
+> **硬性阻塞**：本组 F29–F33 **须第一期全部任务完成后方可开工**——即上方 `## Feature 史诗（Tier 1）` 分组内所有 `open` 项（当前 F8 / F10 / F11 / F12，及任何后续新增 1 期项）交付完毕、无遗留 `open` 后，才进入 feature-builder 取数。
+> **状态约定**：本组统一标 `open ⛔blocked(1期)`；在 1 期清零前**不建 `features/<id>.md`、不建 `feat/<id>` 分支、不跑 feature-builder**。
+> **编号说明**：F27/F28 已被「BDD 集成测试统一 / 历史 feature BDD 覆盖补全」占用（已 done），故本组顺延为 **F29–F33**。
+
+### F29 · 执行持久化（Durable Execution）  [P0]  open  ⛔blocked(1期)  🔴高风险（运行时范式跨越：请求内同步 → 可挂起/恢复 durable）
+- 设计依据：`phases/phase-7-durable-execution.md` + `docs/agent-harness-blueprint.md` §Phase 7（正式 `features/f29-*.md` 待 1 期完成后建）
+- 目标：将 `SequentialOrchestrator.RunToCompletionAsync` 的请求内同步执行改造为可挂起/恢复的 durable 执行；检查点落 `ExecutionLog`；in-flight 状态由进程内 `ConcurrentDictionary` 迁移至 DB；`WorkflowScheduler` 升级为 durable 驱动器。
+- 验收子项：
+  - **D1** durable 框架选型决策（自建检查点 vs Temporal / Workflow Core）→ 决策关锁定后方可实现。
+  - **①** ExecutionLog 检查点机制（per-step 持久化，复用既有 per-step SaveChanges）。
+  - **②** 挂起 / 恢复 API（暴露 Resume / Suspend 端点，替代进程内 Timer 驱逐）。
+  - **③** in-flight 状态外置（ConcurrentDictionary → DB-backed RunningExecution）。
+  - **④** WorkflowScheduler 升级为 durable 驱动器（轮询触发器 → 驱动持久化执行）。
+- 优先级：P0（与 F30 组成最小闭环，消除「无 durable 执行」最大差距）。
+
+### F30 · Agent 运行时实体化 + 模型接通  [P0]  open  ⛔blocked(1期)  🔴高风险（agent 配置当前不生效）
+- 设计依据：`phases/phase-8-agent-runtime.md` + `docs/agent-harness-blueprint.md` §Phase 8
+- 目标：修复 `AgentCallStepExecutor.cs:50` 硬编码（当前忽略 agent 的 `SystemPrompt`/`ModelEndpoint`，直接硬编码 prompt + `DefaultModelId`）；接通既有 `ModelRouter` + `TenantModelClientResolver`；补 Agent 种子字段。
+- 验收子项（v1）：
+  - **①** executor 接管 agent 配置（SystemPrompt / ModelEndpoint 真正生效）。
+  - **②** ModelRouter + TenantModelClientResolver 接通到 agent 级（候选回退 / 租户 BYO）。
+  - **③** Agent 种子字段补全（支持运行时实体化）。
+- 延后项（依赖 D4 决策）：Agent 上下文隔离 / 运行时实体深化 → 独立排期，不阻塞 v1。
+- 优先级：P0（与 F29 组最小闭环）。
+
+### F31 · Agent 消息总线 + 多 Agent 协作  [P1]  open  ⛔blocked(1期)  🟡中风险（依赖 F30 agent 实体化）
+- 设计依据：`phases/phase-9-agent-message-bus.md` + `docs/agent-harness-blueprint.md` §Phase 9
+- 目标：引入 agent 间消息原语；进程内 `Channel<T>` 起步总线；`NegotiationOrchestrator` 真并行推理；handoff / 幂等 / 活锁防治。
+- 验收子项：
+  - **D2** 总线传输决策（进程内 Channel vs 分布式消息队列）。
+  - **①** 消息总线基础设施（Channel<T> + 路由）。
+  - **②** 多 Agent 协作编排（NegotiationOrchestrator，真并行）。
+  - **③** handoff / 幂等 / 活锁防治。
+- 优先级：P1（依赖 F30）。
+
+### F32 · 语义记忆层  [P1]  open  ⛔blocked(1期)  🟡中风险（依赖既有 IVectorStore）
+- 设计依据：`phases/phase-10-semantic-memory.md` + `docs/agent-harness-blueprint.md` §Phase 10
+- 目标：从「文件注入式记忆」升级为语义记忆引擎；`IEmbeddingGenerator` 生成 embedding；episodic 写回；自动 compaction；复用 `IVectorStore`（Pg/InMemory）；租户向量隔离。
+- 验收子项：
+  - **D3** 向量后端决策（复用 IVectorStore / 引入专用向量库）。
+  - **①** Embedding 生成管线（写入向量库）。
+  - **②** Episodic 记忆写回（跨会话经验沉淀）。
+  - **③** 自动 compaction（超限上下文压缩，替代明文 MaxSummaryTokens 截断）。
+- 优先级：P1。
+
+### F33 · 在线评估门禁 + 部署闭环  [P2]  open  ⛔blocked(1期)  🟢低风险（复用 F24 数据集）
+- 设计依据：`phases/phase-11-online-eval-gate.md` + `docs/agent-harness-blueprint.md` §Phase 11
+- 目标：将 F24 评估数据集接入生产前 / 影子门禁；队列化水平扩展。
+- 验收子项（v1）：
+  - **①** 在线 eval 门禁（F24 数据集 → 生产前 / 影子评估，纯应用层复用）。
+- 延后项（依赖 F29/F31 分布式落点）：队列化部署 / 水平扩展 → 独立排期。
+- 优先级：P2。
 
 ## 已完成归档（done）
 
