@@ -91,7 +91,7 @@ public class DockerCodeSandboxTests
 
         var sb = Sandbox();
         var r = await sb.RunCodeAsync("print('docker_ok')", "python", 60, default);
-        Assert.True(r.Success);
+        Assert.True(r.Success, $"Docker 容器执行失败：Stdout='{r.Stdout}' Stderr='{r.Stderr}' ExitCode={r.ExitCode}");
         Assert.Equal(0, r.ExitCode);
         Assert.Contains("docker_ok", r.Stdout);
     }
@@ -103,7 +103,7 @@ public class DockerCodeSandboxTests
 
         var sb = Sandbox();
         var r = await sb.RunCommandAsync("echo container_cmd_ok", 60, default);
-        Assert.True(r.Success);
+        Assert.True(r.Success, $"Docker 容器执行失败：Stdout='{r.Stdout}' Stderr='{r.Stderr}' ExitCode={r.ExitCode}");
         Assert.Equal(0, r.ExitCode);
         Assert.Contains("container_cmd_ok", r.Stdout);
     }

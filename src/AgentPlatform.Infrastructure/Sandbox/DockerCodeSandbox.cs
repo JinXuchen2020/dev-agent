@@ -222,10 +222,12 @@ internal sealed class DockerCodeSandbox : ICodeSandbox
         try
         {
             using var stream = await client.Containers.GetContainerLogsAsync(
-                id, false, new ContainerLogsParameters { ShowStdout = true, ShowStderr = true }, CancellationToken.None)
+                id, true, new ContainerLogsParameters { ShowStdout = true, ShowStderr = true }, CancellationToken.None)
                 .ConfigureAwait(false);
             using var ms = new MemoryStream();
-            // Tty=true 合并输出，全部写入 stdout 流；stderr 留空（下游以 ExitCode 判成败，合并文本兜底错误信息）。
+            // tty 参数必须与容器 Tty=true 一致：否则 MultiplexedStream 会按多路复用帧去解析纯文本，
+            // 导致输出被截断为空（这正是 ubuntu-latest CI 上集成测试 stdout 为空的根因）。
+            // Tty=true 时 stdout/stderr 已合并为单一裸流，全部写入 ms。
             await stream.CopyOutputToAsync(null, ms, null, CancellationToken.None).ConfigureAwait(false);
             ms.Position = 0;
             using var reader = new StreamReader(ms);

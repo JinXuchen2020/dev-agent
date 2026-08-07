@@ -6,5 +6,5 @@
   "cleared": true,
   "reportRef": "docs/quality/f9-docker-sandbox-gate.md",
   "priorPhaseRef": "docs/quality/f26-enterprise-enhancements-gate.md",
-  "notes": "F9 = DockerCodeSandbox 真实化（解决 F5 质量报告记录的 Docker 空心类 waiver）。后端：DockerCodeSandbox 由显式抛异常重写为经 Docker.DotNet 3.125.15 真实拉起隔离容器执行代码/命令（Create→Start→Wait+超时 Kill→Logs→Force-Remove；镜像自动拉取；python:3.12-slim/node:20-slim 语言映射；只读 bind 挂载；Memory=256MB；NetworkMode=none 禁网；超时 kill；语言白名单+ csscript 拒绝）。不新增/不变更任何对外 API 或 ICodeSandbox 契约；默认 Provider=Process 不变，无 Docker 回退进程沙箱。三道质量门对 F9 增量均 0 阻断，4 个发现（2 P2 修复 + 2 P3 waiver）全部处理。与 .quality-gate.json 同笔暂存以满足 pre-commit 钩子；不 push（feature-builder 硬约束）。"
+  "notes": "F9 = DockerCodeSandbox 真实化（解决 F5 质量报告记录的 Docker 空心类 waiver）。后端：DockerCodeSandbox 由显式抛异常重写为经 Docker.DotNet 3.125.15 真实拉起隔离容器执行代码/命令（Create→Start→Wait+超时 Kill→Logs→Force-Remove；镜像自动拉取；python:3.12-slim/node:20-slim 语言映射；只读 bind 挂载；Memory=256MB；NetworkMode=none 禁网；超时 kill；语言白名单+ csscript 拒绝）。不新增/不变更任何对外 API 或 ICodeSandbox 契约；默认 Provider=Process 不变，无 Docker 回退进程沙箱。三道质量门对 F9 增量均 0 阻断，4 个发现（2 P2 修复 + 2 P3 waiver）全部处理。与 .quality-gate.json 同笔暂存以满足 pre-commit 钩子；不 push（feature-builder 硬约束）。补丁(2026-08-07)：修复 SafeReadLogsAsync 的 GetContainerLogsAsync tty 参数(false→true)与容器 Tty=true 不一致导致 CI 集成测试 stdout 为空的回归（ddd-code-reviewer 复审：本次为 1 行参数修正，未引入新风险，沿用已 cleared 门禁）。"
 }

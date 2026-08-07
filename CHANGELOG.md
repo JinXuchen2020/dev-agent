@@ -38,6 +38,11 @@ F26 按用户决策 **v1 仅做低风险纯增量（用量仪表盘 + 工作流 
 - 质量报告 `docs/quality/f9-docker-sandbox-gate.md`
 - 已知残留（非阻断）：①Docker 守护进程——真实路径需含 Docker 的 CI（3 例集成测试经 `SkippableFact` 守卫自动跳过）；②CPU 配额（NanoCpus）列为后续增强；③stdout/stderr 合并（`Tty=true`）为设计选择，后续可改 `MultiplexedStream` 解帧分离
 
+**补丁 (2026-08-07) · 修复 CI 集成测试 stdout 为空：**
+- 根因：`SafeReadLogsAsync` 调 `GetContainerLogsAsync(id, false, …)` 的 `tty` 参数与容器 `Tty=true` 不一致，导致 `MultiplexedStream` 按多路复用帧解析纯文本 → 输出被截断为空，2 例容器集成测试（`RunCodeAsync_Python_Runs_In_Isolated_Container` / `RunCommandAsync_ShellCommand_Runs_In_Alpine`）在 ubuntu-latest（含 Docker）CI 上断言失败。
+- 修复：日志读取 `tty` 参数改为 `true`（与容器配置一致，裸流正确捕获）；集成测试断言补充 `Stdout/Stderr/ExitCode` 失败诊断信息，便于 CI 排查。
+- 注：本沙箱无 Docker 守护进程，集成测试本地仍走 `SkippableFact` 跳过路径，修复仅能在含 Docker 的 CI 真正验证。
+
 ## v2.19 (2026-08-06)
 
 ### F25 · 工作流调试器（变量监视 + 单步重跑 + 错误分支）完成（feature-builder 全栈实跑，🟡中风险闭环）
