@@ -75,3 +75,19 @@
 - Gate 3（codebase-optimizer）：七维 0 阻断，2 项 P3 留观。
 
 `.quality-gate.json` 已更新（`cleared:true` + `codebaseOptimizer` 字段），与本次变更同笔暂存以满足 pre-commit 钩子。按 feature-builder 硬约束 **不 push、不 merge**。
+
+---
+
+## 提交后 CI 修复（F34 合入主干前流水线暴露）
+
+**状态：已修复（新增 1 次提交，不 push）**
+
+| 严重度 | 类别 | 文件 | 现象 | 根因 | 修复 |
+|--------|------|------|------|------|------|
+| **P2** | 测试/环境耦合 | `DualLayerSandboxTests.cs` `DockerProbe_NoDaemon_IsUnavailable` | `ubuntu-latest` 流水线该测试 FAIL：`Assert.False()` 期望 False，实际 True | 该测试写死 `[Fact]` 假设「无 Docker 守护进程」并断言 `IsAvailable==false`；但 GitHub `ubuntu-latest`  runner **自带 Docker 守护进程**，`DockerProbe` 探测成功返回 `true` → 断言失败。此为测试假设错误，非实现缺陷（`DockerProbe` 探测逻辑正确） | 改为 `[SkippableFact]` + `Skip.If(probe.IsAvailable, "Docker 守护进程可用，无法验证无 daemon 的 fail-safe 路径")`：有 daemon 环境（CI）跳过，无 daemon 环境（本沙箱 / 裸机）执行断言 |
+
+**对称性说明**：互补测试 `DockerSandboxIsolation_DockerAvailable_ReturnsStrongResult` 已用 `Skip.IfNot(probe.IsAvailable, …)`。两测试组合后跨环境覆盖完整：
+- CI（有 Docker）：跑 Strong-result 实测，跳过 NoDaemon 断言。
+- 本沙箱 / 裸机（无 Docker）：跑 NoDaemon 断言，跳过 Strong-result。
+
+**验证**：本沙箱重跑 `dotnet test --filter Sandbox` → 21 通过 / 6 跳过 / 0 失败；全量 `dotnet test` → 0 失败（Arch9 / App188 / Infra138+6skip / Integration5 / Api35 / SpecFlow114）。

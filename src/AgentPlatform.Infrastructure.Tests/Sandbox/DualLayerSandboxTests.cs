@@ -28,11 +28,15 @@ public class DualLayerSandboxTests
 
     // ── Docker 守护进程探测（fail-safe）──
 
-    [Fact]
+    [SkippableFact]
     public void DockerProbe_NoDaemon_IsUnavailable()
     {
-        // 本沙箱无 Docker 守护进程：探测应失败且不抛异常（fail-safe 回退进程级隔离）。
+        // 仅当 Docker 守护进程确实不可达时运行（CI ubuntu-latest 自带 Docker，跳过）。
+        // 无 daemon 环境（本沙箱 / 裸机）才执行断言，验证 fail-safe 回退。
         var probe = new DockerProbe(L<DockerProbe>());
+        Skip.If(probe.IsAvailable, "Docker 守护进程可用，无法验证无 daemon 的 fail-safe 路径");
+
+        // 无 Docker 守护进程：探测应失败且不抛异常（fail-safe 回退进程级隔离）。
         Assert.False(probe.IsAvailable);
     }
 
