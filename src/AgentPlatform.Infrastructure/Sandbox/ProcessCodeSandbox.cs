@@ -10,18 +10,21 @@ namespace AgentPlatform.Infrastructure.Sandbox;
 /// <summary>
 /// 进程级代码沙箱：通过 <see cref="System.Diagnostics.Process"/> 拉起 python / node 等解释器，
 /// 真实运行代码并捕获 stdout / stderr / ExitCode / 耗时，超时即杀进程。
-/// 不依赖 Docker，可在本沙箱运行与验证；隔离性弱于容器（网络无法在 OS 层强制隔离，
-/// 仅设 <c>AGENT_PLATFORM_SANDBOX_OFFLINE</c> 环境标记）。
+/// 不依赖 Docker，可在本沙箱运行与验证。通过 <see cref="ISandboxIsolation"/> 施加 OS 级隔离：
+/// Job Object 资源限额 / AppContainer 真实禁网（按 <c>SandboxSettings.OsIsolation</c> 与平台解析，均 fail-safe）。
 /// </summary>
 internal sealed class ProcessCodeSandbox : ICodeSandbox
 {
     private readonly ILogger<ProcessCodeSandbox> _logger;
     private readonly SandboxSettings _settings;
+    private readonly ISandboxIsolation _isolation;
 
-    public ProcessCodeSandbox(ILogger<ProcessCodeSandbox> logger, IOptions<SandboxSettings> settings)
+    public ProcessCodeSandbox(ILogger<ProcessCodeSandbox> logger, IOptions<SandboxSettings> settings,
+        ISandboxIsolation isolation)
     {
         _logger = logger;
         _settings = settings.Value;
+        _isolation = isolation;
     }
 
     public async Task<SandboxResult> RunCodeAsync(string code, string language,
@@ -31,13 +34,24 @@ internal sealed class ProcessCodeSandbox : ICodeSandbox
         if (cmd is null)
             return new SandboxResult(false, string.Empty, $"未找到 {language} 解释器或未授权", 1, 0);
 
+        // OS 级隔离器自行启动（AppContainer 模式）：成功则直接返回隔离结果。
+        if (_isolation.CanLaunch)
+        {
+            var isolated = await _isolation.TryLaunchAsync(cmd, EscapeArg(string.Empty), timeoutSeconds, ct, code, language)
+                .ConfigureAwait(false);
+            if (isolated is not null)
+                return isolated;
+            // 否则透明回退到常规 Process.Start 路径（资源限额仍由下方 Attach 兜底）。
+        }
+
         var tempFile = WriteTempFileOrNull(code, ext);
         if (tempFile is null)
             return new SandboxResult(false, string.Empty, "临时文件写入失败", 1, 0);
 
         try
         {
-            return await RunProcessAsync(cmd, EscapeArg(tempFile), timeoutSeconds, ct, code, language);
+            return await RunProcessAsync(cmd, EscapeArg(tempFile), timeoutSeconds, ct, code, language)
+                .ConfigureAwait(false);
         }
         finally
         {
@@ -75,14 +89,11 @@ internal sealed class ProcessCodeSandbox : ICodeSandbox
             psi.Environment["AGENT_PLATFORM_SANDBOX_OFFLINE"] = "1";
 
         using var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
-        var stdout = new StringBuilder();
-        var stderr = new StringBuilder();
-        process.OutputDataReceived += (_, e) => { if (e.Data != null) stdout.AppendLine(e.Data); };
-        process.ErrorDataReceived += (_, e) => { if (e.Data != null) stderr.AppendLine(e.Data); };
-
+        string? launchError = null;
         int exitCode = -1;
         bool timedOut = false;
-        string? launchError = null;
+        string outStr = string.Empty;
+        string errStr = string.Empty;
         try
         {
             if (!process.Start())
@@ -91,23 +102,14 @@ internal sealed class ProcessCodeSandbox : ICodeSandbox
             }
             else
             {
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
-                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds <= 0 ? _settings.TimeoutSeconds : timeoutSeconds));
-                try
-                {
-                    await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                    timedOut = true;
-                    TryKill(process);
-                }
-
-                // 给输出流一点时间 flush
-                await Task.Delay(200, CancellationToken.None).ConfigureAwait(false);
-                exitCode = process.HasExited ? process.ExitCode : -1;
+                // 事后挂接 OS 级隔离（Job Object 资源限额；AppContainer/Null 为 noop）。
+                _isolation.Attach(process);
+                var cap = await ProcessCaptureHelper.CaptureAsync(
+                    process, timeoutSeconds, _settings.TimeoutSeconds, ct, language).ConfigureAwait(false);
+                outStr = cap.Stdout;
+                errStr = cap.Stderr;
+                exitCode = cap.ExitCode;
+                timedOut = cap.TimedOut;
             }
         }
         catch (Exception ex)
@@ -116,16 +118,16 @@ internal sealed class ProcessCodeSandbox : ICodeSandbox
             exitCode = -1;
         }
 
-        var outStr = Truncate(stdout.ToString(), _settings.MaxOutputBytes);
-        var errStr = Truncate(stderr.ToString(), _settings.MaxOutputBytes);
+        var truncatedOut = Truncate(outStr, _settings.MaxOutputBytes);
+        var truncatedErr = Truncate(errStr, _settings.MaxOutputBytes);
         if (launchError != null)
-            return new SandboxResult(false, outStr, $"{launchError}\n{errStr}", exitCode, sw.ElapsedMilliseconds);
+            return new SandboxResult(false, truncatedOut, $"{launchError}\n{truncatedErr}", exitCode, sw.ElapsedMilliseconds);
 
         var success = !timedOut && exitCode == 0;
-        var finalErr = timedOut ? $"执行超时（>{timeoutSeconds}s）\n{errStr}" : errStr;
+        var finalErr = timedOut ? $"执行超时（>{timeoutSeconds}s）\n{truncatedErr}" : truncatedErr;
         _logger.LogInformation("沙箱执行 {Lang} 完成：Success={Success} ExitCode={ExitCode} Duration={Duration}ms",
             language, success, exitCode, sw.ElapsedMilliseconds);
-        return new SandboxResult(success, outStr, finalErr, exitCode, sw.ElapsedMilliseconds);
+        return new SandboxResult(success, truncatedOut, finalErr, exitCode, sw.ElapsedMilliseconds);
     }
 
     private (string? cmd, string ext) ResolveInterpreter(string language)
@@ -165,12 +167,6 @@ internal sealed class ProcessCodeSandbox : ICodeSandbox
             _logger.LogWarning(ex, "沙箱临时文件写入失败");
             return null;
         }
-    }
-
-    private static void TryKill(Process process)
-    {
-        try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
-        catch { /* 进程可能已退出 */ }
     }
 
     private static void TryDelete(string path)

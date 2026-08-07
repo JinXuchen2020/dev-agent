@@ -142,7 +142,7 @@ public interface IToolRegistry
 
 ### F.5 三个执行器实现（基础设施层）
 
-> 注：以下为早期进程内 handler 设计示意。F5（2026-07-24）已将 `NativeToolExecutor` 实现为对 `ToolDefinition.EndpointUrl` 的**真实 HTTP 调用**（`IHttpClientFactory` + 方法解析 + 真实成功/失败/超时回打）；`SkillPackageExecutor` / `McpClient` 仍为 Phase 6 占位。详见 `src/AgentPlatform.Infrastructure/Tools/NativeToolExecutor.cs` 与 `features/action-layer.md`。
+> 注：以下为早期进程内 handler 设计示意。F5（2026-07-24）已将 `NativeToolExecutor` 实现为对 `ToolDefinition.EndpointUrl` 的**真实 HTTP 调用**（`IHttpClientFactory` + 方法解析 + 真实成功/失败/超时回打）；F10（2026-08-06）已将 `SkillPackageExecutor`（Semantic Kernel 真实调用 Plugin 函数）与 `McpClient`（ModelContextProtocol 2.1.0 真实连接/列举/调用）真实化，三者均经 `ToolCallingDispatcher` 按 `ToolSource` 分派；F11（2026-08-07）为执行后端新增 OS 级隔离层 `ISandboxIsolation`（Windows JobObject 资源限额 + AppContainer 真实禁网，fail-safe 回退）。详见 `src/AgentPlatform.Infrastructure/Tools/*` 与 `src/AgentPlatform.Infrastructure/Sandbox/*`。
 
 #### NativeToolExecutor —— 原生 C# 函数（早期示意）
 
