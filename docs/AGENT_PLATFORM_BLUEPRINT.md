@@ -87,7 +87,7 @@
 | 向量数据库 | Chroma | PGVector (PostgreSQL 扩展) | 100%（真实 embedding + 余弦检索，Phase 4 落地） |
 | 后端接口 | FastAPI | ASP.NET Core Web API | 100% |
 | 前端 | Streamlit | **React** (TypeScript + Vite) + Ant Design；桌面形态可选 **Tauri 2.0**（详见附录 G） | 100% |
-| 代码沙箱 | 进程级真实执行 + Docker 桩(未接入) | ProcessCodeSandbox(真实) / DockerCodeSandbox(显式抛异常) | 进程 100% / Docker 0% |
+| 代码沙箱 | 进程级真实执行 + Docker 桩(未接入) | ProcessCodeSandbox(真实, 接入 ISandboxIsolation) / DockerCodeSandbox(Docker.DotNet 真实容器隔离) / OS 级隔离(JobObject 资源限额 + AppContainer 真实禁网, fail-safe 回退) | 进程 100% / Docker 100% / OS 隔离 100%(Windows) |
 | 缓存 / 短期记忆 | Redis | StackExchange.Redis 最新稳定版（兼容 .NET 9，目标 net10.0） | 100% |
 | BDD 验收 | behave | **Reqnroll 3.x**（SpecFlow 继任者，Gherkin 语法 100% 兼容）+ xUnit；真 HTTP + 文件 SQLite 集成层 | 100% |
 | CQRS / 领域事件 | — | **MediatR 12.4**（v12+ 内置 DI 注册 `AddMediatR`，无需独立包） | 100% |
@@ -179,7 +179,15 @@ src/
 │   ├── Cache/
 │   │   └── InMemoryShortTermMemory.cs     # ConcurrentDictionary 内存缓存（原名 RedisShortTermMemory）
 │   ├── Sandbox/
-│   │   └── DockerCodeSandbox.cs           # Docker.DotNet（未接入真实容器，显式抛异常；默认走 ProcessCodeSandbox）
+│   │   ├── ProcessCodeSandbox.cs          # 进程级真实执行（默认 Provider=Process），接入 ISandboxIsolation
+│   │   ├── DockerCodeSandbox.cs           # Docker.DotNet 真实容器隔离（Provider=Docker；无 Docker 回退 ProcessCodeSandbox）
+│   │   ├── ISandboxIsolation.cs           # OS 级隔离抽象（internal 策略接口）
+│   │   ├── JobObjectSandboxIsolation.cs   # Windows Job Object 资源限额（作业/进程内存 + 活动进程数 + CPU 速率硬上限）
+│   │   ├── AppContainerSandboxIsolation.cs# Windows AppContainer 真实禁网 + 内部叠加 JobObject（fail-safe 回退）
+│   │   ├── NullSandboxIsolation.cs        # 非 Windows / Off 回退（仅环境标记缓解项）
+│   │   ├── WindowsJobObject.cs            # Job Object P/Invoke 封装（IDisposable）
+│   │   ├── WindowsAppContainer.cs         # AppContainer profile P/Invoke 封装（IDisposable）
+│   │   └── ProcessCaptureHelper.cs        # 输出捕获 + 超时杀 + 退出码共享实现
 │   ├── Tools/                             # 附录 F：三层能力执行器（NativeToolExecutor 已真实化 / Skill·MCP 为 Phase 6 占位）
 │   │   ├── NativeToolExecutor.cs          # 原生工具真实 HTTP 执行（IToolExecutor 实现）
 │   │   ├── SkillPackageExecutor.cs        # SK Plugin 调用（IToolExecutor 实现）
@@ -610,8 +618,9 @@ AuditLog
 
 > **当前 Stub 组件**（Phase 1 占位，Phase 2 替换为真实实现）：
 > - `PgVectorStore`（总是返回模拟向量搜索结果）
-> - `DockerCodeSandbox`（未接入真实 Docker 容器，显式抛异常；真实代码执行走 `ProcessCodeSandbox`）
-> - `NativeToolExecutor`（已真实化：对 `ToolDefinition.EndpointUrl` 发起真实 HTTP 调用；`SkillPackageExecutor`、`McpClient` 仍为 Phase 6 占位）
+> - `DockerCodeSandbox`（F9 已真实化：Docker.DotNet 真实容器隔离；真实代码执行走 `ProcessCodeSandbox` 或 `DockerCodeSandbox` 取决于 `Sandbox:Provider`）
+> - `NativeToolExecutor` / `SkillPackageExecutor` / `McpClient`（F10 已真实化：原生工具真实 HTTP、SK Plugin 真实调用、MCP SDK 真实连接/列举/调用；三者均经 `IToolExecutor` 分派）
+> - `ProcessCodeSandbox` OS 级隔离（F11 已真实化：Windows JobObject 资源限额 + AppContainer 真实禁网，fail-safe 回退；`ISandboxIsolation` 抽象）
 > - `StubWorkflowEngine`（空实现）
 > - `AutoGenAgentOrchestrator`（`Task.Delay(200)` + 返回字符串，未使用 AutoGen.NET）
 > - `RoutingPolicyDomainService.EstimateCost`（总是返回 `Money.Zero`）

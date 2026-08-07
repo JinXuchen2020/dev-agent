@@ -23,7 +23,8 @@ public class ProcessCodeSandboxTests
             NetworkEnabled = network,
             MaxOutputBytes = 65536,
         };
-        return new ProcessCodeSandbox(Substitute.For<ILogger<ProcessCodeSandbox>>(), Options.Create(settings));
+        return new ProcessCodeSandbox(Substitute.For<ILogger<ProcessCodeSandbox>>(), Options.Create(settings),
+            new NullSandboxIsolation(Substitute.For<ILogger<NullSandboxIsolation>>()));
     }
 
     [Fact]

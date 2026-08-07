@@ -71,7 +71,7 @@
   - **A1** 工具调用执行层全空心（三个 `IToolExecutor`：`NativeToolExecutor`/`SkillPackageExecutor`/`McpClient` 均直接返回伪造成功）→ ✅ done（`NativeToolExecutor` 接真实 HTTP 执行，单测走真实 `SendAsync` 路径覆盖成功/失败/超时/方法解析；Skill/MCP 执行器保留为 Phase 6 占位，设计文档明确 A1 仅要求 NativeToolExecutor 真实化）。
   - **A2** 代码沙箱为桩（`DockerCodeSandbox.cs:9-56`）→ ✅ done（进程级真实执行：`ProcessCodeSandbox` 用 `System.Diagnostics.Process` 拉起 python/node 真实运行并回传 stdout/stderr/ExitCode/超时杀进程；原 `DockerCodeSandbox` 桩改为显式抛异常消除静默假成功；真实 Docker 容器执行因本沙箱无 Docker 守护进程 + 未引 Docker SDK，列入 Phase 6）。
   - **节点全家桶·Tool/Code/Knowledge Retrieval** → ✅ done（新增 `ToolStepExecutor`/`CodeStepExecutor` 注册为 `StepType.Tool=6`/`Code=7`，经既有 `ResolveExecutor`(`HandlesType`) 真实路由；前端 DAG 画布补 Tool/Code 节点调色板/图标/配置面板；Knowledge Retrieval 已于 RAG 地基层完成）。
-  - **已知残留（非阻断，已拆为独立 feature F9–F12）**：① 真实 Docker 容器隔离；② Skill/MCP 执行器占位（设计文档明确 A1 仅要求 NativeToolExecutor 真实化）；③ 进程模式 OS 层禁网不可强求（以 `NetworkEnabled=false`+语言白名单+超时杀+输出截断缓解）；④ 含 Tool/Code 节点的全链路 e2e 需后端+Web 实例，本沙箱未跑（单元层已覆盖真实执行路径）。
+  - **已知残留（非阻断，已拆为独立 feature F9–F12）**：① 真实 Docker 容器隔离（✅ F9 done）；② Skill/MCP 执行器占位（✅ F10 done）；③ 进程模式 OS 层禁网不可强求（以 `NetworkEnabled=false`+语言白名单+超时杀+输出截断缓解；✅ F11 已在 Windows 经 JobObject 资源限额 + AppContainer 真实禁网落地，跨平台 fail-safe 回退）；④ 含 Tool/Code 节点的全链路 e2e 需后端+Web 实例，本沙箱未跑（单元层已覆盖真实执行路径；open=F12）。
 
 ### F6 · Research Agent（联网多步调研）  [P1]  done  （2026-07-24，分支 feat/f6-research-agent，设计文档 features/research-agent.md；范围已确认：SerpApi + ResearchPage + SSE 流式 + 全认证用户）  ✅高风险已收口
 - 设计文档：`features/research-agent.md`（已建）
@@ -288,8 +288,7 @@
   - 真实副作用单测：需在提供 Docker 守护进程的 runner 上跑（本开发沙箱无 Docker，该 feature 门禁须在含 Docker 的 CI 跑，或提供可跳过集成测试标记）。
   - 默认 `Provider=Process` 不变，保证无 Docker 环境仍可运行。
 
-### F10 · A1 残余执行器真实化（Skill + MCP）  [P2]  open  ⚠️中风险（Phase 6 行动层）
-- 设计文档：`features/executor-realization.md`（待建）
+### F10 · A1 残余执行器真实化（Skill + MCP）  [P2]  done  ✅（Phase 6 行动层 / SkillPackageExecutor 经 Semantic Kernel 真实调用 + McpClient 经 ModelContextProtocol 2.1.0 真实连接列举调用；分支 feat/f10-executor-realization，设计文档 features/executor-realization.md；质量门 docs/quality/f10-executor-realization-gate.md）
 - 来源：F5 残留 ②（F5 仅真实化 `NativeToolExecutor`；`src/AgentPlatform.Infrastructure/Tools/SkillPackageExecutor.cs` 与 `McpClient.cs` 保留 `// TODO(Phase6)` 占位，仍伪造成功）。
 - 目标：让 SK 技能包与 MCP 工具真正执行，补全 Agent 三类动作源（Native / Skill / MCP）的真实副作用。
 - 验收子项：
@@ -298,8 +297,8 @@
   - 单测：各自真实执行路径（SK 用内存插件或 mock runtime；MCP 用本地 mock MCP server / test transport）覆盖成功/失败。
   - 两者可独立排期（F7「发布为 MCP Server」复用此能力）。
 
-### F11 · 沙箱 OS 级隔离增强（进程沙箱禁网/资源限额）  [P2]  open  ⚠️高风险（OS 级隔离，跨平台）
-- 设计文档：`features/sandbox-os-isolation.md`（待建）
+### F11 · 沙箱 OS 级隔离增强（进程沙箱禁网/资源限额）  [P2]  done  ✅（Phase 6 行动层 / Windows JobObject 资源限额 + AppContainer 真实禁网，fail-safe 回退；分支 feat/f11-sandbox-os-isolation，设计文档 features/sandbox-os-isolation.md；质量门 docs/quality/f11-sandbox-os-isolation-gate.md）
+- 设计文档：`features/sandbox-os-isolation.md`（已建，分支 feat/f11-sandbox-os-isolation）
 - 来源：F5 残留 ③（`SandboxSettings.NetworkEnabled=false` 在进程沙箱仅为声明，未在 OS 层强制；语言白名单 + 超时杀 + 输出截断为缓解项）。
 - 目标：让 `Process` 沙箱在不引入 Docker 的前提下获得 OS 级网络隔离与资源约束，使 `NetworkEnabled=false` 真正生效。
 - 验收子项：
@@ -323,7 +322,7 @@
 ## 第二期 · 真 Agent Harness 升级（阻塞于第一期全部完成）
 
 > ⛔ **第二期 = 真 Harness 升级路线图**：源于 `docs/agent-harness-blueprint.md`（Phase 7–11）与 `phases/phase-7-*.md`～`phases/phase-11-*.md`。
-> **硬性阻塞**：本组 F29–F33 **须第一期全部任务完成后方可开工**——即上方 `## Feature 史诗（Tier 1）` 分组内所有 `open` 项（当前 F8 / F10 / F11 / F12，及任何后续新增 1 期项）交付完毕、无遗留 `open` 后，才进入 feature-builder 取数。
+> **硬性阻塞**：本组 F29–F33 **须第一期全部任务完成后方可开工**——即上方 `## Feature 史诗（Tier 1）` 分组内所有 `open` 项（当前 F8 / F12，及任何后续新增 1 期项）交付完毕、无遗留 `open` 后，才进入 feature-builder 取数。
 > **状态约定**：本组统一标 `open ⛔blocked(1期)`；在 1 期清零前**不建 `features/<id>.md`、不建 `feat/<id>` 分支、不跑 feature-builder**。
 > **编号说明**：F27/F28 已被「BDD 集成测试统一 / 历史 feature BDD 覆盖补全」占用（已 done），故本组顺延为 **F29–F33**。
 

@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Application.EventHandlers;
 using AgentPlatform.Application.Routing.Services;
@@ -27,6 +28,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Embeddings;
 using StackExchange.Redis;
@@ -178,6 +180,20 @@ public static class DependencyInjection
             services.AddScoped<ICodeSandbox, DockerCodeSandbox>();
         else
             services.AddScoped<ICodeSandbox, ProcessCodeSandbox>();
+
+        // OS 级沙箱隔离：按平台 + Sandbox:OsIsolation 解析具体实现（均 fail-safe，绝不阻断执行）。
+        // Windows + AppContainer/Full → AppContainer（真实禁网 + JobObject 资源限额）；
+        // Windows + JobObject（默认）→ JobObject 资源限额；非 Windows / Off → Null（仅环境标记缓解项）。
+        services.AddScoped<ISandboxIsolation>(sp =>
+        {
+            var opts = sp.GetRequiredService<IOptions<SandboxSettings>>().Value;
+            var lf = sp.GetRequiredService<ILoggerFactory>();
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || opts.OsIsolation == OsIsolationMode.Off)
+                return new NullSandboxIsolation(lf.CreateLogger<NullSandboxIsolation>());
+            if (opts.OsIsolation == OsIsolationMode.AppContainer || opts.OsIsolation == OsIsolationMode.Full)
+                return new AppContainerSandboxIsolation(lf.CreateLogger<AppContainerSandboxIsolation>(), Options.Create(opts));
+            return new JobObjectSandboxIsolation(lf.CreateLogger<JobObjectSandboxIsolation>(), Options.Create(opts));
+        });
 
         // 搜索提供方：真实 HTTP（SerpApi），密钥走 SearchSettings / 环境变量，不落库。
         // Provider 决定具体实现（当前仅 SerpApi；其余值启动即报错，避免静默失败）。

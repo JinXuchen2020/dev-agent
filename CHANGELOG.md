@@ -1,5 +1,18 @@
 # 变更日志
 
+## v2.22 (2026-08-07)
+
+### F11 · 沙箱 OS 级隔离增强（JobObject 资源限额 + AppContainer 真实禁网）完成（feature-builder 全栈实跑，⚠️高风险闭环）
+
+F11 让 `Process` 沙箱（默认 `Sandbox:Provider=Process`）获得 OS 级网络隔离与资源约束，使 `SandboxSettings.NetworkEnabled=false` 真正生效。三道质量门全 PASS。
+
+**核心改动：**
+- **隔离抽象**：新增 `ISandboxIsolation` + 三实现 `JobObjectSandboxIsolation`（Windows Job Object 资源限额：作业/进程内存上限、活动进程数上限防 fork 炸、CPU 速率硬上限）、`AppContainerSandboxIsolation`（无 `internetClient` 能力的 AppContainer profile 内启动解释器真实禁网 + 内部叠加 JobObject）、`NullSandboxIsolation`（非 Windows/Off 回退仅环境标记缓解项）。
+- **接入**：`ProcessCodeSandbox` 注入 `ISandboxIsolation`；`CanLaunch` 的隔离器（AppContainer）先行启动，失败 null 回退常规 `Process.Start`；其余路径 `Attach` 事后挂接 JobObject。`ICodeSandbox`/`SandboxResult` 对外契约不变。
+- **配置**：`SandboxSettings` 新增 `OsIsolation`（`Off`/`JobObject`/`AppContainer`/`Full`，**默认 `JobObject`**）+ `MaxProcessCount`(16)/`MemoryLimitBytes`(256MB)/`CpuRatePercent`(50)；`appsettings.json` Sandbox 节扩展。
+- **失败安全**：任何 OS 机制不可用（权限/平台/解释器文件系统不可达/API 未导出）一律透明回退环境标记缓解项，绝不阻断代码执行。纯 `kernel32.dll` P/Invoke，无新增 NuGet 包。
+- **测试**：新增 `SandboxIsolationTests`（5 项，含 Windows JobObject 实测 + AppContainer fail-safe 不变量）；全量 `dotnet test` 0 失败（6 程序集）。
+
 ## v2.20 (2026-08-06)
 
 ### F26 · 企业增强 v1（用量仪表盘 + 工作流 diff）完成（feature-builder 全栈实跑，🟢低风险闭环）
