@@ -174,26 +174,34 @@ public static class DependencyInjection
             AgentPlatform.Infrastructure.Services.PlainTextExtractor>();
         services.AddScoped<AgentPlatform.Domain.Repositories.IKnowledgeBaseRepository,
             AgentPlatform.Infrastructure.Persistence.Repositories.KnowledgeBaseRepository>();
-        // 代码沙箱：默认 Process（进程级，真实可验证、不依赖 Docker）；显式配置 Sandbox:Provider=Docker 才走容器（需 Docker 运行环境）。
-        var sandboxProvider = configuration.GetSection("Sandbox:Provider").Value;
-        if (string.Equals(sandboxProvider, "Docker", StringComparison.Ordinal))
-            services.AddScoped<ICodeSandbox, DockerCodeSandbox>();
-        else
+            // 代码沙箱：ProcessCodeSandbox 为唯一 ICodeSandbox 入口；隔离策略全交给 ISandboxIsolation。
+            // 默认 Sandbox:Provider=Docker（优先容器强隔离，守护进程不可用时自动降级进程级隔离，fail-safe）；
+            // 显式配置 Process 则仅走进程级隔离。
             services.AddScoped<ICodeSandbox, ProcessCodeSandbox>();
 
-        // OS 级沙箱隔离：按平台 + Sandbox:OsIsolation 解析具体实现（均 fail-safe，绝不阻断执行）。
-        // Windows + AppContainer/Full → AppContainer（真实禁网 + JobObject 资源限额）；
-        // Windows + JobObject（默认）→ JobObject 资源限额；非 Windows / Off → Null（仅环境标记缓解项）。
-        services.AddScoped<ISandboxIsolation>(sp =>
-        {
-            var opts = sp.GetRequiredService<IOptions<SandboxSettings>>().Value;
-            var lf = sp.GetRequiredService<ILoggerFactory>();
-            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || opts.OsIsolation == OsIsolationMode.Off)
-                return new NullSandboxIsolation(lf.CreateLogger<NullSandboxIsolation>());
-            if (opts.OsIsolation == OsIsolationMode.AppContainer || opts.OsIsolation == OsIsolationMode.Full)
-                return new AppContainerSandboxIsolation(lf.CreateLogger<AppContainerSandboxIsolation>(), Options.Create(opts));
-            return new JobObjectSandboxIsolation(lf.CreateLogger<JobObjectSandboxIsolation>(), Options.Create(opts));
-        });
+            // Docker 守护进程可用性探测（单例，构造时一次 ping，结果缓存）。
+            services.AddSingleton<IDockerProbe, DockerProbe>();
+            // DockerCodeSandbox 作为内部容器执行器，由 DockerSandboxIsolation 复用（不暴露为 ICodeSandbox）。
+            services.AddScoped<DockerCodeSandbox>();
+
+            // OS 级沙箱隔离：按 Sandbox:Provider + Docker 可用性 + 平台 + OsIsolation 解析（均 fail-safe，绝不阻断执行）。
+            // Provider=Docker 且守护进程可用 → DockerSandboxIsolation（强隔离，复用 DockerCodeSandbox）；
+            // 否则：Windows + AppContainer/Full → AppContainer（真实禁网 + JobObject 资源限额）；
+            //       Windows + JobObject（默认）→ JobObject 资源限额；非 Windows / Off → Null（仅环境标记缓解项）。
+            services.AddScoped<ISandboxIsolation>(sp =>
+            {
+                var opts = sp.GetRequiredService<IOptions<SandboxSettings>>().Value;
+                var lf = sp.GetRequiredService<ILoggerFactory>();
+                var probe = sp.GetRequiredService<IDockerProbe>();
+                if (string.Equals(opts.Provider, "Docker", StringComparison.Ordinal) && probe.IsAvailable)
+                    return new DockerSandboxIsolation(
+                        lf.CreateLogger<DockerSandboxIsolation>(), probe, sp.GetRequiredService<DockerCodeSandbox>());
+                if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || opts.OsIsolation == OsIsolationMode.Off)
+                    return new NullSandboxIsolation(lf.CreateLogger<NullSandboxIsolation>());
+                if (opts.OsIsolation == OsIsolationMode.AppContainer || opts.OsIsolation == OsIsolationMode.Full)
+                    return new AppContainerSandboxIsolation(lf.CreateLogger<AppContainerSandboxIsolation>(), Options.Create(opts));
+                return new JobObjectSandboxIsolation(lf.CreateLogger<JobObjectSandboxIsolation>(), Options.Create(opts));
+            });
 
         // 搜索提供方：真实 HTTP（SerpApi），密钥走 SearchSettings / 环境变量，不落库。
         // Provider 决定具体实现（当前仅 SerpApi；其余值启动即报错，避免静默失败）。

@@ -24,4 +24,7 @@ internal interface ISandboxIsolation
 
     /// <summary>进程已启动后挂接隔离（JobObject 赋权；Null 无操作）。返回是否成功挂接。</summary>
     bool Attach(Process process);
+
+    /// <summary>本隔离器施加的隔离强度（Strong=Docker / Weak=F11 进程级 / None=无 OS 级隔离），供 <see cref="SandboxResult.IsolationStrength"/> 回传。</summary>
+    IsolationStrength Strength { get; }
 }
