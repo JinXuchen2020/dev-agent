@@ -121,13 +121,13 @@ internal sealed class ProcessCodeSandbox : ICodeSandbox
         var truncatedOut = Truncate(outStr, _settings.MaxOutputBytes);
         var truncatedErr = Truncate(errStr, _settings.MaxOutputBytes);
         if (launchError != null)
-            return new SandboxResult(false, truncatedOut, $"{launchError}\n{truncatedErr}", exitCode, sw.ElapsedMilliseconds);
+            return new SandboxResult(false, truncatedOut, $"{launchError}\n{truncatedErr}", exitCode, sw.ElapsedMilliseconds, _isolation.Strength);
 
         var success = !timedOut && exitCode == 0;
         var finalErr = timedOut ? $"执行超时（>{timeoutSeconds}s）\n{truncatedErr}" : truncatedErr;
         _logger.LogInformation("沙箱执行 {Lang} 完成：Success={Success} ExitCode={ExitCode} Duration={Duration}ms",
             language, success, exitCode, sw.ElapsedMilliseconds);
-        return new SandboxResult(success, truncatedOut, finalErr, exitCode, sw.ElapsedMilliseconds);
+        return new SandboxResult(success, truncatedOut, finalErr, exitCode, sw.ElapsedMilliseconds, _isolation.Strength);
     }
 
     private (string? cmd, string ext) ResolveInterpreter(string language)

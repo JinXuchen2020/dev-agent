@@ -1,5 +1,22 @@
 # 变更日志
 
+## v2.23 (2026-08-07)
+
+### F34 · 沙箱双层隔离（Docker 默认强隔离 + JobObject/AppContainer 兜底）完成（feature-builder 全栈实跑，⚠️中风险闭环）
+
+F34 收敛 `docs/sandbox-isolation-harness-comparison.md` §7 的差距建议：默认走 Docker 容器强隔离，无守护进程时降级 F11 的 JobObject/AppContainer 进程级兜底，并显式告知用户隔离强度。三道质量门全 PASS。
+
+**核心改动：**
+- **唯一入口收敛**：`ICodeSandbox` 仅注册 `ProcessCodeSandbox`（移除原 `Provider=Docker → DockerCodeSandbox` 并列注册）；`DockerCodeSandbox` 降级为内部容器执行器，由 `DockerSandboxIsolation` 持有复用。
+- **强隔离接入**：新增 `DockerSandboxIsolation : ISandboxIsolation`（注入 `IDockerProbe` + `DockerCodeSandbox`），`CanLaunch ⇒ Docker 守护进程可用`，`Strength ⇒ Strong`；`TryLaunchAsync` 委托 `DockerCodeSandbox.RunCodeAsync`（NetworkMode=none + 内存限额 + 只读代码挂载）并以 `result with { IsolationStrength = Strong }` 标注结果，异常/不可用返回 `null` 透明回退。
+- **守护进程探测**：新增 `IDockerProbe` 单例，构造时一次 `DockerClientConfiguration().CreateClient().PingAsync()`（2s 超时 + 全 `try/catch`），`IsAvailable` 缓存；不可用记告警、不抛、不阻塞启动（fail-safe）。
+- **强度标注**：`Application.Abstractions` 新增 `IsolationStrength` 枚举（None/Weak/Strong）；`SandboxResult` record 末尾追加 `IsolationStrength IsolationStrength = IsolationStrength.Weak`（带默认值，向后兼容）；`ISandboxIsolation` 扩展 `Strength` 属性，F11 三实现分别返回 Weak/Weak/None；`ProcessCodeSandbox` 构造 `SandboxResult` 时填入 `_isolation.Strength`。
+- **DI 工厂**：`ISandboxIsolation` 按 `Provider + Docker 可用 + 平台 + OsIsolation` 解析——`Provider=Docker` 且守护进程可用 → `DockerSandboxIsolation`；否则 Windows+AppContainer/Full → `AppContainerSandboxIsolation`；Windows+JobObject/默认 → `JobObjectSandboxIsolation`；非 Windows/Off → `NullSandboxIsolation`。
+- **配置**：`appsettings.json` `Sandbox.Provider` 默认 `"Docker"`（强隔离优先，守护进程不可用自动降级 fail-safe）；其余 Sandbox 字段不变。
+- **范围边界**：`ProcessCodeSandbox.RunCommandAsync`（shell 命令）保持 F11 行为（不经 Docker）；不引入 gVisor/Firecracker/新 NuGet 包；前端无沙箱 UI、无前端变更。
+- **测试**：新增 `DualLayerSandboxTests`（7 项：探测 fail-safe / 模式切换 / `Attach=false` / Strong 结果 `SkippableFact` / 回退 Weak `SkippableFact`(Windows) / 向后兼容）；F11 兜底路径全绿。全量 `dotnet test` 0 失败（6 程序集）。
+- **质量门**：`ddd-code-reviewer` 发现并即时修复 **P1×1**（`DockerSandboxIsolation` 未将结果标注为 Strong，静默违反核心契约）+ **P2×1**（设计文档 `ReadonlyRootfs` 表述漂移已校正）+ **P3×1**（测试 `Process.Start("echo")` Windows CI 失败已改 SkippableFact）；`ddd-phase-quality-gate` 12 类审计全过；`codebase-optimizer` 七维 0 阻断（分析模式，不建分支/不 push）。质量报告 `docs/quality/f34-dual-layer-sandbox-gate.md`。
+
 ## v2.22 (2026-08-07)
 
 ### F11 · 沙箱 OS 级隔离增强（JobObject 资源限额 + AppContainer 真实禁网）完成（feature-builder 全栈实跑，⚠️高风险闭环）

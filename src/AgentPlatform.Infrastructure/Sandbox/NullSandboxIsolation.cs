@@ -22,6 +22,8 @@ internal sealed class NullSandboxIsolation : ISandboxIsolation
 
     public bool CanLaunch => false;
 
+    public IsolationStrength Strength => IsolationStrength.None;
+
     public Task<SandboxResult?> TryLaunchAsync(
         string fileName, string arguments, int timeoutSeconds, CancellationToken ct, string source, string language)
         => Task.FromResult<SandboxResult?>(null);

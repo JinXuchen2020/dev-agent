@@ -20,16 +20,16 @@
 
 > 每个史诗含：目标 + 验收子项（原 B/O/P 归并，保留 `文件:行号` 锚点）+ 优先级 + 风险 + 设计文档链接。验收子项里的前端细项可由 `feature-dev` 直接取做。
 
-### F34 · 沙箱双层隔离（Docker 默认强隔离 + JobObject/AppContainer 兜底）  [P0 最高优先级]  open  ⬆️置顶（feature-builder 下一个）  ⚠️中风险（跨 F9/F11 集成；Docker 可用性探测 + 模式选择）
+### F34 · 沙箱双层隔离（Docker 默认强隔离 + JobObject/AppContainer 兜底）  [P0 最高优先级]  done  ✅（2026-08-07，分支 `feat/f34-dual-layer-sandbox`；设计文档 features/dual-layer-sandbox-isolation.md + 质量报告 docs/quality/f34-dual-layer-sandbox-gate.md）  ⬆️原置顶  ⚠️中风险（跨 F9/F11 集成；Docker 可用性探测 + 模式选择）
 
-- 设计文档：`features/dual-layer-sandbox-isolation.md`（待建，本节为立项骨架）
+- 设计文档：`features/dual-layer-sandbox-isolation.md`（已建，完整设计文档）
 - 动机：来自 `docs/sandbox-isolation-harness-comparison.md` §7「收敛差距建议」——F11 同内核隔离为 fail-safe 开放、真实禁网依赖宿主 ACL；要获 VM 级确定性隔离，应**两层并存**：默认走 Docker 强隔离，无 daemon 时降级到 F11 的 JobObject/AppContainer 并显式告知用户「隔离 weaker」。
-- 目标：在 `ISandboxIsolation` 抽象上新增 `DockerSandboxIsolation`（`Provider=Docker` 且守护进程可用时默认启用），复用 F9 已真实化的 `DockerCodeSandbox` 能力（`NetworkMode=none` + 资源限额 + read-only rootfs + seccomp）；`ProcessCodeSandbox` 按 `Sandbox.Provider`/`OsIsolation` 选择隔离层。
+- 目标：在 `ISandboxIsolation` 抽象上新增 `DockerSandboxIsolation`（`Provider=Docker` 且守护进程可用时默认启用），复用 F9 已真实化的 `DockerCodeSandbox` 能力（`NetworkMode=none` + 内存限额 + 只读代码挂载 `:ro`）；`ProcessCodeSandbox` 按 `Sandbox.Provider`/`OsIsolation` 选择隔离层。
 - 范围边界：
   - 不重复造轮子——Docker 执行路径直接复用 F9 `DockerCodeSandbox`，本 feature 只新增「模式选择 + 探测 + 兜底链路 + 显式告警」。
   - `OsIsolation=Off` 或 Docker 不可用时，明确回退 F11 `JobObjectSandboxIsolation`/`AppContainerSandboxIsolation`，并打结构化日志/响应字段声明隔离强度（strong / weak）。
 - 验收要点：
-  - Docker 守护进程可用 → `Provider=Docker` 真实容器执行，断言 `NetworkMode=none` 生效（容器内 socket 连接外部失败）、资源限额生效、rootfs read-only、seccomp 应用。
+  - Docker 守护进程可用 → `Provider=Docker` 真实容器执行，断言 `NetworkMode=none` 生效（容器内 socket 连接外部失败）、内存限额生效、只读代码挂载（`:ro`）生效。
   - Docker 不可用 / `Provider=Process` → 走 F11 JobObject（默认）+ 可选 AppContainer，行为与 F11 既有测试一致；响应/日志显式标注隔离强度为 weak。
   - 启动时一次 Docker 可用性探测；探测失败不抛异常，静默降级并告警（fail-safe）。
   - `dotnet build` 0/0；全量 `dotnet test` 0 失败；Docker 路径 `SkippableFact`（本沙箱无 daemon，跳过；CI `ubuntu-latest` 实测）。

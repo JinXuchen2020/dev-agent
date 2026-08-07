@@ -16,6 +16,8 @@ internal sealed class JobObjectSandboxIsolation : ISandboxIsolation, IDisposable
 {
     public bool CanLaunch => false;
 
+    public IsolationStrength Strength => IsolationStrength.Weak;
+
     private readonly ILogger<JobObjectSandboxIsolation> _logger;
     private readonly SandboxSettings _settings;
     private readonly ConcurrentDictionary<int, WindowsJobObject> _active = new();

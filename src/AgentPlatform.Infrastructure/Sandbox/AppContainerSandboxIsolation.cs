@@ -17,6 +17,8 @@ internal sealed class AppContainerSandboxIsolation : ISandboxIsolation
 {
     public bool CanLaunch => true;
 
+    public IsolationStrength Strength => IsolationStrength.Weak;
+
     private readonly ILogger<AppContainerSandboxIsolation> _logger;
     private readonly SandboxSettings _settings;
 
