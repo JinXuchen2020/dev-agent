@@ -203,8 +203,10 @@ Swagger 没 Authorize → 查 AddSecurityDefinition
 | 45 | pre-commit 质量门拒绝 commit，报"缺少 codebaseOptimizer 字段 / cleared 非 true" | 改 `src/` 须同暂存 `.quality-gate.json` 且 `cleared:true` 且含 `codebaseOptimizer`；`git commit --amend` 若 json 无实质差量会被判"未更新"而拒 | 对 json 做实质补充（如改 hash/notes）再 amend；新 feature 务必同笔暂存 `.quality-gate.json` |
 | 46 | playwright-bdd 跑出 "testDir not found" / 步骤未定义 | playwright-bdd 9.x 的 `testDir` 须 `= defineBddConfig()` 生成目录；`workers:1`+`fullyParallel:false` 才稳 | 严格按 9.x 配置；逻辑变量（PORT 等）置 `defineConfig` 外 |
 | 47 | `qa.mjs` lint 报 peer-deps 冲突安装失败 | 前端依赖版本错配，需 `--legacy-peer-deps` | 跑 lint/install 统一加 `--legacy-peer-deps` |
+| 48 | playwright E2E 断言工作流 `Completed` 终态等不到（CI 红） | 纯前端产品化 feature 的 E2E 越界耦合了后端执行：协商/agent 工作流收敛依赖真实 LLM，CI 无 LLM 时节点停在 Failed/Pending，画布只渲染 `data.state` 文本而非固定 "Completed" | 前端产品化 E2E 只断言前端交付（UI 状态/脚手架生成节点/保存后持久化）；后端执行终态交给 Reqnroll 集成测/单测覆盖，不要在前端 E2E 里断言 LLM 驱动的运行结果 |
+| 49 | playwright 列表卡片点击触发 `strict mode violation: resolved to N elements` | 卡片定位器用「祖先 div + hasText」泛型匹配，多卡时祖先网格容器含多个同名按钮 | 列表卡片用 antd `<Card>` 渲染，直接 `page.locator('.ant-card', { hasText: 名称 }).first()` 精确匹配单卡；别假设"自定义 Card 是普通 div"——先查实际 DOM 再写定位器 |
 
-**收尾期最值钱的三课**：① 编排行为相关的布尔/标志字段（如 `IsDag`）必须落库，否则"重跑即复位"会制造 `Completed` 假完成的静默故障（#36）；② 测试诊断别信落盘文件、改 bug 后别用 `--no-build`（#38/#39）；③ 前端与 API 的枚举/模式必须对齐序列化方式（int vs string），这是 F8 最易踩的模型一致性坑（#41）。
+**收尾期最值钱的三课**：① 编排行为相关的布尔/标志字段（如 `IsDag`）必须落库，否则"重跑即复位"会制造 `Completed` 假完成的静默故障（#36）；② 测试诊断别信落盘文件、改 bug 后别用 `--no-build`（#38/#39）；③ 前端与 API 的枚举/模式必须对齐序列化方式（int vs string），这是 F8 最易踩的模型一致性坑（#41）。**E2E 纪律补两课**：④ 前端产品化 E2E 不耦合后端 LLM 执行终态（#48）；⑤ 列表卡片定位用 `.ant-card` 精确匹配，别用祖先 div 泛型（#49）。
 
 ---
 

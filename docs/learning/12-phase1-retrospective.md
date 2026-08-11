@@ -72,7 +72,7 @@
 
 ## 二、踩坑地图（按主题速查）
 
-> 一张表定位大方向，精确到坑号看 `06-common-pitfalls.md`（#1–#35 历史坑 + §6.14 #36–#47 收尾坑）。
+> 一张表定位大方向，精确到坑号看 `06-common-pitfalls.md`（#1–#35 历史坑 + §6.14 #36–#47 收尾坑 + §6.15 #48–#49 E2E 纪律坑）。
 
 | 主题 | 典型症状 | 先查 | 代表坑号 |
 |------|----------|------|----------|
@@ -147,7 +147,7 @@
 ---
 
 ## 参考
-- `00-学习导读.md`（章节索引）· `06-common-pitfalls.md`（#1–#47 全坑 + 按症状查因表）
+- `00-学习导读.md`（章节索引）· `06-common-pitfalls.md`（#1–#49 全坑 + 按症状查因表）
 - `01-ddd` / `02-clean-arch` / `03-mediatr` / `04-ef` / `05-testing` / `07-evolution` / `08-decision` / `09-phase4` / `10-phase5` / `11-interview-qa`
 - `features/backlog.md`（Tier 1 完成态）· `features/negotiation-productization.md`（F8 设计）
 - 项目长期记忆 `MEMORY.md`（架构事实 / 内核现状 / 环境坑）
