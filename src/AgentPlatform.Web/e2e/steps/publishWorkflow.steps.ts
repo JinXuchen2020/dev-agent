@@ -24,10 +24,12 @@ When('I open the Workflows page', async ({ page }) => {
 });
 
 When('I publish the fixture workflow {string}', async ({ page }, name: string) => {
-  // 夹具工作流卡片：列表用 antd <Card title={name}> 渲染，根为 .ant-card，每张卡含一个 Publish/发布 按钮。
-  // 直接按 .ant-card + 夹具名定位（hasText 子串匹配卡片标题），避免用「祖先 div + hasText」泛型匹配——
-  // 当列表存在多张卡（如其他 E2E 留下的工作流）时，祖先网格容器会含多个发布按钮，触发 strict mode 冲突。
-  const card = page.locator('.ant-card', { hasText: name }).first();
+  // 列表卡片结构（已读源码核实，src/components/EntityCardGrid.tsx + Card.tsx）：
+  //   EntityCardGrid 为【每张卡】渲染一个 antd <Col>（.ant-col），Col 内包一个【无 class 的自定义 <Card> div】。
+  //   - 自定义 Card 不是 antd Card，故【无 .ant-card 类】——用 .ant-card 匹配会得 0 个（已踩过）。
+  //   - 不能裸用 div + hasText：会匹配到外层 .ant-row 网格容器，多卡时网格内含多个发布按钮 → strict mode。
+  //   锚定 .ant-col + 夹具名即可唯一定位单卡（每张卡独占一个 Col），不受其他 E2E 留下的额外卡片影响。
+  const card = page.locator('.ant-col', { hasText: name }).first();
   await expect(card, `fixture workflow '${name}' not visible on /workflows`).toBeVisible();
 
   // 点击卡片内 Publish 打开发布 Drawer
