@@ -24,13 +24,10 @@ When('I open the Workflows page', async ({ page }) => {
 });
 
 When('I publish the fixture workflow {string}', async ({ page }, name: string) => {
-  // 夹具工作流卡片：实体卡片网格中每张卡含工作流名 + 一个 Publish/发布 按钮。
-  // 自定义 Card 组件是普通 div（无 ant-card 类），故以「含夹具名 + 含发布按钮」定位。
-  const card = page
-    .locator('div')
-    .filter({ hasText: name })
-    .filter({ has: page.getByRole('button', { name: PUBLISH_RE }) })
-    .first();
+  // 夹具工作流卡片：列表用 antd <Card title={name}> 渲染，根为 .ant-card，每张卡含一个 Publish/发布 按钮。
+  // 直接按 .ant-card + 夹具名定位（hasText 子串匹配卡片标题），避免用「祖先 div + hasText」泛型匹配——
+  // 当列表存在多张卡（如其他 E2E 留下的工作流）时，祖先网格容器会含多个发布按钮，触发 strict mode 冲突。
+  const card = page.locator('.ant-card', { hasText: name }).first();
   await expect(card, `fixture workflow '${name}' not visible on /workflows`).toBeVisible();
 
   // 点击卡片内 Publish 打开发布 Drawer

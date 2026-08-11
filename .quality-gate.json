@@ -5,5 +5,5 @@
   "codebaseOptimizer": "codebase-optimizer PASSED (Round 1, 0 open；纯前端产品化最小化改动，无 stub/生产就绪改造项，复用充分)",
   "cleared": true,
   "reportRef": "docs/quality/f8-negotiation-gate.md",
-  "notes": "F8 纯前端产品化：编排模式 Segmented 选择器（auto/sequential/negotiation → 省略/int0/int1）+ 协商模式可见指示 + 一键脚手架（Start→Architect→Developer→Critic→End，单一 history 快照）。后端原语（OrchestrationPreset.Negotiation / NegotiationOrchestrator / CriticStepExecutor / DetectPreset）零改动、零迁移、零契约变更。模型一致性：preset 以 int 收发（API 未注册 JsonStringEnumConverter），tsc --noEmit 0、vite build 0、bddgen+playwright list 0 未定义步骤、eslint(改动文件) 0 error。文档更新"
+  "notes": "F8 纯前端产品化：编排模式 Segmented 选择器（auto/sequential/negotiation → 省略/int0/int1）+ 协商模式可见指示 + 一键脚手架（Start→Architect→Developer→Critic→End，单一 history 快照）。后端原语（OrchestrationPreset.Negotiation / NegotiationOrchestrator / CriticStepExecutor / DetectPreset）零改动、零迁移、零契约变更。模型一致性：preset 以 int 收发（API 未注册 JsonStringEnumConverter），tsc --noEmit 0、vite build 0、bddgen+playwright list 0 未定义步骤、eslint(改动文件) 0 error。文档更新。E2E 稳定化（测试修复，非功能改动）：F8 场景去除「断言后端协商收敛到 Completed」的越界耦合（CI 无真实 LLM 跑不出 Completed），改为纯前端交付断言（脚手架生成 Critic 节点 / 图含 Critic 自动识别协商模式指示 / 保存后编辑页持久化）；publish 卡片定位器由「祖先 div+hasText」泛型改为 antd .ant-card 精确匹配，规避 F8 在共享后端留卡后网格容器匹配到多个发布按钮触发 strict mode。"
 }

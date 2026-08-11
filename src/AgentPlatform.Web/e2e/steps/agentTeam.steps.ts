@@ -37,12 +37,3 @@ Then('画布显示协商模式指示', async ({ page }) => {
 When('我在名称框输入 {string}', async ({ page }, name: string) => {
   await page.getByPlaceholder('工作流名称').fill(name);
 });
-
-Then('工作流达终态 Completed', async ({ page }) => {
-  // 现有工作流路径：保存并运行调用 runExistingWorkflow(id, preset) 同步跑完 DAG，
-  // 刷新后画布节点带 "Completed" 状态文本（协商式运行收敛终止，不耦合具体评审结果）。
-  await expect(
-    page.getByText('Completed', { exact: false }).first(),
-    '工作流未达 Completed 终态',
-  ).toBeVisible({ timeout: 20000 });
-});
