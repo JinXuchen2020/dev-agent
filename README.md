@@ -30,7 +30,7 @@ curl -X POST "http://localhost:5000/api/v1/conversations/$CONV_ID/messages" \
 | `AgentPlatform.Infrastructure` | 基础设施 — EF Core、Semantic Kernel、Redis 短期记忆、AutoGen 编排、状态机引擎、ExecutionLog |
 | `AgentPlatform.Api` | 表现层 — ASP.NET Core Web API 含 Agents/AgentRoles/ExecutionLogs/Auth 端点、JWT（Cookie 承载）+ API-Key 认证（Smart policy scheme）、RBAC、限流、提示注入中间件、Swagger/Scalar、CORS |
 | `AgentPlatform.Workflow` | 工作流引擎（预留） |
-| `AgentPlatform.SpecFlowTests` | BDD 验收测试（SpecFlow + xUnit，11 个 .feature 文件） |
+| `AgentPlatform.SpecFlowTests` | BDD 验收测试（Reqnroll + xUnit，覆盖 8 功能域 114 场景） |
 
 ## 构建与测试
 
@@ -58,11 +58,11 @@ dotnet user-secrets set "OpenAI:Key" "sk-your-key-here"
 - **多租户**: ITenantScoped + EF Core Global Query Filter（Phase 5 升级为 per-request 真实多租户；F13 新增外部 API 凭据层租户隔离——模型/搜索 BYO-Key + 平台内置回退）
 - **认证**: httpOnly + SameSite Cookie 承载 JWT（前端 `withCredentials`，不落 localStorage）+ PBKDF2 密码哈希；API-Key 与 Bearer 并存于 Smart policy
 - **状态机引擎**: 自研 `WorkflowStateMachineEngine`，支持分支/重试（可配置次数）/回滚
-- **多 Agent 编排**: `AutoGenAgentOrchestrator` 顺序管线，6 种预置角色 + 自定义 `AgentType` 值对象
+- **多 Agent 编排**: `AutoGenAgentOrchestrator` 顺序管线 + `NegotiationOrchestrator` 协商式（Critic 收敛，F8 产品化），6 种预置角色 + 自定义 `AgentType` 值对象
 - **短期记忆**: Redis 实现 `IShortTermMemory`，`IConnectionMultiplexer` Singleton，连接失败降级到内存
 - **运行时日志**: `ExecutionLog` 聚合根，5 个领域事件贯穿工作流生命周期
 - **可插拔数据库**: 条件编译 `USE_SQLITE`/`USE_POSTGRESQL`，`DatabaseInitializer` 自动初始化
-- **BDD**: SpecFlow Gherkin 验收用例驱动开发（41 个场景全部通过）
+- **BDD**: Reqnroll（原 SpecFlow）+ playwright-bdd 验收用例驱动开发（后端 114 场景 + 前端 22 场景，全绿）
 
 ## 阶段路线
 
@@ -73,7 +73,7 @@ dotnet user-secrets set "OpenAI:Key" "sk-your-key-here"
 | Phase 3 | 平台化 — 可视化编排、监控、自定义 AgentType | ✅ 完成 |
 | Phase 4 | 知识接地与加固 — RAG 真接地、Critic fail-loud、DB 分页、真 tokenizer | ✅ 完成 |
 | Phase 5 | 安全加固（launch-blocking）— JWT/API-Key 认证 / RBAC / 真实多租户 / 限流 / 提示注入防护 / 审计 / API Key AES-256-GCM 加密 | ✅ 完成 |
-| Phase 6 | 前沿特性 — Code Agent、压测、BDD 全量（F5 行动层 / F6 Research 已完成） | 🔄 进行中（F13 多租户凭据已完成；F14 供应商模型发现已完成；F15 多语言 i18n 已完成；F16 列表改卡片已完成；F17 AgentConfiguration 实例化已完成；F18 Dashboard 图表已完成；F19 Agent Roles 内建+合并 设计中） |
+| Phase 6 | 前沿特性 — Code Agent、压测、BDD 全量、差异化优势产品化 | ✅ 完成（第一期 Tier 1 共 29 个史诗已全部 done：F5 行动层 / F6 Research / F8 Negotiation+Critic / F9–F12 沙箱与 e2e / F13–F19 多租户·i18n·Dashboard / F20–F28 工作流平台化 / F27–F28 BDD 全量 / F34 沙箱双层隔离；第二期 F29–F33 已解锁待启动，详见 features/backlog.md） |
 
 ## 功能特性进度
 
@@ -81,7 +81,9 @@ dotnet user-secrets set "OpenAI:Key" "sk-your-key-here"
 
 - **F13 多租户凭据配置** ✅ 已完成（2026-07-27，`feat/f13-multi-tenant-credentials`）
 - **F14 供应商模型发现** ✅ 已完成（2026-07-28，`feat/f14-model-discovery`）
-- **F15 多语言 i18n** ✅ 已完成（2026-07-28，`feat/f15-i18n`）/ **F16 列表改卡片** ✅ 已完成（2026-07-29，`feat/f16-card-layout`）/ **F17 AgentConfiguration 实例化** ✅ 已完成（2026-07-29，`feat/f17-agent-config-instantiation`）/ **F18 Dashboard 图表** ✅ 已完成（2026-07-30，`feat/f18-dashboard-charts`）/ **F19 Agent Roles 内建+合并** —— 设计中（各 feature 设计文档在 `features/` 目录）
+- **F15 多语言 i18n** ✅ 已完成（2026-07-28，`feat/f15-i18n`）/ **F16 列表改卡片** ✅ 已完成（2026-07-29，`feat/f16-card-layout`）/ **F17 AgentConfiguration 实例化** ✅ 已完成（2026-07-29，`feat/f17-agent-config-instantiation`）/ **F18 Dashboard 图表** ✅ 已完成（2026-07-30，`feat/f18-dashboard-charts`）/ **F19 Agent Roles 内建+合并** ✅ 已完成（2026-08，各 feature 设计文档在 `features/` 目录）
+
+- **第一期其余史诗（F1–F12、F20–F34，含 F7 拆出的 F20–F26）亦已全部完成**，完整实现状态以 [`features/backlog.md`](./features/backlog.md) 为准。
 
 > 约定：新增 feature 须先将设计文档放入 `features/`，再进入实现（见 backlog 红线）。
 

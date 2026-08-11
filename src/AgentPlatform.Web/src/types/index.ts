@@ -162,6 +162,13 @@ export const StepType = {
 } as const;
 export type StepType = (typeof StepType)[keyof typeof StepType];
 
+// F8 · 编排模式（前端选择器，语义对齐后端 OrchestrationPreset 枚举）：
+// - 'auto'        ：省略 preset，由后端 DetectPreset 自动识别（图含 Critic 即 Negotiation）。
+// - 'sequential'  ：顺序编排，映射后端 int 0（OrchestrationPreset.Sequential）。
+// - 'negotiation' ：协商式多智能体（LLM 驱动选步 + Critic 收敛），映射后端 int 1。
+// 注意：API 全局未注册 JsonStringEnumConverter，故 preset 以 **int** 收发，绝不可改字符串。
+export type OrchestrationPresetMode = 'auto' | 'sequential' | 'negotiation';
+
 // Parsed node configuration (stored as JSON string in `configJson` on the backend).
 export interface NodeConfig {
   systemPrompt?: string;

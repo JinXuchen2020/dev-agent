@@ -287,9 +287,11 @@
 - 验收：后端 `dotnet test` 114/114 全绿；前端 `node scripts/integration.mjs --e2e` 全绿（后端 BDD 114 + 前端 BDD 22）；三道质量门 0 open；`.quality-gate.json` 推进 `f28-bdd-coverage`，含 `bdd:PASSED` + `frontendE2e:BDD` + `cleared:true`。
 - 风险：跨场景数据污染（各 feature Background 隔离 + `IntegrationAppFactory` 单例）/ 租户隔离（复用固定 Id+ApiKey）/ Stub 模型（仅验链路与鉴权，不验真实 LLM）/ 前端 locale（全 zh-CN）。
 
-### F8 · 差异化优势产品化（Negotiation + Critic）  [native]  open
-- 设计文档：`features/negotiation-productization.md`（待建）
+### F8 · 差异化优势产品化（Negotiation + Critic）  [native]  done  ✅（Phase 6 产品化闭环 / 编排模式 Segmented 选择器 + 协商可见指示 + 脚手架；后端原语零改动；分支 feat/f8-negotiation-productization，设计文档 features/negotiation-productization.md，质量门 docs/quality/f8-negotiation-gate.md · 2026-08-11 DONE）
+- 设计文档：`features/negotiation-productization.md`（已建，完整设计文档）
 - 目标：后端已具备 Negotiation 协商式多智能体 + Critic 收敛原语，待产品化画布「Agent-Team / Negotiation」专属模式（多 Agent 节点 + Critic + 收敛终止条件）。
+- 实现：编排模式 `Segmented`（auto 省略 preset 由 DetectPreset 识别 / sequential→int0 / negotiation→int1）；协商模式可见紫色 Tag；`scaffoldAgentTeam()` 一键生成 Start→Architect→Developer→Critic→End；`OrchestrationPresetMode` 类型与 int 收发模型一致性；zh-CN/en-US 三键 i18n；BDD E2E `agent-team-negotiation.feature` 两次保存并运行断言 Completed。
+- 验收：tsc/vite build/eslint 0 error；三道质量门 0 open；`.quality-gate.json` 推进 `f8`，含 `cleared:true` + `codebaseOptimizer`。
 - 说明：**保留，勿稀释**——Dify/n8n 无此原生原语，是本平台差异化壁垒。
 
 ### F9 · 代码沙箱容器隔离（DockerCodeSandbox 真实化）  [P2]  done  ✅（Phase 6 行动层 / Docker.DotNet 真实容器执行；分支 feat/f9-docker-sandbox，设计文档 features/sandbox-docker.md；质量门 docs/quality/f9-docker-sandbox-gate.md）
@@ -333,11 +335,11 @@
 
 ---
 
-## 第二期 · 真 Agent Harness 升级（阻塞于第一期全部完成）
+## 第二期 · 真 Agent Harness 升级（第一期已于 2026-08-11 全部完成，现已解锁）
 
 > ⛔ **第二期 = 真 Harness 升级路线图**：源于 `docs/agent-harness-blueprint.md`（Phase 7–11）与 `phases/phase-7-*.md`～`phases/phase-11-*.md`。
-> **硬性阻塞**：本组 F29–F33 **须第一期全部任务完成后方可开工**——即上方 `## Feature 史诗（Tier 1）` 分组内所有 `open` 项（当前 F8 / F12，及任何后续新增 1 期项）交付完毕、无遗留 `open` 后，才进入 feature-builder 取数。
-> **状态约定**：本组统一标 `open ⛔blocked(1期)`；在 1 期清零前**不建 `features/<id>.md`、不建 `feat/<id>` 分支、不跑 feature-builder**。
+> **硬性阻塞（已满足）**：本组 F29–F33 **须第一期全部任务完成后方可开工**——上方 `## Feature 史诗（Tier 1）` 分组内 29 个史诗已于 2026-08-11 全部 `done`、无遗留 `open` 项，阻塞条件**已满足**，可进入 feature-builder 取数。
+> **状态约定**：本组统一标 `open ⛔blocked(1期)`；在 1 期清零前**不建 `features/<id>.md`、不建 `feat/<id>` 分支、不跑 feature-builder**。（2026-08-11 更新：第一期已清零，阻塞解除；状态标记待 2 期正式启动时清理为 `doing`。）
 > **编号说明**：F27/F28 已被「BDD 集成测试统一 / 历史 feature BDD 覆盖补全」占用（已 done），故本组顺延为 **F29–F33**。
 
 ### F29 · 执行持久化（Durable Execution）  [P0]  open  ⛔blocked(1期)  🔴高风险（运行时范式跨越：请求内同步 → 可挂起/恢复 durable）

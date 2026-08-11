@@ -78,10 +78,10 @@
 - Scalar/OpenAPI/Swagger: 所有环境默认启用 (已移除环境限制)
 
 ## Next Steps
-- Phase 5: 安全加固（launch-blocking）— JWT/Identity 认证、RBAC、真实多租户隔离、速率限制、审计日志、API Key 加密
-- Phase 6: 前沿特性 — Code Agent、vLLM 深度集成、BDD 全量覆盖、性能优化
-- 解决 Phase 2 审查遗留问题：注册分支执行器、持久化重试计数器、真实 AutoGen .NET 集成
-- 蓝图同步: 版本 v1.5, Phase 2 清单已勾选, Phase 3 全部完成
+- Phase 5: 安全加固（launch-blocking）— ✅ 已完成（JWT/API-Key 认证、RBAC、真实多租户隔离、速率限制、审计日志、API Key AES-256-GCM 加密）
+- Phase 6: 前沿特性 — ✅ 已完成（第一期 Tier 1 共 29 个史诗全部 done：F5 行动层 / F6 Research / F8 Negotiation+Critic / F9–F12 沙箱与 e2e / F13–F19 多租户·i18n·Dashboard / F20–F28 工作流平台化 / F27–F28 BDD 全量 / F34 沙箱双层隔离）
+- 第二期（真 Agent Harness 升级）已解锁：F29 Durable Execution / F30 Agent 实体化 / F31 消息总线 / F32 语义记忆 / F33 评估门禁——见 features/backlog.md
+- 蓝图同步: 版本 v1.5+, Phase 2–6 清单已勾选，第一期全部完成
 
 ## Critical Context
 - .NET 9, SK 1.30 (IChatCompletionService in Microsoft.SemanticKernel.ChatCompletion, metadata keys: "Usage.InputTokens", "Usage.OutputTokens")

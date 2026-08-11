@@ -156,6 +156,9 @@ interface CanvasState {
   onNodeDragStart: () => void;
 
   addNode: (stepType: StepType, position: { x: number; y: number }) => void;
+  // F8 · 一键脚手架：生成「Start → Architect(Agent) → Developer(Agent) → Critic → End」协商图。
+  // 替换当前画布（保证单一 Start 通过 ValidateGraph），走单一 history 快照以支持撤销。
+  scaffoldAgentTeam: () => void;
   removeNode: (id: string) => void;
   removeEdge: (id: string) => void;
   snapshot: () => void;
@@ -228,6 +231,41 @@ export const useCanvasStore = create<CanvasState>((set, get) => {
         },
       };
       set({ nodes: [...get().nodes, node], selectedNodeId: id });
+    },
+
+    scaffoldAgentTeam: () => {
+      pushHistory();
+      const buildNode = (
+        stepType: StepType,
+        label: string,
+        position: { x: number; y: number },
+      ): DagNode => ({
+        id: newId(),
+        type: STEP_TYPE_TO_NODE_TYPE[stepType],
+        position,
+        data: { label, stepType, config: defaultConfig(stepType) },
+      });
+      // 严格按 ValidateGraph 构造：单一 Start、单一 End、线性无环、名称唯一、从 Start 全连通。
+      const start = buildNode(StepType.Start, STEP_TYPE_LABEL[StepType.Start], { x: 40, y: 220 });
+      const architect = buildNode(StepType.Agent, 'Architect', { x: 280, y: 220 });
+      const developer = buildNode(StepType.Agent, 'Developer', { x: 520, y: 220 });
+      const critic = buildNode(StepType.Critic, STEP_TYPE_LABEL[StepType.Critic], { x: 760, y: 220 });
+      const end = buildNode(StepType.End, STEP_TYPE_LABEL[StepType.End], { x: 1000, y: 220 });
+      const edge = (source: string, target: string): DagEdge => ({
+        id: newId(),
+        source,
+        target,
+      });
+      set({
+        nodes: [start, architect, developer, critic, end],
+        edges: [
+          edge(start.id, architect.id),
+          edge(architect.id, developer.id),
+          edge(developer.id, critic.id),
+          edge(critic.id, end.id),
+        ],
+        selectedNodeId: null,
+      });
     },
 
     removeNode: (id) => {

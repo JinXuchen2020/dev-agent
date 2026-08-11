@@ -1,5 +1,20 @@
 # 变更日志
 
+## v2.25 (2026-08-11)
+
+### F8 · 差异化优势产品化（Negotiation + Critic）前端专属模式完成（feature-builder 纯前端闭环，🟢低风险）
+
+F8 将后端已就绪的 Negotiation 协商式多智能体 + Critic 收敛原语**产品化为画布专属模式**。后端零改动（OrchestrationPreset.Negotiation / NegotiationOrchestrator / CriticStepExecutor / DetectPreset 原语齐全），纯前端实现。三道质量门全 PASS。
+
+**核心改动：**
+- **编排模式选择器**：`WorkflowCanvasPage` 工具栏新增 antd `Segmented`（自动/顺序/协商），`auto` 省略 preset 由后端 `DetectPreset` 自动识别；`sequential`→int 0；`negotiation`→int 1。模型一致性关键：API 全局未注册 `JsonStringEnumConverter`，preset 一律以 **int 收发**，绝不可改字符串。
+- **协商模式可见指示**：当 `presetMode==='negotiation'` 或画布含 `StepType.Critic` 节点时，显示紫色 `Tag`（协商模式 · 评审收敛），让 Critic 收敛特性在 UI 上可感知。
+- **一键脚手架**：`workflowCanvasStore.scaffoldAgentTeam()` 单次 history 快照生成 `Start → Architect → Developer → Critic → End` 五节点四边协商图（严格满足 `ValidateGraph`：单 Start、≥1 End、无环、全连通、节点名唯一）。
+- **模型一致性**：`runExistingWorkflow(id, mode)` 映射 `OrchestrationPresetMode` → 后端 preset int；`services/api.ts` 与 `types/index.ts` 新增 `OrchestrationPresetMode` 类型（'auto' | 'sequential' | 'negotiation'）。
+- **i18n**：`zh-CN.ts` / `en-US.ts` 对称补充 `preset` / `negotiationMode` / `scaffoldAgentTeam` 三键。
+- **BDD E2E**：新增 `agent-team-negotiation.feature`（1 场景）+ `agentTeam.steps.ts`，采用「新建工作流 + 两次保存并运行」路径——首次线性创建跳转编辑页（生成 id），第二次在既有工作流上走 `runExistingWorkflow(id,'negotiation')` 真实 DAG 协商运行并断言 `Completed` 终态；后端不可达时整体 skip。`bddgen` + `playwright test --list` 0 未定义步骤。
+- **质量门**：`tsc --noEmit` 0、`vite build` 0、`eslint`（改动文件）0 error、三道门 0 open。质量报告 `docs/quality/f8-negotiation-gate.md`，设计文档 `features/negotiation-productization.md`。
+
 ## v2.24 (2026-08-11)
 
 ### F12 · Tool/Code 节点全链路 e2e 完成（feature-builder 全栈实跑，🟢低风险闭环）

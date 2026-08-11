@@ -824,6 +824,16 @@ export const zhCN = {
     hitlResolveFailed: '审批处理失败',
     variableWatch: '变量监视',
     noRunResult: '尚无运行结果',
+    // ── F8 · 协商式多智能体（Negotiation + Critic）产品化 ──
+    preset: {
+      label: '编排模式',
+      auto: '自动',
+      sequential: '顺序',
+      negotiation: '协商',
+    },
+    negotiationMode: '协商模式 · 评审收敛',
+    scaffoldAgentTeam: '搭建 Agent 团队',
+    scaffoldAgentTeamTip: '一键生成 Start→Architect→Developer→Critic→End 协商图',
   },
 };
 
