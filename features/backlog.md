@@ -335,11 +335,11 @@
 
 ---
 
-## 第二期 · 真 Agent Harness 升级（阻塞于第一期全部完成）
+## 第二期 · 真 Agent Harness 升级（第一期已于 2026-08-11 全部完成，现已解锁）
 
 > ⛔ **第二期 = 真 Harness 升级路线图**：源于 `docs/agent-harness-blueprint.md`（Phase 7–11）与 `phases/phase-7-*.md`～`phases/phase-11-*.md`。
-> **硬性阻塞**：本组 F29–F33 **须第一期全部任务完成后方可开工**——即上方 `## Feature 史诗（Tier 1）` 分组内所有 `open` 项（当前 F8 / F12，及任何后续新增 1 期项）交付完毕、无遗留 `open` 后，才进入 feature-builder 取数。
-> **状态约定**：本组统一标 `open ⛔blocked(1期)`；在 1 期清零前**不建 `features/<id>.md`、不建 `feat/<id>` 分支、不跑 feature-builder**。
+> **硬性阻塞（已满足）**：本组 F29–F33 **须第一期全部任务完成后方可开工**——上方 `## Feature 史诗（Tier 1）` 分组内 29 个史诗已于 2026-08-11 全部 `done`、无遗留 `open` 项，阻塞条件**已满足**，可进入 feature-builder 取数。
+> **状态约定**：本组统一标 `open ⛔blocked(1期)`；在 1 期清零前**不建 `features/<id>.md`、不建 `feat/<id>` 分支、不跑 feature-builder**。（2026-08-11 更新：第一期已清零，阻塞解除；状态标记待 2 期正式启动时清理为 `doing`。）
 > **编号说明**：F27/F28 已被「BDD 集成测试统一 / 历史 feature BDD 覆盖补全」占用（已 done），故本组顺延为 **F29–F33**。
 
 ### F29 · 执行持久化（Durable Execution）  [P0]  open  ⛔blocked(1期)  🔴高风险（运行时范式跨越：请求内同步 → 可挂起/恢复 durable）

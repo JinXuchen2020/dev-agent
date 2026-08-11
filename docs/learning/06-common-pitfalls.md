@@ -26,6 +26,13 @@
 | 角色被误标「自定义」/ 内建区恒空 | 查前端硬编码 code 与 DB 是否对齐 | #33 角色分类双源不一致（AgentType vs AgentRoleDefinition） |
 | 设计文档「锁定决策」被用户推翻 | 查用户真实使用（文档决策可修订） | #34 设计决策非铁律 |
 | curl 中文参数返回 400 | 查 Git Bash 编码（非后端 bug） | #35 命令行中文参数编码 |
+| 工作流"假完成"：Status=Completed 但所有节点 Pending | 查 IsDag 等影响编排的标志是否持久化 | #36 编排标志未映射 |
+| SaveChanges 报 DbUpdateConcurrencyException（本应 INSERT） | 查客户端 Guid 主键是否 ValueGeneratedNever | #37 客户端 Guid PK |
+| BDD/集成测试无诊断输出、日志不落地 | 查测试宿主是否吞文件写 | #38 宿主吞文件写 |
+| 改 bug 后测试仍"绿"但其实是旧 DLL | 查是否用了 --no-build | #39 --no-build 旧 DLL |
+| 前端选了某模式/枚举但后端不生效 | 查枚举是 int 还是字符串收发 | #41 枚举须 int 收发 |
+| git push 到 GitHub 失败 | 查执行环境出站网络 | #44 沙箱无出站网络 |
+| 质量门 commit 被拒（缺 json/cleared 非 true） | 查 .quality-gate.json 是否同暂存 | #45 pre-commit 质量门 |
 | 架构违规（编译不报） | 查 ArchitectureTests | 教训见 #5/#6/#8，用架构测试自动拦截 |
 
 ---
@@ -175,6 +182,29 @@ Swagger 没 Authorize → 查 AddSecurityDefinition
 | 35 | 用 `curl -d '{"name":"中文"}'` 调后端返回 400，但 ASCII 正常 | Git Bash 在 inline JSON 里把中文 UTF-8 编码成乱码，后端收到非法 JSON | 浏览器/前端 axios 正常；命令行验证中文用 `python -c "urllib.request(...json.dumps(body).encode('utf-8'), headers={'Content-Type':'application/json; charset=utf-8'})"` |
 
 **教训：** 控制器层的输入校验若比 handler 内部兜底更严，会产生「handler 本可处理却被挡在门外」的静默失败；列表页用 OR 聚合错误会让单点 400 拖垮整页——错误隔离要逐请求处理。
+
+---
+
+## 6.14 2026-08-11 新增坑（F12 / F8 收尾 + 一期闭环）
+
+> 这批坑来自一期最后冲刺（F12 Tool/Code 全链路 e2e、F8 Negotiation 产品化）与仓库工程环境实测，是 #1~#35 之后补录的"收尾期"经验。
+
+| # | 现象 | 根因 | 避免 |
+|---|------|------|------|
+| 36 | DAG 工作流 run 后整体 `Completed`，但所有 Code/Tool 节点 `State=Pending`、`Result` 空（"假完成"） | `Workflow._isDag` 未做 EF 映射，re-run 从 DB 重载 `IsDag` 复位 false，`SequentialOrchestrator.PrepareContext` 据此 fallback 到遗留 `wf.Steps` 投影（节点 Type=null+ConfigJson="{}"），真实 DAG `Nodes` 从未被编排 | 任何影响编排行为的布尔/标志字段都必须持久化；加 `WorkflowConfiguration` 映射 + 迁移 `PersistWorkflowIsDag`（含 `#pragma warning disable IDE0161`） |
+| 37 | 新增含显式 `Guid.NewGuid()` 的子实体集合，`SaveChanges` 报 `DbUpdateConcurrencyException`（期望 INSERT 却发 UPDATE） | EF 对 client-generated Guid 主键默认 `ValueGeneratedOnAdd`，检测到已赋值就当"已存在"走 UPDATE | 客户端预置 Guid 的集合属性配置 `ValueGeneratedNever()` |
+| 38 | Reqnroll/SpecFlow 步骤里 `File.WriteAllText`/`AppendAllText` 诊断日志"写了但文件不落地"，排查无输出 | 测试宿主进程（test host）对文件系统写受限/被重定向，`WriteAllText` 静默吞异常 | 诊断靠"断言失败抛 Exception 带 dump"或 `dotnet test > file.txt` 重定向取 stdout；不要在步骤里依赖落盘文件 |
+| 39 | 改完 bug 跑 `dotnet test --no-build` 仍"绿"，但实际 DLL 还是旧的 | 此前 `dotnet build` 因 IDE0161（TreatWarningsAsErrors）失败，残留下次编译产物；`--no-build` 跳过重编直接用旧 DLL | 改 bug 后务必 `dotnet test`（不带 `--no-build`）强制重编；CI 里避免 `--no-build` 除非确定刚 build 过 |
+| 40 | 断言"全节点 Completed"通过，但控制标记 Start/End 实际还是 Pending，误以为全成功 | Start(0)/End(1) 是控制标记节点，编排器不解析执行器，合法保持 Pending；仅可执行节点（Code=7/Tool=6）被标 Completed | 断言终态时排除控制标记，只校验 Code/Tool；或断言工作流级 `Status=Completed` |
+| 41 | 前端选了"协商"模式，后端却按顺序跑 / 枚举对不上 | API 全局**未注册** `JsonStringEnumConverter`，`OrchestrationPreset` 以 **int** 收发（Negotiation=1, Sequential=0）；前端若用字符串 JSON 会反序列化失败或落默认 | 模型一致性铁律：枚举参数一律 int 收发，绝不可改字符串；约定写进类型注释与 BDD 步骤 |
+| 42 | CI PR 工作流不触发 / 分支规则报"无匹配" | 仓库 CI 分支规则只认 `[master]`，不存在 `main`/`develop` 分支名 | 新分支/PR 基于 `master`；改 PR 分支工作流须先合 master |
+| 43 | 新建源码目录被 `.gitignore` 静默忽略、构建产物缺文件 | `.gitignore` 含 `[Dd]ebug/` 通配，曾误伤名为 `Debug` 的源码目录（F25） | 建新目录前先排查重名；避免目录名命中常见忽略通配 |
+| 44 | `git push` 到 GitHub 失败（沙箱无出站网络） | 当前执行环境无 GitHub 出站网络 | 只本地 `git commit`；CI（`ubuntu-latest`）自带 Docker，无 daemon 断言用 `[SkippableFact]`+`Skip.If` |
+| 45 | pre-commit 质量门拒绝 commit，报"缺少 codebaseOptimizer 字段 / cleared 非 true" | 改 `src/` 须同暂存 `.quality-gate.json` 且 `cleared:true` 且含 `codebaseOptimizer`；`git commit --amend` 若 json 无实质差量会被判"未更新"而拒 | 对 json 做实质补充（如改 hash/notes）再 amend；新 feature 务必同笔暂存 `.quality-gate.json` |
+| 46 | playwright-bdd 跑出 "testDir not found" / 步骤未定义 | playwright-bdd 9.x 的 `testDir` 须 `= defineBddConfig()` 生成目录；`workers:1`+`fullyParallel:false` 才稳 | 严格按 9.x 配置；逻辑变量（PORT 等）置 `defineConfig` 外 |
+| 47 | `qa.mjs` lint 报 peer-deps 冲突安装失败 | 前端依赖版本错配，需 `--legacy-peer-deps` | 跑 lint/install 统一加 `--legacy-peer-deps` |
+
+**收尾期最值钱的三课**：① 编排行为相关的布尔/标志字段（如 `IsDag`）必须落库，否则"重跑即复位"会制造 `Completed` 假完成的静默故障（#36）；② 测试诊断别信落盘文件、改 bug 后别用 `--no-build`（#38/#39）；③ 前端与 API 的枚举/模式必须对齐序列化方式（int vs string），这是 F8 最易踩的模型一致性坑（#41）。
 
 ---
 
