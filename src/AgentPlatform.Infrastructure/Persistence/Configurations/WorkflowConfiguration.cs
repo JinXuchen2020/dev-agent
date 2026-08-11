@@ -25,6 +25,14 @@ internal sealed class WorkflowConfiguration : IEntityTypeConfiguration<Workflow>
         builder.Property(w => w.Context).HasMaxLength(16000);
         builder.Property(w => w.TenantId).IsRequired();
 
+        // F12 修复：IsDag（_isDag 私有字段）此前未持久化，导致「重跑已有工作流」经仓储重载后
+        // IsDag 复位为 false，编排器误走遗留 Steps 投影（Type=null、ConfigJson="{}"）而非真实 DAG
+        // Nodes，使 Code/Tool 等显式节点永不执行。现显式落库，重跑路径与创建即跑路径行为一致。
+        builder.Property<bool>("_isDag")
+            .HasColumnName("IsDag")
+            .IsRequired()
+            .HasDefaultValue(false);
+
         // AgentAssignments stores agent IDs (not full Agent aggregate); preserved for backward-compat.
         builder.Ignore(w => w.AgentAssignments);
 

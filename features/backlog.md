@@ -322,8 +322,8 @@
   - 与 `SandboxSettings`（NetworkEnabled / TimeoutSeconds / AllowedLanguages / MaxOutputBytes）联动；跨平台抽象，失败安全（不支持平台回退现有缓解项并告警）。
   - 单测：在 CI 对应平台断言禁网生效（e.g. 代码尝试 socket 连接 → 失败）。
 
-### F12 · Tool/Code 节点全链路 e2e  [P3]  open  🟢低风险（测试基础设施）
-- 设计文档：`features/tool-code-e2e.md`（待建）
+### F12 · Tool/Code 节点全链路 e2e  [P3]  done  🟢低风险（测试基础设施 · feature-builder 全流程 · 分支 `feat/f12-tool-code-e2e`）
+- 设计文档：`features/tool-code-e2e.md`（已建，完整设计文档）
 - 来源：F5 残留 ④（单元层已覆盖真实执行路径；含 Tool/Code 节点的端到端需后端+Web 实例，本开发沙箱未跑）。
 - 目标：起真实后端 + Web 实例，跑一条含 Tool 节点（真实 HTTP）与 Code 节点（真实 python/node 子进程）的工作流，断言端到端 stdout/响应回填与节点状态。
 - 验收子项：

@@ -65,3 +65,20 @@ public sealed record ExecutionLogStepEntryDto(
 public sealed record ExecutionLogStepsResponseDto(
     IReadOnlyList<ExecutionLogStepEntryDto> Items,
     int TotalCount);
+
+/// <summary>F12 工作流运行响应 DTO（camelCase；枚举按整数序列化）。仅声明断言所需字段。</summary>
+public sealed record WorkflowNodeResponseDto(
+    Guid Id,
+    int Type,
+    string Name,
+    int State,
+    string? Result,
+    string? ErrorDetail);
+
+/// <summary>F12 工作流详情 DTO（camelCase）。断言聚焦于 Nodes（图节点）的状态与真实输出回填。</summary>
+public sealed record WorkflowDetailResponseDto(
+    Guid Id,
+    string Name,
+    int CurrentState,
+    IReadOnlyList<WorkflowNodeResponseDto>? Nodes,
+    IReadOnlyList<object>? Edges);
