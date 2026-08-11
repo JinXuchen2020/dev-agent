@@ -89,7 +89,7 @@
 | 前端 | Streamlit | **React** (TypeScript + Vite) + Ant Design；桌面形态可选 **Tauri 2.0**（详见附录 G） | 100% |
 | 代码沙箱 | 进程级真实执行 + Docker 桩(未接入) | ProcessCodeSandbox(唯一 ICodeSandbox 入口, 接入 ISandboxIsolation) / DockerCodeSandbox(Docker.DotNet 真实容器隔离, 经 DockerSandboxIsolation 复用) / OS 级隔离(JobObject 资源限额 + AppContainer 真实禁网, fail-safe 回退) / IsolationStrength 强度标注 | 双层 100%（Docker 强隔离默认 + F11 进程级兜底） |
 | 缓存 / 短期记忆 | Redis | StackExchange.Redis 最新稳定版（兼容 .NET 9，目标 net10.0） | 100% |
-| BDD 验收 | behave | **Reqnroll 3.x**（SpecFlow 继任者，Gherkin 语法 100% 兼容）+ xUnit；真 HTTP + 文件 SQLite 集成层 | 100% |
+| BDD 验收 | behave | **Reqnroll 3.x**（SpecFlow 继任者，Gherkin 语法 100% 兼容）+ xUnit；真 HTTP + 文件 SQLite 集成层（基工厂默认假执行器隔离 LLM；F12 `RealStepsIntegrationAppFactory` 变体保留真实 Tool/Code 执行器 + `ToolEchoServer` 回环端点，实证端到端真实 stdout/HTTP 输出） | 100% |
 | CQRS / 领域事件 | — | **MediatR 12.4**（v12+ 内置 DI 注册 `AddMediatR`，无需独立包） | 100% |
 
 ---
@@ -223,9 +223,17 @@ src/
 │
 ├── AgentPlatform.SpecFlowTests/           # BDD 验收测试 (Reqnroll + xUnit，真 HTTP + 文件 SQLite 集成层)
 │   ├── Features/
-│   │   └── AgentRouting.feature
-│   └── Steps/
-│       └── AgentRoutingSteps.cs
+│   │   ├── AgentRouting.feature
+│   │   └── WorkflowCodeToolE2E.feature     # F12：真实后端 + 真实 Tool/Code 执行器全链路
+│   ├── Steps/
+│   │   ├── AgentRoutingSteps.cs
+│   │   └── WorkflowCodeToolE2ESteps.cs     # F12 场景步骤（断言真实 stdout/HTTP + execution-logs 回填）
+│   ├── IntegrationAppFactory.cs            # 基工厂（真 HTTP 集成层；StripStepExecutors 默认 true 用假执行器）
+│   ├── RealStepsIntegrationAppFactory.cs   # F12 变体：StripStepExecutors=false 保留真实执行器 + Sandbox:Provider=Process + 独立 DB
+│   ├── ToolEchoServer.cs                   # F12：TcpListener 回环动态端口最小 HTTP 响应器（规避 Windows URL ACL）
+│   ├── F12IntegrationHost.cs               # F12 静态单例（懒初始化 RealStepsIntegrationAppFactory）
+│   ├── F12IntegrationClient.cs             # F12 HTTP 客户端
+│   └── TestDtos.cs                         # 复用/扩展 DTO（WorkflowDetailResponseDto 等）
 │
 └── AgentPlatform.Web/                     # 前端（React + TypeScript + Vite，桌面形态可启用 Tauri，详见附录 G）
 ```

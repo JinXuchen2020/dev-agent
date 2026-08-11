@@ -19,14 +19,56 @@ namespace AgentPlatform.SpecFlowTests;
 /// 与 Api.Tests 的 in-memory SQLite 不同，本工厂使用独立磁盘文件 test-integration.db，
 /// 仍走 EF 迁移 + 磁盘 I/O（满足「真 DB」契约）；并使用 Integration 环境令 DatabaseInitializer
 /// 在启动时跑迁移 + 基础种子（角色 / agent 配置 / admin 用户）。
+///
+/// 类刻意「解封」（非 sealed）并抽出 3 个可覆写钩子（DbPath / StripStepExecutors /
+/// IntegrationConfiguration），以便 F12 派生 <see cref="RealStepsIntegrationAppFactory"/>
+/// 在保留真实 IStepExecutor（Code/Tool 真实执行）的同时不破坏既有 BDD（默认行为不变）。
 /// </summary>
-public sealed class IntegrationAppFactory : WebApplicationFactory<Program>, IAsyncLifetime
+public class IntegrationAppFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
-    /// <summary>真实磁盘 SQLite 文件，每次运行重建，仍具真实磁盘 I/O。</summary>
-    private const string DbPath = "test-integration.db";
-
     /// <summary>测试 JWT 密钥（≥32 字符且非 dev 默认值，满足 Program.cs 启动守卫）。</summary>
     private const string TestJwtSecretKey = "test-only-secret-key-at-least-32-chars!!";
+
+    /// <summary>真实磁盘 SQLite 文件名（可覆写，避免派生工厂争用同一文件）。每次运行重建，仍具真实磁盘 I/O。</summary>
+    protected virtual string DbPath => "test-integration.db";
+
+    /// <summary>
+    /// 是否剥除全部真实 IStepExecutor 并替换为 ConfigurableStepExecutor（假输出）。
+    /// 默认 true（隔离外部 LLM 行为）；F12 覆写为 false 以保留真实 Code/Tool 执行器。
+    /// </summary>
+    protected virtual bool StripStepExecutors => true;
+
+    /// <summary>
+    /// 注入到宿主的配置（内存集合）。既有 BDD 的全部键值在此；派生工厂可覆写以追加键
+    /// （如 F12 的 Sandbox:Provider=Process + 解释器路径）。
+    /// </summary>
+    protected virtual Dictionary<string, string?> IntegrationConfiguration => new()
+    {
+        // 真实文件 SQLite（非 in-memory）。Pooling=false 确保连接关闭后立即释放文件句柄，
+        // 否则 AfterFeature 删除磁盘文件会因仍被连接池占用而抛 IOException。
+        ["ConnectionStrings:DefaultConnection"] = $"Data Source={DbPath};Pooling=false",
+        ["Database:Type"] = "sqlite",
+
+        // 钉死默认租户，使种子 admin 用户、TenantProvider 解析、JWT 声明三方一致
+        ["Tenant:DefaultTenantId"] = IntegrationConstants.Tenant1Id.ToString(),
+
+        // 合法 JWT 密钥（非 dev 默认）
+        ["Security:JwtSecretKey"] = TestJwtSecretKey,
+        ["Security:DevLoginEnabled"] = "false",
+        ["Security:EnforceAuthentication"] = "true",
+
+        // Integration 环境关闭限流，避免令牌桶干扰 BDD 真 HTTP 验收场景
+        // （features/bdd-integration-design.md §11 风险 2）。
+        ["Security:RateLimitingEnabled"] = "false",
+
+        // 内存缓存避免 Redis 依赖；Stub 模型避免真实 LLM 调用
+        ["Cache:Provider"] = "Memory",
+        ["ModelClient:Provider"] = "Stub",
+        ["ModelClient:StubResponse"] = "Integration test stub response.",
+
+        // 非空 Key，避免 embedding 服务注册抛错
+        ["OpenAI:Key"] = "test-openai-key-not-empty",
+    };
 
     /// <summary>已配置好基础地址的 HttpClient（真实管线）。</summary>
     public HttpClient Api { get; private set; } = null!;
@@ -38,33 +80,7 @@ public sealed class IntegrationAppFactory : WebApplicationFactory<Program>, IAsy
 
         builder.ConfigureAppConfiguration((_, config) =>
         {
-            config.AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                // 真实文件 SQLite（非 in-memory）。Pooling=false 确保连接关闭后立即释放文件句柄，
-                // 否则 AfterFeature 删除磁盘文件会因仍被连接池占用而抛 IOException。
-                ["ConnectionStrings:DefaultConnection"] = $"Data Source={DbPath};Pooling=false",
-                ["Database:Type"] = "sqlite",
-
-                // 钉死默认租户，使种子 admin 用户、TenantProvider 解析、JWT 声明三方一致
-                ["Tenant:DefaultTenantId"] = IntegrationConstants.Tenant1Id.ToString(),
-
-                // 合法 JWT 密钥（非 dev 默认）
-                ["Security:JwtSecretKey"] = TestJwtSecretKey,
-                ["Security:DevLoginEnabled"] = "false",
-                ["Security:EnforceAuthentication"] = "true",
-
-                // Integration 环境关闭限流，避免令牌桶干扰 BDD 真 HTTP 验收场景
-                // （features/bdd-integration-design.md §11 风险 2）。
-                ["Security:RateLimitingEnabled"] = "false",
-
-                // 内存缓存避免 Redis 依赖；Stub 模型避免真实 LLM 调用
-                ["Cache:Provider"] = "Memory",
-                ["ModelClient:Provider"] = "Stub",
-                ["ModelClient:StubResponse"] = "Integration test stub response.",
-
-                // 非空 Key，避免 embedding 服务注册抛错
-                ["OpenAI:Key"] = "test-openai-key-not-empty",
-            });
+            config.AddInMemoryCollection(IntegrationConfiguration);
         });
 
         // 用文件 SQLite 覆盖默认 DbContext 注册（与 ApiContractTestFactory 同法，已验证）。
@@ -76,14 +92,18 @@ public sealed class IntegrationAppFactory : WebApplicationFactory<Program>, IAsy
 
             services.AddDbContext<AppDbContext>(options => options.UseSqlite($"Data Source={DbPath};Pooling=false"));
 
-            // 用可控执行器替换全部真实 IStepExecutor（仅隔离外部 LLM 步骤行为，真实引擎 + 真实 DB 不变）。
-            // 见 ConfigurableStepExecutor：这是 WorkflowStateMachine / MultiAgentPipeline 旧玩具假实现的诚实替代。
-            var executorDescriptors = services.Where(d => d.ServiceType == typeof(IStepExecutor)).ToList();
-            foreach (var d in executorDescriptors)
-                services.Remove(d);
+            // 默认：用可控执行器替换全部真实 IStepExecutor（仅隔离外部 LLM 步骤行为，真实引擎 + 真实 DB 不变）。
+            // F12 通过 StripStepExecutors=false 保留真实执行器（见 RealStepsIntegrationAppFactory）。
+            if (StripStepExecutors)
+            {
+                // 见 ConfigurableStepExecutor：这是 WorkflowStateMachine / MultiAgentPipeline 旧玩具假实现的诚实替代。
+                var executorDescriptors = services.Where(d => d.ServiceType == typeof(IStepExecutor)).ToList();
+                foreach (var d in executorDescriptors)
+                    services.Remove(d);
 
-            services.AddSingleton<ConfigurableStepExecutor>();
-            services.AddSingleton<IStepExecutor>(sp => sp.GetRequiredService<ConfigurableStepExecutor>());
+                services.AddSingleton<ConfigurableStepExecutor>();
+                services.AddSingleton<IStepExecutor>(sp => sp.GetRequiredService<ConfigurableStepExecutor>());
+            }
 
             // 禁用后台托管服务（执行日志清理 / ApiKey 过期 / 工作流调度定时任务）：
             // 它们会周期性写同一文件 SQLite，与 BDD 场景并发写引发 database is locked → 21s 忙等 → 偶发 500。

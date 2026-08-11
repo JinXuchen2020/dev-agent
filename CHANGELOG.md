@@ -1,5 +1,19 @@
 # 变更日志
 
+## v2.24 (2026-08-11)
+
+### F12 · Tool/Code 节点全链路 e2e 完成（feature-builder 全栈实跑，🟢低风险闭环）
+
+F12 起**真实后端 + 真实 Tool/Code 执行器**，跑一条含 `StepType.Tool`（真实 HTTP）与 `StepType.Code`（真实 python 子进程）节点的工作流，断言端到端 stdout/响应回填与节点状态。三道质量门全 PASS。顺带**暴露并修复一个真实平台缺陷**。
+
+**核心改动：**
+- **测试基础设施解封**：`IntegrationAppFactory` 抽 3 虚钩子（`DbPath`/`StripStepExecutors`/`IntegrationConfiguration`），基默认行为不变；新增 `RealStepsIntegrationAppFactory`（`StripStepExecutors=false` 保留真实执行器、`Sandbox:Provider=Process`、独立 DB `test-integration-f12.db`、`DetectPythonCommand` 解析 `python`/`python3`）。
+- **本地回环 Tool echo 端点**：新增 `ToolEchoServer`（`TcpListener` 回环动态端口最小 HTTP 响应器，规避 Windows `HttpListener` URL ACL），测试向 `IToolRegistry` 注册 `bdd-echo-tool` 指向其 `BaseUrl`。
+- **BDD 场景**：新增 `WorkflowCodeToolE2E.feature`（1 场景）+ `F12IntegrationHost`/`F12IntegrationClient`/`WorkflowCodeToolE2ESteps`，复用既有 harness；实测 Code 节点 `Result="hello-from-code\r\n"`（真实 python stdout）、Tool 节点 `Result='{"echo":"ok","tool":"bdd-echo-tool"}'`（真实 HTTP 响应）、二者 `State=Completed`、`execution-logs` 回填同含真实输出。
+- **关联平台修复（真实缺陷）**：`Workflow._isDag` 未做 EF 持久化，致 DAG 工作流**重跑**时 `IsDag` 复位 `false`、`SequentialOrchestrator.PrepareContext` 静默 fallback 到遗留 `Steps` 投影，所有 `Code`/`Tool` 节点不执行而工作流整体 `Completed`（典型"假完成"）。→ `WorkflowConfiguration` 映射 `IsDag` 列（not null 默认 false）+ 新增迁移 `PersistWorkflowIsDag`（含 `#pragma warning disable IDE0161` 以符合 `TreatWarningsAsErrors` 铁律）。此为通用 DAG 重跑缺陷，对所有含节点工作流的 run 接口生效。
+- **测试**：新增 F12 场景 1 项；全量 `dotnet test` 0 失败（6 程序集：Arch9/App188/Infra138+6skip/Integration5/Api35/SpecFlow115，既有 114 BDD 未被 `IsDag` 修复破坏）。`dotnet build` 0 警告 0 错误。
+- **质量门**：`ddd-code-reviewer` 发现并即时修复 **IDE0161 编译阻断** + **控制标记断言误判** + **IsDag 平台缺陷** 共 3 项；`ddd-phase-quality-gate` 12 类审计全过；`codebase-optimizer` 七维 0 阻断（分析模式，不建分支/不 push）。质量报告 `docs/quality/f12-tool-code-e2e-gate.md`。设计文档 `features/tool-code-e2e.md` §8 记录关联平台修复。
+
 ## v2.23 (2026-08-07)
 
 ### F34 · 沙箱双层隔离（Docker 默认强隔离 + JobObject/AppContainer 兜底）完成（feature-builder 全栈实跑，⚠️中风险闭环）
