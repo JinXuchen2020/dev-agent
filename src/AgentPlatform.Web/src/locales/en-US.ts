@@ -834,5 +834,15 @@ export const enUS: Resources = {
     hitlResolveFailed: 'Failed to resolve approval',
     variableWatch: 'Variable Watch',
     noRunResult: 'No run results yet',
+    // ── F8 · Negotiation multi-agent (Negotiation + Critic) productization ──
+    preset: {
+      label: 'Orchestration',
+      auto: 'Auto',
+      sequential: 'Sequential',
+      negotiation: 'Negotiation',
+    },
+    negotiationMode: 'Negotiation · critic convergence',
+    scaffoldAgentTeam: 'Build Agent Team',
+    scaffoldAgentTeamTip: 'Scaffold a Start→Architect→Developer→Critic→End negotiation graph',
   },
 };

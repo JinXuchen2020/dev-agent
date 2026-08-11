@@ -287,9 +287,11 @@
 - 验收：后端 `dotnet test` 114/114 全绿；前端 `node scripts/integration.mjs --e2e` 全绿（后端 BDD 114 + 前端 BDD 22）；三道质量门 0 open；`.quality-gate.json` 推进 `f28-bdd-coverage`，含 `bdd:PASSED` + `frontendE2e:BDD` + `cleared:true`。
 - 风险：跨场景数据污染（各 feature Background 隔离 + `IntegrationAppFactory` 单例）/ 租户隔离（复用固定 Id+ApiKey）/ Stub 模型（仅验链路与鉴权，不验真实 LLM）/ 前端 locale（全 zh-CN）。
 
-### F8 · 差异化优势产品化（Negotiation + Critic）  [native]  open
-- 设计文档：`features/negotiation-productization.md`（待建）
+### F8 · 差异化优势产品化（Negotiation + Critic）  [native]  done  ✅（Phase 6 产品化闭环 / 编排模式 Segmented 选择器 + 协商可见指示 + 脚手架；后端原语零改动；分支 feat/f8-negotiation-productization，设计文档 features/negotiation-productization.md，质量门 docs/quality/f8-negotiation-gate.md · 2026-08-11 DONE）
+- 设计文档：`features/negotiation-productization.md`（已建，完整设计文档）
 - 目标：后端已具备 Negotiation 协商式多智能体 + Critic 收敛原语，待产品化画布「Agent-Team / Negotiation」专属模式（多 Agent 节点 + Critic + 收敛终止条件）。
+- 实现：编排模式 `Segmented`（auto 省略 preset 由 DetectPreset 识别 / sequential→int0 / negotiation→int1）；协商模式可见紫色 Tag；`scaffoldAgentTeam()` 一键生成 Start→Architect→Developer→Critic→End；`OrchestrationPresetMode` 类型与 int 收发模型一致性；zh-CN/en-US 三键 i18n；BDD E2E `agent-team-negotiation.feature` 两次保存并运行断言 Completed。
+- 验收：tsc/vite build/eslint 0 error；三道质量门 0 open；`.quality-gate.json` 推进 `f8`，含 `cleared:true` + `codebaseOptimizer`。
 - 说明：**保留，勿稀释**——Dify/n8n 无此原生原语，是本平台差异化壁垒。
 
 ### F9 · 代码沙箱容器隔离（DockerCodeSandbox 真实化）  [P2]  done  ✅（Phase 6 行动层 / Docker.DotNet 真实容器执行；分支 feat/f9-docker-sandbox，设计文档 features/sandbox-docker.md；质量门 docs/quality/f9-docker-sandbox-gate.md）

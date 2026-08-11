@@ -60,6 +60,7 @@ import type {
   DebugRetryResponse,
   DebugVariablesResponse,
   DebugWorkflowStateSnapshot,
+  OrchestrationPresetMode,
 } from '../types';
 
 const api = axios.create({
@@ -188,8 +189,17 @@ export const updateWorkflow = (
     edges?: WorkflowEdgeRequest[];
   },
 ) => api.put<WorkflowDetail>(`/workflows/${id}`, data).then((r) => r.data);
-export const runExistingWorkflow = (id: string, preset?: string) =>
-  api.post<WorkflowDetail>(`/workflows/${id}/run`, preset ? { preset } : {}).then((r) => r.data);
+// F8 · 编排模式 → 后端预设（int）。
+// API 全局未注册 JsonStringEnumConverter，故 preset 必须以 **int** 收发：
+//   sequential → 0 (OrchestrationPreset.Sequential)
+//   negotiation → 1 (OrchestrationPreset.Negotiation)
+//   auto → 省略 preset，由后端 DetectPreset 自动识别（图含 Critic 即 Negotiation）。
+export const runExistingWorkflow = (id: string, mode?: OrchestrationPresetMode) => {
+  let body: Record<string, unknown> = {};
+  if (mode === 'sequential') body = { preset: 0 };
+  else if (mode === 'negotiation') body = { preset: 1 };
+  return api.post<WorkflowDetail>(`/workflows/${id}/run`, body).then((r) => r.data);
+};
 
 // F20 S3 — HITL 人工审批门：列出某工作流全部审批记录（含待处理），解析（批准/拒绝）单个审批门。
 // 路径不含 execId：审批按 workflowId 归并、由 approvalId 唯一定位（见 WorkflowsController）。

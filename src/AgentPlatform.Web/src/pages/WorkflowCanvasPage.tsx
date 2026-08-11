@@ -22,6 +22,7 @@ import {
   List,
   Tag,
   Empty,
+  Segmented,
 } from 'antd';
 import {
   SaveOutlined,
@@ -30,6 +31,7 @@ import {
   PlayCircleOutlined,
   PlusOutlined,
   UploadOutlined,
+  TeamOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -49,7 +51,7 @@ import DagNode from '../components/canvas/DagNode';
 import NodePalette from '../components/canvas/NodePalette';
 import NodeConfigPanel from '../components/canvas/NodeConfigPanel';
 import VariableWatchPanel from '../components/canvas/VariableWatchPanel';
-import { StepType, type ImportWorkflowRequest } from '../types';
+import { StepType, type ImportWorkflowRequest, type OrchestrationPresetMode } from '../types';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '../stores/appStore';
 
@@ -90,6 +92,7 @@ const CanvasInner: React.FC = () => {
   const onConnect = useCanvasStore((s) => s.onConnect);
   const onNodeDragStart = useCanvasStore((s) => s.onNodeDragStart);
   const addNode = useCanvasStore((s) => s.addNode);
+  const scaffoldAgentTeam = useCanvasStore((s) => s.scaffoldAgentTeam);
   const setSelectedNode = useCanvasStore((s) => s.setSelectedNode);
   const loadFromDetail = useCanvasStore((s) => s.loadFromDetail);
   const undo = useCanvasStore((s) => s.undo);
@@ -101,6 +104,8 @@ const CanvasInner: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
   const [importing, setImporting] = useState(false);
+  // F8 · 编排模式：默认自动（省略 preset，由后端 DetectPreset 识别含 Critic 即协商）。
+  const [presetMode, setPresetMode] = useState<OrchestrationPresetMode>('auto');
   const fileRef = useRef<HTMLInputElement>(null);
   const seeded = useRef(false);
 
@@ -139,6 +144,10 @@ const CanvasInner: React.FC = () => {
 
   // F20 S3 — 暂停态（currentState === 2）自动弹出 HITL 审批弹窗并加载待处理审批。
   const isPaused = Number(wfState?.currentState) === 2;
+
+  // F8 · 协商模式指示：显式选协商，或图含 Critic 节点（后端 DetectPreset 会判 Negotiation）。
+  const isNegotiationMode =
+    presetMode === 'negotiation' || nodes.some((n) => n.data.stepType === StepType.Critic);
 
   const loadApprovals = useCallback(async () => {
     if (!id) return;
@@ -265,7 +274,8 @@ const CanvasInner: React.FC = () => {
           nodes: payload.nodes,
           edges: payload.edges,
         });
-        await runExistingWorkflow(id);
+        // F8 · 把编排模式映射为 int 预设传入（auto=省略，由后端 DetectPreset 识别）。
+        await runExistingWorkflow(id, presetMode);
         message.success(t('pages.workflows.savedAndRun'));
         // refresh states（含暂停态检测与审批弹窗触发）
         await refreshWorkflow();
@@ -342,8 +352,8 @@ const CanvasInner: React.FC = () => {
 
   return (
     <div style={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column' }}>
-      <Space style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap' }}>
-        <Space>
+      <Space style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap' }} align="center">
+        <Space align="center">
           <Title level={4} style={{ margin: 0 }}>
             {t('pages.workflows.canvasTitle')} {id ? t('pages.workflows.editingSuffix', { id }) : t('pages.workflows.newSuffix')}
           </Title>
@@ -353,8 +363,31 @@ const CanvasInner: React.FC = () => {
             onChange={(e) => setName(e.target.value)}
             style={{ width: 220 }}
           />
+          {/* F8 · 编排模式选择器（自动 / 顺序 / 协商） */}
+          <Space size={4}>
+            <span style={{ color: 'rgba(0,0,0,0.45)' }}>{t('canvas.preset.label')}</span>
+            <Segmented
+              value={presetMode}
+              onChange={(v) => setPresetMode(v as OrchestrationPresetMode)}
+              options={[
+                { label: t('canvas.preset.auto'), value: 'auto' },
+                { label: t('canvas.preset.sequential'), value: 'sequential' },
+                { label: t('canvas.preset.negotiation'), value: 'negotiation' },
+              ]}
+            />
+          </Space>
+          {isNegotiationMode && (
+            <Tag color="purple" icon={<TeamOutlined />}>
+              {t('canvas.negotiationMode')}
+            </Tag>
+          )}
         </Space>
         <Space wrap>
+          <Tooltip title={t('canvas.scaffoldAgentTeamTip')}>
+            <Button icon={<TeamOutlined />} onClick={scaffoldAgentTeam}>
+              {t('canvas.scaffoldAgentTeam')}
+            </Button>
+          </Tooltip>
           <Tooltip title={t('pages.workflows.undoTip')}>
             <Button icon={<UndoOutlined />} onClick={undo}>
               {t('pages.workflows.undo')}
