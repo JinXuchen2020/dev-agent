@@ -4,6 +4,8 @@
 > **关联**：`../AGENT_PLATFORM_BLUEPRINT.md`（总体蓝图）、`quality/*`（质量门）、`../features/backlog.md`（实现意图池）。
 > **置信度**：现状章节为已核实事实；路线图章节为方案建议，需 Phase 启动时再逐项锁定决策。
 
+> **二期排期变更（2026-08-12）**：`features/backlog.md` 二期现以 **F29 = Agentic Agent Primitive（自主控制循环原语）** 置顶（P0，独立轨道，先于 Phase 7–11 启动）。Phase 7–11 路线图本身不变，仅在其前插入该范式级 feature；原 Phase 7–11 对应 feature 顺延为 **F30–F34**（执行持久化 / Agent 运行时实体化 / 消息总线 / 语义记忆 / 在线评估门禁）。设计文档 `features/agentic-agent-primitive.md`，现状核实同日。
+
 ## 0. 方法与偏差纠正
 
 本报告以代码核实为准。过程中纠正了先前对话中的两处假设偏差，特此声明以保证可靠性：

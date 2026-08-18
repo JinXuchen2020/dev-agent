@@ -338,12 +338,25 @@
 ## 第二期 · 真 Agent Harness 升级（第一期已于 2026-08-11 全部完成，现已解锁）
 
 > ⛔ **第二期 = 真 Harness 升级路线图**：源于 `docs/agent-harness-blueprint.md`（Phase 7–11）与 `phases/phase-7-*.md`～`phases/phase-11-*.md`。
-> **硬性阻塞（已满足）**：本组 F29–F33 **须第一期全部任务完成后方可开工**——上方 `## Feature 史诗（Tier 1）` 分组内 29 个史诗已于 2026-08-11 全部 `done`、无遗留 `open` 项，阻塞条件**已满足**，可进入 feature-builder 取数。
+> **硬性阻塞（已满足）**：本组 F29–F34 **须第一期全部任务完成后方可开工**——上方 `## Feature 史诗（Tier 1）` 分组内 29 个史诗已于 2026-08-11 全部 `done`、无遗留 `open` 项，阻塞条件**已满足**，可进入 feature-builder 取数。
 > **状态约定**：本组统一标 `open ⛔blocked(1期)`；在 1 期清零前**不建 `features/<id>.md`、不建 `feat/<id>` 分支、不跑 feature-builder**。（2026-08-11 更新：第一期已清零，阻塞解除；状态标记待 2 期正式启动时清理为 `doing`。）
-> **编号说明**：F27/F28 已被「BDD 集成测试统一 / 历史 feature BDD 覆盖补全」占用（已 done），故本组顺延为 **F29–F33**。
+> **编号说明**：F27/F28 已被「BDD 集成测试统一 / 历史 feature BDD 覆盖补全」占用（已 done），故本组顺延为 **F29–F34**。其中 **F29 = Agentic Agent 控制循环原语（置顶 · 最高优先级 · 独立轨道，先于 Phase 7–11 启动）**，原 F29–F33 顺延为 **F30–F34**（执行持久化 / Agent 运行时实体化 / 消息总线 / 语义记忆 / 在线评估门禁）。
 
-### F29 · 执行持久化（Durable Execution）  [P0]  open  ⛔blocked(1期)  🔴高风险（运行时范式跨越：请求内同步 → 可挂起/恢复 durable）
-- 设计依据：`phases/phase-7-durable-execution.md` + `docs/agent-harness-blueprint.md` §Phase 7（正式 `features/f29-*.md` 待 1 期完成后建）
+### F29 · Agentic Agent Primitive（自主 Agent 控制循环原语）  [P0 置顶]  open  ✅1期解锁  🔴高风险（范式跨越：DAG 静态编排 → 模型自主循环 + 工具调用通道 + 安全护栏）
+- 设计依据：`features/agentic-agent-primitive.md`（已建，完整设计文档）+ 用户 2026-08-12 拍板「二期第一个 feature，置顶」；独立轨道（拟 Phase 12），先于 Phase 7–11 启动。
+- 目标：把「agent 配置实体」升级为「真 agent」——给定目标 + 允许工具白名单，模型自主循环（plan→act→observe→reflect）决策、调用工具、观察结果、再决策，直到停止条件。这是 dev-agent 与 Codex/Claude Code/WorkBuddy 等真 harness 的范式级差距根因，也是产品差异化核心。
+- 现状核实（代码事实）：`IModelClient.ChatAsync` 仅返回文本 `ModelResponse`（无 ToolCalls）——最大 blocker；`SemanticKernelModelClient` 基于 SK 但未注册 function/未解析 `ToolCallContent`（SK 原生支持，仅缺接线）；`ToolCallingDispatcher`+`IToolRegistry`+3 个 `IToolExecutor`(Native/Skill/MCP) 已具备工具执行半边；`ChatMessage` 已预留 `ToolCallId`/`ToolName`；`ChatStreamAsync` 已存在；沙箱 substrate(F9/F10/F11/F34) 可作 workspace 工具底座。地基 ~65% 已埋。
+- 核心改造（P0）：① 模型工具调用通道（扩 `IModelClient`+SK function 注册+解析 `ToolCallContent`，不自 Invoke，由平台循环接管）/ ② ReAct 控制循环引擎（新 `AgenticOrchestrator`，循环组消息→调模型→有 tool call 则 `ToolCallingDispatcher.DispatchAsync`→结果回灌→无 tool call 判停+迭代硬上限）/ ③ agent 配置字段+迁移（`AllowedToolNames`/`MaxIterations`/`StopCriteria`，与 F31 协同）/ ④ agent workspace/FS 工具（新增 `WorkspaceToolExecutor`：read/write/edit/run_command/list_dir，在现有代码沙箱 substrate 内执行，真 coding 自主硬前提）/ ⑤ 安全护栏（路径白名单+命令黑名单+破坏性操作 HITL 确认+硬迭代/成本上限复用 F13 `ICostController`+审计复用 F24 Trace）。
+- P1 项（依赖二期其他项）：⑥ 长程 durable（依赖 F30）/ ⑦ 流式可中断 UX（复用 `ChatStreamAsync`+SSE）/ ⑧ compaction（部分=F33）。
+- 衔接：依赖 **F31（Agent 运行时实体化）**（agent 实体是控制循环消费底座，F29 ① 在其上扩展）+ **F30（执行持久化）**（长程检查点）；**不替代 DAG**——自主 agent 最自然形态是 `StepType.Agentic` 节点经 `SequentialOrchestrator` 调度（混合编排）。
+- 验收子项（v1 最小闭环）：① 模型吐 ToolCalls（单测 mock SK）/ ② 控制循环 standalone 跑通（StubModelClient+内存工具）/ ③ 三字段落库+迁移+种子/ ④ Workspace 工具沙箱内真实读写跑（单测走 ProcessCodeSandbox）/ ⑤ 护栏单测/ ⑥(P1) durable 接 F30/ ⑦(P1) 流式可中断。
+- 诚实风险：模型 function-calling 质量依赖 DefaultModelId；跑飞/成本需硬上限；「跑完≠正确」需人审+F24 eval；DAG 不被替代。
+- 质量门：三道门（ddd-code-reviewer/ddd-phase-quality-gate/codebase-optimizer）；高风险闸口（IModelClient 契约/工具调用租户上下文）先设计后实现；`.quality-gate.json` 推进 `f29-agentic-agent-primitive` 含 `cleared:true`+`codebaseOptimizer`；测试工程纳入 `AgentPlatform.sln`。
+- 最小验证路径：先做「research agent」standalone（目标→调 2-3 工具→循环→产出）→ 再包 `StepType.Agentic` 节点 → 再补前端（Agent 配置页加允许工具/最大迭代 + 运行页展示思考/工具流）。
+- 优先级：P0（置顶，二期第一个 feature，最高优先级）。
+
+### F30 · 执行持久化（Durable Execution）  [P0]  open  ⛔blocked(1期)  🔴高风险（运行时范式跨越：请求内同步 → 可挂起/恢复 durable）
+- 设计依据：`phases/phase-7-durable-execution.md` + `docs/agent-harness-blueprint.md` §Phase 7（正式 `features/f30-*.md` 待 1 期完成后建）
 - 目标：将 `SequentialOrchestrator.RunToCompletionAsync` 的请求内同步执行改造为可挂起/恢复的 durable 执行；检查点落 `ExecutionLog`；in-flight 状态由进程内 `ConcurrentDictionary` 迁移至 DB；`WorkflowScheduler` 升级为 durable 驱动器。
 - 验收子项：
   - **D1** durable 框架选型决策（自建检查点 vs Temporal / Workflow Core）→ 决策关锁定后方可实现。
@@ -351,9 +364,9 @@
   - **②** 挂起 / 恢复 API（暴露 Resume / Suspend 端点，替代进程内 Timer 驱逐）。
   - **③** in-flight 状态外置（ConcurrentDictionary → DB-backed RunningExecution）。
   - **④** WorkflowScheduler 升级为 durable 驱动器（轮询触发器 → 驱动持久化执行）。
-- 优先级：P0（与 F30 组成最小闭环，消除「无 durable 执行」最大差距）。
+- 优先级：P0（与 F31 组成最小闭环，消除「无 durable 执行」最大差距；并为 F29 长程 agent 提供检查点支撑）。
 
-### F30 · Agent 运行时实体化 + 模型接通  [P0]  open  ⛔blocked(1期)  🔴高风险（agent 配置当前不生效）
+### F31 · Agent 运行时实体化 + 模型接通  [P0]  open  ⛔blocked(1期)  🔴高风险（agent 配置当前不生效）
 - 设计依据：`phases/phase-8-agent-runtime.md` + `docs/agent-harness-blueprint.md` §Phase 8
 - 目标：修复 `AgentCallStepExecutor.cs:50` 硬编码（当前忽略 agent 的 `SystemPrompt`/`ModelEndpoint`，直接硬编码 prompt + `DefaultModelId`）；接通既有 `ModelRouter` + `TenantModelClientResolver`；补 Agent 种子字段。
 - 验收子项（v1）：
@@ -361,9 +374,9 @@
   - **②** ModelRouter + TenantModelClientResolver 接通到 agent 级（候选回退 / 租户 BYO）。
   - **③** Agent 种子字段补全（支持运行时实体化）。
 - 延后项（依赖 D4 决策）：Agent 上下文隔离 / 运行时实体深化 → 独立排期，不阻塞 v1。
-- 优先级：P0（与 F29 组最小闭环）。
+- 优先级：P0（与 F30 组成最小闭环）。本 feature 的 agent 配置实体化是 **F29（Agentic Agent Primitive）** 控制循环消费的底座；F29 的 ① 模型工具调用通道在 F31 之上扩展，二者共同构成「可自主 agent」。
 
-### F31 · Agent 消息总线 + 多 Agent 协作  [P1]  open  ⛔blocked(1期)  🟡中风险（依赖 F30 agent 实体化）
+### F32 · Agent 消息总线 + 多 Agent 协作  [P1]  open  ⛔blocked(1期)  🟡中风险（依赖 F31 agent 实体化）
 - 设计依据：`phases/phase-9-agent-message-bus.md` + `docs/agent-harness-blueprint.md` §Phase 9
 - 目标：引入 agent 间消息原语；进程内 `Channel<T>` 起步总线；`NegotiationOrchestrator` 真并行推理；handoff / 幂等 / 活锁防治。
 - 验收子项：
@@ -371,24 +384,24 @@
   - **①** 消息总线基础设施（Channel<T> + 路由）。
   - **②** 多 Agent 协作编排（NegotiationOrchestrator，真并行）。
   - **③** handoff / 幂等 / 活锁防治。
-- 优先级：P1（依赖 F30）。
+- 优先级：P1（依赖 F31）。
 
-### F32 · 语义记忆层  [P1]  open  ⛔blocked(1期)  🟡中风险（依赖既有 IVectorStore）
+### F33 · 语义记忆层  [P1]  open  ⛔blocked(1期)  🟡中风险（依赖既有 IVectorStore）
 - 设计依据：`phases/phase-10-semantic-memory.md` + `docs/agent-harness-blueprint.md` §Phase 10
 - 目标：从「文件注入式记忆」升级为语义记忆引擎；`IEmbeddingGenerator` 生成 embedding；episodic 写回；自动 compaction；复用 `IVectorStore`（Pg/InMemory）；租户向量隔离。
 - 验收子项：
   - **D3** 向量后端决策（复用 IVectorStore / 引入专用向量库）。
   - **①** Embedding 生成管线（写入向量库）。
   - **②** Episodic 记忆写回（跨会话经验沉淀）。
-  - **③** 自动 compaction（超限上下文压缩，替代明文 MaxSummaryTokens 截断）。
+  - **③** 自动 compaction（超限上下文压缩，替代明文 MaxSummaryTokens 截断；并为 F29 长程 agent 提供上下文压缩）。
 - 优先级：P1。
 
-### F33 · 在线评估门禁 + 部署闭环  [P2]  open  ⛔blocked(1期)  🟢低风险（复用 F24 数据集）
+### F34 · 在线评估门禁 + 部署闭环  [P2]  open  ⛔blocked(1期)  🟢低风险（复用 F24 数据集）
 - 设计依据：`phases/phase-11-online-eval-gate.md` + `docs/agent-harness-blueprint.md` §Phase 11
 - 目标：将 F24 评估数据集接入生产前 / 影子门禁；队列化水平扩展。
 - 验收子项（v1）：
   - **①** 在线 eval 门禁（F24 数据集 → 生产前 / 影子评估，纯应用层复用）。
-- 延后项（依赖 F29/F31 分布式落点）：队列化部署 / 水平扩展 → 独立排期。
+- 延后项（依赖 F30/F32 分布式落点）：队列化部署 / 水平扩展 → 独立排期。
 - 优先级：P2。
 
 ## 已完成归档（done）
