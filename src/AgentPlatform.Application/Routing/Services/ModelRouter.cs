@@ -103,7 +103,7 @@ public sealed class ModelRouter : IModelRouter
             try
             {
                 var response = await _pipelineProvider.ExecuteWithRetryAsync(
-                    async (innerCt) => await activeClient.ChatAsync(candidate.ModelId, request.Messages, innerCt), ct);
+                    async (innerCt) => await activeClient.ChatAsync(candidate.ModelId, request.Messages, ct: innerCt), ct);
 
                 if (usePlatformBudget)
                     _costController.SettleUsage(candidate, response.TokenUsage, _routerSettings.DefaultEstimatedTokens, tenantId);

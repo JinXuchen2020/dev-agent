@@ -158,13 +158,15 @@ public record ToolCall(string Id, string Name, string ArgumentsJson);
 
 ## 7. 验收子项（v1 最小闭环）
 
-- **①** 模型客户端能吐出 `ToolCalls`（单测 mock SK 验证 function 注册 + `ToolCallContent` 解析）。
-- **②** 控制循环 standalone 跑通：research 类目标 → 调 2–3 个工具 → 无 tool call 终态 → 产出结构化结果（`StubModelClient` + 内存工具集成测试）。
-- **③** 三个 agent 字段落库 + EF 迁移 + 种子（幂等）。
-- **④** Workspace 工具在沙箱内真实读/写/跑命令（单测走真实 `ProcessCodeSandbox`）。
-- **⑤** 路径白名单 / 命令黑名单 / 迭代上限单测。
-- **⑥（P1）** 长程 durable 接 F30。
-- **⑦（P1）** 流式可中断 UX。
+> 2026-08-21 落地状态：①–⑤ 全部 ✅（详见 §12 质量门清单与报告 `docs/quality/f29-agentic-gate.md`）。
+
+- **① ✅** 模型客户端能吐出 `ToolCalls`（`SemanticKernelModelClientToolCallTests`：mock `IChatCompletionService.GetChatMessageContentsAsync` 验证 declare-only 接线 + `FunctionCallContent` 解析；SK 1.30 实为 `FunctionCallContent`/`FunctionResultContent`，位于 `Microsoft.SemanticKernel` 命名空间，构造函数参数序为 `(functionName, pluginName, id, arguments)` / `(functionName, pluginName, callId, result)`）。
+- **② ✅** 控制循环 standalone 跑通：`AgenticOrchestratorTests`（Stub 模型 + 内存工具注册表 + 假执行器）验证 tool call → 执行 → 无 tool call 终态 → 结构化结果；迭代上限抛 `AgentIterationLimitExceededException`；白名单拦截 `tool_not_allowed`。
+- **③ ✅** 三个 agent 字段落库 + EF 迁移 `AddAgentAgenticFields`（AllowedToolNamesJson/MaxIterations/StopCriteria）+ `DatabaseInitializer` 幂等种子（F29 demo agent，固定 Guid `3333…3301`，工作区工具白名单）。
+- **④ ✅** Workspace 工具在真实 `ProcessCodeSandbox` 内读/写/编辑/列出/跑命令（`WorkspaceToolExecutorTests`：写→读回环、edit 替换、list 相对路径、run_command 工作目录断言 `ap_workspace_`）。
+- **⑤ ✅** 路径逃逸拒绝（`escapes`）、命令黑名单（`rm -rf /` → `guardrail`）、迭代上限单测。
+- **⑥（P1）** 长程 durable 接 F30（未开工）。
+- **⑦（P1）** 流式可中断 UX（未开工，UI 已留运行弹窗展示最终回答）。
 
 ---
 
@@ -363,3 +365,58 @@ return keep
 5. **11.3 ③ 流式 / 可中断** 最后做 UX（依赖前面循环稳定）
 
 四者**全部落在 F29（二期第一个 feature）范围内**，不另开 feature；④ 的部分能力会被 F33 正式化。
+
+---
+
+## 12. F29 Phase 5 质量门清单（ddd-phase-quality-gate，2026-08-21）
+
+Gate Status: **PASS** — P0=0 / P1=0 / P2=0 / P3=0（无 waiver）。
+
+### 模式 1：Checklist（8 类）
+
+| # | 类别 | 结论 |
+|---|------|------|
+| 1 | Pre-flight 版本审计 | ✅ SK 1.30.0 实 API 经反射核实（`IChatCompletionService` 仅 `GetChatMessageContentsAsync` 复数；`FunctionCallContent`/`FunctionResultContent` 在 `Microsoft.SemanticKernel` 命名空间；`OpenAIFunction` ctor internal，经 `KernelFunctionMetadata.ToOpenAIFunction()` 构建；`ToolCallBehavior.EnableFunctions(fn, autoInvoke:false)` declare-only）。此前误用的 `ToolCallContent`/`NoKernelFunctions`/`OpenAIChatPromptExecutionSettings`/3 参 `OpenAIFunction` 均不存在，已全部改正 |
+| 2 | BDD/测试先行 | ✅ 验收 ①–⑤ 对应 3 个新测试类 13 用例 + E2E `agentic-run.feature`（先写 feature 再实现 UI 步骤） |
+| 3 | DDD 分层规则 | ✅ 接口在 Application（`IModelClient`/`IToolRegistry`/`ICodeSandbox`/`IStepExecutor`/`IToolExecutor`），实现 internal sealed 在 Infrastructure（`SemanticKernelModelClient`/`InMemoryToolRegistry`/`ProcessCodeSandbox`/`WorkspaceToolExecutor`/`AgenticStepExecutor`），控制循环 `AgenticOrchestrator` 在 Application.Agents.Agentic（纯编排，无 IO 依赖） |
+| 4 | DI 注册完备 | ✅ `ToolCallingDispatcher`(413)/`AgenticOrchestrator`(415)/`WorkspaceToolExecutor`(420)/`AgenticStepExecutor`(349) 均已注册；`IToolRegistry` 单例工厂内种子 6 个工作区工具；`ModelDefaults` 由 Api `Configure<ModelDefaults>` 提供（种子可解析） |
+| 5 | Configuration-First | ✅ 沙箱/模型/限流均走 IOptions；Agent 字段走聚合字段（非配置） |
+| 6 | EF Core 映射同步 | ✅ `AgentConfiguration` 补 3 字段映射；迁移 `20260821043044_AddAgentAgenticFields`（含 IDE0161 pragma）；`MigrateAsync` 为 schema 唯一来源 |
+| 7 | 并发与生命周期 | ✅ `IToolRegistry` 单例用 `ConcurrentDictionary`；`WorkspaceToolExecutor` 每请求 scoped + `Dispose` 清理临时根目录；`InMemoryToolRegistry.Register` `TryAdd` 防重；迭代上限硬保护防跑飞 |
+| 8 | 横切基础设施 | ✅ 无新增 CORS/异常面；RunAgent 未找到 agent 已改 404（catch `InvalidOperationException`） |
+
+### 模式 2：Audit（12 类）
+
+| 类别 | 结果 |
+|------|------|
+| DI 缺口 | 0（见上） |
+| 分层违规 | 0 |
+| EF 映射缺口 | 0 |
+| 硬编码 | 0（种子固定 Guid 为幂等设计，已注释） |
+| 缺 CancellationToken | 0（所有 async 均带 ct） |
+| 缺 internal sealed | 0 |
+| 并发风险 | 0 |
+| 缺空值守卫 | 0（`ArgumentNullException.ThrowIfNull`/`ThrowIfNullOrWhiteSpace`） |
+| API 基础设施 | 0 |
+| 蓝图漂移 | 0 |
+| 缺 XML 文档 | 0（TreatWarningsAsErrors 强制） |
+| 死代码/空洞类 | 0（新类型全部有引用点：DI/控制器/测试） |
+
+### Review-Fix 记录（ddd-code-reviewer 对抗审查 + 本门审计修复项）
+
+| 严重级 | 文件 | 发现 | 修复 |
+|--------|------|------|------|
+| P0 | `SemanticKernelModelClient.cs` | `FunctionCallContent`/`FunctionResultContent` 构造参数序错位（`(functionName, pluginName, id, arguments)` / `(functionName, pluginName, callId, result)`），助手 tool_calls 回显与 tool 结果字段全部错位 | 改为命名参数 `functionName:`/`id:`/`arguments:`/`callId:`/`result:`；测试 `ChatAsync_ToolCallHistory_RoundTripsToChatHistory` 抓出 |
+| P0 | `WorkspaceToolExecutor.cs` | `Encoding.UTF8` 写文件带 BOM，读回内容前置 `\uFEFF` | 引入 `Utf8NoBom = new UTF8Encoding(false)`，write/edit 统一使用 |
+| P1 | `SemanticKernelModelClient.cs` | `ToolCallBehavior.NoKernelFunctions` 不存在（SK 1.30 为 `EnableKernelFunctions`/`EnableFunctions`）；`OpenAIChatPromptExecutionSettings` 应为 `OpenAIPromptExecutionSettings`；`OpenAIFunction` 3 参 ctor 不存在 | 全部改用真实 API；`ToOpenAIFunction` 经 `KernelFunctionMetadata`+参数 schema 解析 + `ToOpenAIFunction()` 扩展构建 |
+| P1 | `WorkspaceToolExecutor.cs` | run_command/git_diff 未指定工作目录，命令跑在宿主 CWD | `ICodeSandbox.RunCommandAsync` 增 `workingDirectory` 参数，传 `EnsureRoot()` |
+| P2 | `AgentsController.cs` | RunAgent 未找到 agent → 500 | catch `InvalidOperationException` → 404 |
+| P2 | `CreateAgentCommand`/`AgentsController` | 位置参数错位（新字段插入后 `ConfigurationId` 前移） | 控制器改命名参数 |
+| P2 | `SemanticKernelModelClient.cs` | `c.Id` 可空 → CS8604 | `c.Id ?? string.Empty` |
+| P3 | `AgenticStepExecutor.cs` | 类内 `string StepType` 属性遮蔽枚举类型，`StepType.Agentic` 无法解析 | 全限定 `AgentPlatform.Domain.Enums.StepType.Agentic` |
+
+### 验证
+
+- `dotnet build src/AgentPlatform.sln`：0 warning / 0 error。
+- `dotnet test`：Application.Tests 192 / Infrastructure.Tests 147+6skip / Api.Tests 35 / ArchitectureTests 9 / SpecFlowTests(BDD) 115 全绿。
+- 前端：`tsc --noEmit` 0；eslint 改动文件 0 error；`bddgen` + Playwright：`agentic-run.feature` 通过；全量 `@e2e` 26/26 通过。

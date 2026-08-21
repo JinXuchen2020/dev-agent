@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AgentPlatform.Domain.Abstractions;
 using AgentPlatform.Domain.Aggregates.ToolDefinitions;
 using AgentPlatform.Domain.Enums;
@@ -94,6 +95,27 @@ public sealed class Agent : ITenantScoped, IAggregateRoot
     public void ClearDomainEvents() => _domainEvents.Clear();
 
     /// <summary>
+    /// Gets the JSON-serialized allow-list of tool names the agent may invoke during an agentic run.
+    /// </summary>
+    public string AllowedToolNamesJson { get; private set; } = "[]";
+
+    /// <summary>
+    /// Gets the maximum number of agentic control-loop iterations before the run is forcibly halted.
+    /// </summary>
+    public int MaxIterations { get; private set; } = 25;
+
+    /// <summary>
+    /// Gets an optional stop-criterion phrase/rule for the agentic control loop.
+    /// </summary>
+    public string? StopCriteria { get; private set; }
+
+    /// <summary>
+    /// Gets the allow-list of tool names the agent may invoke, deserialized from <see cref="AllowedToolNamesJson"/>.
+    /// </summary>
+    public IReadOnlyList<string> AllowedToolNames =>
+        JsonSerializer.Deserialize<List<string>>(AllowedToolNamesJson) ?? new List<string>();
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="Agent"/> class and raises an
     /// <see cref="Events.AgentCreated"/> domain event.
     /// </summary>
@@ -104,7 +126,8 @@ public sealed class Agent : ITenantScoped, IAggregateRoot
     /// <param name="systemPrompt">The system prompt defining the agent's behavior.</param>
     /// <param name="tenantId">The unique identifier of the tenant that owns the agent.</param>
     public Agent(Guid id, string name, AgentType role, ModelEndpoint modelEndpoint,
-        string systemPrompt, Guid tenantId)
+        string systemPrompt, Guid tenantId,
+        List<string>? allowedToolNames = null, int maxIterations = 25, string? stopCriteria = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(systemPrompt);
@@ -117,6 +140,9 @@ public sealed class Agent : ITenantScoped, IAggregateRoot
         SystemPrompt = systemPrompt;
         Status = AgentStatus.Active;
         TenantId = tenantId;
+        AllowedToolNamesJson = JsonSerializer.Serialize(allowedToolNames ?? new List<string>());
+        MaxIterations = maxIterations < 1 ? 25 : maxIterations;
+        StopCriteria = stopCriteria;
         CreatedAt = DateTime.UtcNow;
         UpdatedAt = CreatedAt;
         AddDomainEvent(new Events.AgentCreated(id, name, role.RoleCode, tenantId));
@@ -206,6 +232,37 @@ public sealed class Agent : ITenantScoped, IAggregateRoot
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serverName);
         _mcpServerNames.Add(serverName);
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Replaces the whitelist of tool names the agent may invoke during an agentic run.
+    /// </summary>
+    /// <param name="names">The new allow-list of tool names (case-insensitive matched at dispatch time).</param>
+    public void UpdateAllowedToolNames(List<string> names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        AllowedToolNamesJson = JsonSerializer.Serialize(names);
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Updates the maximum number of agentic control-loop iterations.
+    /// </summary>
+    /// <param name="maxIterations">The new cap; values below 1 are clamped to 1.</param>
+    public void UpdateMaxIterations(int maxIterations)
+    {
+        MaxIterations = maxIterations < 1 ? 1 : maxIterations;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Updates the optional stop criterion phrase/rule for the agentic control loop.
+    /// </summary>
+    /// <param name="stopCriteria">The new stop criterion, or null to clear it.</param>
+    public void UpdateStopCriteria(string? stopCriteria)
+    {
+        StopCriteria = stopCriteria;
         UpdatedAt = DateTime.UtcNow;
     }
 }

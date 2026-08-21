@@ -7,13 +7,16 @@ namespace AgentPlatform.Application.Agents.Commands.CreateAgent;
 /// Represents a command to create a new agent with the specified configuration.
 /// </summary>
 /// <param name="Name">The display name of the agent.</param>
-/// <param name="RoleCode">The role code assigned to the agent (e.g., "developer", "architect").</param>
-    /// <param name="ModelProvider">The provider hosting the model (e.g., "openai", "anthropic").</param>
+    /// <param name="RoleCode">The role code assigned to the agent (e.g., "developer", "architect").</param>
+/// <param name="ModelProvider">The provider hosting the model (e.g., "openai", "anthropic").</param>
 /// <param name="ModelName">The name of the model to use (e.g., "gpt-4o").</param>
 /// <param name="ModelApiUrl">The API base URL for the model provider.</param>
 /// <param name="SystemPrompt">The system prompt that defines the agent's behaviour.</param>
 /// <param name="TenantId">The unique identifier of the tenant that owns the agent.</param>
 /// <param name="ConfigurationId">Optional identifier of the source agent configuration definition this agent was instantiated from (used for provenance/audit tracing only).</param>
+/// <param name="AllowedToolNames">Optional allow-list of tool names the agentic loop may invoke. Null = none permitted.</param>
+/// <param name="MaxIterations">Optional upper bound on ReAct iterations. Null = default (25).</param>
+/// <param name="StopCriteria">Optional natural-language stop condition the orchestrator evaluates each iteration.</param>
 public record CreateAgentCommand(
     string Name,
     string RoleCode,
@@ -22,5 +25,8 @@ public record CreateAgentCommand(
     string ModelApiUrl,
     string SystemPrompt,
     Guid TenantId,
-    Guid? ConfigurationId = null
+    Guid? ConfigurationId = null,
+    List<string>? AllowedToolNames = null,
+    int? MaxIterations = null,
+    string? StopCriteria = null
 ) : ICommand<Agent>;

@@ -16,6 +16,9 @@ namespace AgentPlatform.Application.Agents.Commands.UpdateAgent;
 /// <param name="ModelApiUrl">The new model API URL, or null to keep the current value.</param>
 /// <param name="SystemPrompt">The new system prompt, or null to keep the current value.</param>
 /// <param name="Status">The new status, or null to keep the current value.</param>
+/// <param name="AllowedToolNames">Optional new allow-list of tool names for the agentic loop. Null = unchanged.</param>
+/// <param name="MaxIterations">Optional new upper bound on ReAct iterations. Null = unchanged.</param>
+/// <param name="StopCriteria">Optional new natural-language stop condition. Null = unchanged.</param>
 public record UpdateAgentCommand(
     Guid Id,
     string? Name,
@@ -24,5 +27,8 @@ public record UpdateAgentCommand(
     string? ModelName,
     string? ModelApiUrl,
     string? SystemPrompt,
-    string? Status
+    string? Status,
+    List<string>? AllowedToolNames = null,
+    int? MaxIterations = null,
+    string? StopCriteria = null
 ) : ICommand<Agent?>;

@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Application.Research;
+using AgentPlatform.Domain.Aggregates.ToolDefinitions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -38,7 +39,7 @@ public class ResearchCommandHandlerTests
             new ModelResponse("[\"q1\",\"q2\"]", null, "m", "stop"),
             new ModelResponse("## 结论\n这是结论正文。", null, "m", "stop")
         });
-        modelClient.ChatAsync(Arg.Any<string>(), Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<CancellationToken>())
+        modelClient.ChatAsync(Arg.Any<string>(), Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<IReadOnlyList<ToolDefinition>>(), Arg.Any<CancellationToken>())
             .Returns<Task<ModelResponse>>(_ => Task.FromResult(planThenSynthesize.Dequeue()));
 
         var searchProvider = Substitute.For<ISearchProvider>();
@@ -89,7 +90,7 @@ public class ResearchCommandHandlerTests
     public async Task Handle_PlanFailure_Yields_Error_Then_EmptyReport()
     {
         var modelClient = Substitute.For<IModelClient>();
-        modelClient.ChatAsync(Arg.Any<string>(), Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<CancellationToken>())
+        modelClient.ChatAsync(Arg.Any<string>(), Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<IReadOnlyList<ToolDefinition>>(), Arg.Any<CancellationToken>())
             .Returns<Task<ModelResponse>>(_ => throw new System.InvalidOperationException("model down"));
 
         var searchProvider = Substitute.For<ISearchProvider>();
@@ -115,7 +116,7 @@ public class ResearchCommandHandlerTests
             new ModelResponse("[\"q1\"]", null, "m", "stop"),
             new ModelResponse("## 结论\nok", null, "m", "stop")
         });
-        modelClient.ChatAsync(Arg.Any<string>(), Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<CancellationToken>())
+        modelClient.ChatAsync(Arg.Any<string>(), Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<IReadOnlyList<ToolDefinition>>(), Arg.Any<CancellationToken>())
             .Returns<Task<ModelResponse>>(_ => Task.FromResult(planThenSynthesize3.Dequeue()));
 
         var searchProvider = Substitute.For<ISearchProvider>();

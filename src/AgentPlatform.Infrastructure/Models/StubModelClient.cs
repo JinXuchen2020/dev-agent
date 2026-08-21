@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Domain.Aggregates.ToolDefinitions;
 using AgentPlatform.Domain.ValueObjects;
 
 namespace AgentPlatform.Infrastructure.Models;
@@ -30,7 +31,7 @@ internal sealed class StubModelClient : IModelClient
     /// <param name="messages">The conversation history to send to the model.</param>
     /// <param name="ct">A token to monitor for cancellation requests.</param>
     /// <returns>A task that completes with a <see cref="ModelResponse"/> containing the stub reply.</returns>
-    public Task<ModelResponse> ChatAsync(string modelId, IReadOnlyList<ChatMessage> messages, CancellationToken ct = default)
+    public Task<ModelResponse> ChatAsync(string modelId, IReadOnlyList<ChatMessage> messages, IReadOnlyList<ToolDefinition>? tools = null, CancellationToken ct = default)
     {
         var response = new ModelResponse(_stubResponse, new TokenUsage(10, 20), modelId, "stop");
         return Task.FromResult(response);

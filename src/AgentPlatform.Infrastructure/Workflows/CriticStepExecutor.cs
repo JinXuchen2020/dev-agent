@@ -81,7 +81,7 @@ internal sealed class CriticStepExecutor : IStepExecutor
             try
             {
                 var modelId = _settings.DefaultModelId;
-                var response = await _modelClient.ChatAsync(modelId, messages, ct);
+                var response = await _modelClient.ChatAsync(modelId, messages, ct: ct);
                 reviewResult = ParseReviewResult(response.Content, lastArtifact.StepName, _settings.AllowCriticOverride);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)

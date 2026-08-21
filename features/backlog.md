@@ -342,7 +342,7 @@
 > **状态约定**：本组统一标 `open ⛔blocked(1期)`；在 1 期清零前**不建 `features/<id>.md`、不建 `feat/<id>` 分支、不跑 feature-builder**。（2026-08-11 更新：第一期已清零，阻塞解除；状态标记待 2 期正式启动时清理为 `doing`。）
 > **编号说明**：F27/F28 已被「BDD 集成测试统一 / 历史 feature BDD 覆盖补全」占用（已 done），故本组顺延为 **F29–F34**。其中 **F29 = Agentic Agent 控制循环原语（置顶 · 最高优先级 · 独立轨道，先于 Phase 7–11 启动）**，原 F29–F33 顺延为 **F30–F34**（执行持久化 / Agent 运行时实体化 / 消息总线 / 语义记忆 / 在线评估门禁）。
 
-### F29 · Agentic Agent Primitive（自主 Agent 控制循环原语）  [P0 置顶]  open  ✅1期解锁  🔴高风险（范式跨越：DAG 静态编排 → 模型自主循环 + 工具调用通道 + 安全护栏）
+### F29 · Agentic Agent Primitive（自主 Agent 控制循环原语）  [P0 置顶]  done  ✅1期解锁  🔴高风险（范式跨越：DAG 静态编排 → 模型自主循环 + 工具调用通道 + 安全护栏）
 - 设计依据：`features/agentic-agent-primitive.md`（已建，完整设计文档）+ 用户 2026-08-12 拍板「二期第一个 feature，置顶」；独立轨道（拟 Phase 12），先于 Phase 7–11 启动。
 - 目标：把「agent 配置实体」升级为「真 agent」——给定目标 + 允许工具白名单，模型自主循环（plan→act→observe→reflect）决策、调用工具、观察结果、再决策，直到停止条件。这是 dev-agent 与 Codex/Claude Code/WorkBuddy 等真 harness 的范式级差距根因，也是产品差异化核心。
 - 现状核实（代码事实）：`IModelClient.ChatAsync` 仅返回文本 `ModelResponse`（无 ToolCalls）——最大 blocker；`SemanticKernelModelClient` 基于 SK 但未注册 function/未解析 `ToolCallContent`（SK 原生支持，仅缺接线）；`ToolCallingDispatcher`+`IToolRegistry`+3 个 `IToolExecutor`(Native/Skill/MCP) 已具备工具执行半边；`ChatMessage` 已预留 `ToolCallId`/`ToolName`；`ChatStreamAsync` 已存在；沙箱 substrate(F9/F10/F11/F34) 可作 workspace 工具底座。地基 ~65% 已埋。

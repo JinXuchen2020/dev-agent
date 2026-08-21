@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Application.Agents.Agentic;
 using AgentPlatform.Application.EventHandlers;
 using AgentPlatform.Application.Routing.Services;
 using AgentPlatform.Application.Tools;
@@ -117,7 +118,14 @@ public static class DependencyInjection
         // ── F25 工作流调试会话（租户隔离）仓储 ──
         services.AddScoped<IDebugSessionRepository, DebugSessionRepository>();
         services.AddSingleton<IYamlConfigurationParser, YamlConfigurationParserService>();
-        services.AddSingleton<IToolRegistry, InMemoryToolRegistry>();
+        // 单例工具注册表：启动时把平台内置 workspace 工具（Codex 式自主编码能力）注册进去，
+        // 供 AgenticOrchestrator 按 agent 的 AllowedToolNames 白名单动态选用（F29）。
+        services.AddSingleton<IToolRegistry>(_ =>
+        {
+            var registry = new InMemoryToolRegistry();
+            WorkspaceToolDefinitions.Seed(registry);
+            return registry;
+        });
 
         // Register Semantic Kernel text embedding service used by PgVectorStore.
         // Uses the same OpenAI key as the chat completion service.
@@ -337,6 +345,8 @@ public static class DependencyInjection
         services.AddScoped<IStepExecutor, DelayStepExecutor>();
         services.AddScoped<IStepExecutor, SubWorkflowStepExecutor>();
         services.AddScoped<IStepExecutor, UserInputStepExecutor>();
+        // ── F29 Agentic Agent Primitive：自主控制循环节点 ──
+        services.AddScoped<IStepExecutor, AgenticStepExecutor>();
         services.AddScoped<IConditionEvaluator, JsConditionEvaluator>();
 
         // ── F20 S3 HITL 审批仓储 ──
@@ -401,9 +411,13 @@ public static class DependencyInjection
         // orchestrator and its dead config block are gone; OrchestrationPrimitive is the only engine.
 
         services.AddScoped<ToolCallingDispatcher>();
+        // ── F29 Agentic Agent Primitive：ReAct 控制循环引擎 ──
+        services.AddScoped<AgenticOrchestrator>();
         services.AddScoped<IToolExecutor, NativeToolExecutor>();
         services.AddScoped<IToolExecutor, SkillPackageExecutor>();
         services.AddScoped<IToolExecutor, McpClient>();
+        // ── F29 Agentic Agent Primitive：workspace / FS 工具执行器（在沙箱内读写跑）──
+        services.AddScoped<IToolExecutor, WorkspaceToolExecutor>();
 
         // Register execution log cleanup background job
         services.AddHostedService<ExecutionLogCleanupJob>();

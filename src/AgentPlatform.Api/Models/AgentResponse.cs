@@ -14,6 +14,9 @@ namespace AgentPlatform.Api.Models;
 /// <param name="Status">The operational status of the agent (e.g. "Active", "Inactive").</param>
 /// <param name="SystemPrompt">The system prompt that defines the agent's behaviour.</param>
 /// <param name="CreatedAt">The UTC timestamp when the agent was created.</param>
+/// <param name="AllowedToolNames">The allow-list of tool names the agentic loop may invoke, or null if unset.</param>
+/// <param name="MaxIterations">The upper bound on ReAct iterations for the agentic loop.</param>
+/// <param name="StopCriteria">An optional natural-language stop condition for the agentic loop.</param>
 public record AgentResponse(
     Guid Id,
     string Name,
@@ -23,7 +26,10 @@ public record AgentResponse(
     Guid TenantId,
     string Status,
     string SystemPrompt,
-    DateTime CreatedAt)
+    DateTime CreatedAt,
+    IReadOnlyList<string>? AllowedToolNames,
+    int MaxIterations,
+    string? StopCriteria)
 {
     /// <summary>
     /// Maps a domain <see cref="Agent"/> aggregate to an <see cref="AgentResponse"/> API payload.
@@ -39,5 +45,8 @@ public record AgentResponse(
         agent.TenantId,
         agent.Status.ToString(),
         agent.SystemPrompt,
-        agent.CreatedAt);
+        agent.CreatedAt,
+        agent.AllowedToolNames,
+        agent.MaxIterations,
+        agent.StopCriteria);
 }

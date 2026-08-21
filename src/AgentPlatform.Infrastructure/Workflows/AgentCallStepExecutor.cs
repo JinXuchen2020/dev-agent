@@ -50,7 +50,7 @@ internal sealed class AgentCallStepExecutor : IStepExecutor
             var modelId = _settings.DefaultModelId;
 
             _logger.LogDebug("Calling model {ModelId} for step {StepName}", modelId, step.Name);
-            var response = await _modelClient.ChatAsync(modelId, messages, ct);
+            var response = await _modelClient.ChatAsync(modelId, messages, ct: ct);
 
             var output = response.Content;
             var artifact = JsonSerializer.Serialize(new

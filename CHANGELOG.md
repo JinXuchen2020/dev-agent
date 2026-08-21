@@ -1,5 +1,24 @@
 # 变更日志
 
+## v2.26 (2026-08-21)
+
+### F29 · Agentic Agent Primitive（自主 Agent 控制循环原语）完成（feature-builder 全栈闭环，🔴高风险范式跨越，三道质量门全 PASS）
+
+F29 把「Agent 配置实体」变成「真自主 Agent」：模型工具调用通道 + ReAct 控制循环 + 工作区工具 + 安全护栏，端到端落地（后端 + 前端 + BDD E2E）。`features/agentic-agent-primitive.md` §12 含完整质量门清单与 Review-Fix 记录。
+
+**核心改动（后端）：**
+- **① 模型工具调用通道**（最大 blocker 已解）：`IModelClient.ChatAsync` 增 `IReadOnlyList<ToolDefinition>? tools` 参数；`ModelResponse`/`ChatMessage` 增 `ToolCalls` 字段；`SemanticKernelModelClient` 按 **SK 1.30 真实 API** 接线——`OpenAIPromptExecutionSettings.ToolCallBehavior = ToolCallBehavior.EnableFunctions(fn, autoInvoke:false)` declare-only、工具经 `KernelFunctionMetadata.ToOpenAIFunction()` 构建（`OpenAIFunction` ctor 为 internal）、助手 tool_calls 用 `FunctionCallContent` 回显、tool 结果用 `FunctionResultContent` 配对（两类型在 `Microsoft.SemanticKernel` 命名空间）。此前误写的 `ToolCallContent`/`NoKernelFunctions`/`OpenAIChatPromptExecutionSettings`/3 参 `OpenAIFunction` 均不存在，经反射核实后全部改正。
+- **② ReAct 控制循环**：新 `AgenticOrchestrator`（plan→act→observe→reflect，工具调用经 `ToolCallingDispatcher` 分发，结果回灌；无 tool call 判停；硬迭代上限抛 `AgentIterationLimitExceededException`；白名单护栏拦截非允许工具并记录 `tool_not_allowed`）。`StepType.Agentic=15` + `AgenticStepExecutor` 使自主 agent 成为 DAG 节点（混合编排，`HandlesType` 显式路由）。
+- **③ Agent 字段 + 迁移 + 种子**：`Agent` 聚合增 `AllowedToolNamesJson`/`MaxIterations`/`StopCriteria`（EF 映射 + 迁移 `AddAgentAgenticFields`，含 IDE0161 pragma）；`DatabaseInitializer` 幂等种子 F29 demo agent（固定 Guid `3333…3301`，工作区工具白名单）。DTO/命令/API 全链路打通，新增 `POST /api/v1/agents/{id}/runs`（Admin,Operator，未找到 agent 返回 404）。
+- **④ Workspace 工具**：`WorkspaceToolExecutor`（read/write/edit/list_files/run_command/git_diff）在真实沙箱内执行，`ICodeSandbox.RunCommandAsync` 增 `workingDirectory`（修复命令跑在宿主 CWD 缺陷）；修 UTF-8 BOM 写文件缺陷；路径逃逸 + 命令黑名单护栏。
+- **⑤ 测试**：3 个新测试类 13 用例（`AgenticOrchestratorTests` 4 / `WorkspaceToolExecutorTests` 6 / `SemanticKernelModelClientToolCallTests` 3），覆盖验收 ①②④⑤。全量 `dotnet test` 0 失败（App 192 / Infra 147+6skip / Api 35 / Arch 9 / SpecFlow BDD 115）。
+
+**核心改动（前端）：**
+- Agent 表单新增「允许工具（多选）」「最大迭代」「停止条件」；卡片显示工具数/迭代标签；新增运行弹窗（输入目标 → `POST /agents/{id}/runs` → 展示最终回答 + 迭代/令牌 + 逐步 trace）。类型/API/i18n（zh/en）对称补齐。
+- **BDD E2E**：`agentic-run.feature`（1 场景：建带工具白名单 agent → 运行 → 显示最终回答）全链路通过；全量 `@e2e` 26/26 通过（含对重名 agent 的 `.first()` 定位稳健化）。
+
+**模型一致性**：Agent 三字段类型/枚举（`StepType` int）/DTO 全对齐；`tsc --noEmit` 0、eslint 0 error、`dotnet build` 0 警告 0 错误。质量报告 `docs/quality/f29-agentic-gate.md`，`.quality-gate.json` cleared:true。
+
 ## v2.25 (2026-08-11)
 
 ### F8 · 差异化优势产品化（Negotiation + Critic）前端专属模式完成（feature-builder 纯前端闭环，🟢低风险）
