@@ -121,7 +121,8 @@ appsettings.*.Development.json
 # AI Assistant / Tooling
 # ──────────────────────────────────────────────
 .omo/run-continuation/
-.workbuddy/
+.workbuddy/memory/
+.workbuddy/backend.log
 .opencode/
 .codebase-optimizer/
 
