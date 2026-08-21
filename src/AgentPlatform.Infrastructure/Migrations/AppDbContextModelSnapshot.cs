@@ -109,8 +109,21 @@ namespace AgentPlatform.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("AllowedToolNamesJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("[]")
+                        .HasColumnName("AllowedToolNamesJson");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("MaxIterations")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(25)
+                        .HasColumnName("MaxIterations");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -119,6 +132,11 @@ namespace AgentPlatform.Infrastructure.Migrations
 
                     b.Property<int>("Status")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("StopCriteria")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("StopCriteria");
 
                     b.Property<string>("SystemPrompt")
                         .IsRequired()

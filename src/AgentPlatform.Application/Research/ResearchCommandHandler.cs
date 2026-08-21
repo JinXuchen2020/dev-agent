@@ -205,7 +205,7 @@ internal sealed class ResearchCommandHandler
         {
             new(MessageRole.System, sys),
             new(MessageRole.User, user)
-        }, ct);
+        }, ct: ct);
 
         try
         {
@@ -238,7 +238,7 @@ internal sealed class ResearchCommandHandler
         {
             new(MessageRole.System, sys),
             new(MessageRole.User, userBuilder.ToString())
-        }, ct);
+        }, ct: ct);
 
         var (answer, sections) = ParseReport(resp.Content);
         return (answer, sections, resp.TokenUsage);

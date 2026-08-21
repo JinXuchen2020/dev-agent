@@ -61,7 +61,7 @@ internal sealed class DockerCodeSandbox : ICodeSandbox
     }
 
     public async Task<SandboxResult> RunCommandAsync(string command,
-        int timeoutSeconds = 30, CancellationToken ct = default)
+        int timeoutSeconds = 30, CancellationToken ct = default, string? workingDirectory = null)
     {
         if (string.IsNullOrWhiteSpace(command))
             return new SandboxResult(false, string.Empty, "命令为空", 1, 0);

@@ -364,6 +364,44 @@ internal sealed class DatabaseInitializer : IDatabaseInitializer
             _logger.LogWarning(ex, "Failed to seed data, but continuing with startup");
             _logger.LogWarning("This may cause issues when querying tables. Please check the database initialization.");
         }
+
+        // ── F29 demo：自主 coding agent（工作区工具白名单）──
+        // 幂等：固定 Guid 主键 + IgnoreQueryFilters 判重。使 POST /api/v1/agents/{id}/runs 开箱即用。
+        try
+        {
+            var defaultTenantId = _tenantSettings.DefaultTenantId != Guid.Empty
+                ? _tenantSettings.DefaultTenantId
+                : DefaultTenantIdSeed;
+            var demoAgentId = Guid.Parse("33333333-3333-3333-3333-333333333301");
+
+            if (await _context.Agents.IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(a => a.Id == demoAgentId, ct) is null)
+            {
+                var modelDefaults = _serviceProvider.GetRequiredService<IOptions<ModelDefaults>>().Value;
+                var demoAgent = new Agent(
+                    demoAgentId,
+                    "Autonomous Coding Agent (F29 demo)",
+                    AgentType.Development,
+                    new ModelEndpoint(
+                        modelDefaults.ModelProvider,
+                        modelDefaults.ModelName,
+                        modelDefaults.ModelApiUrl),
+                    "You are an autonomous coding agent. Use the workspace tools to read, write, edit, list files, " +
+                    "run commands and inspect git diffs inside your isolated workspace to accomplish the user's goal. " +
+                    "When the goal is fully accomplished, reply with the final answer and stop calling tools.",
+                    defaultTenantId,
+                    allowedToolNames: new List<string> { "read_file", "write_file", "edit_file", "list_files", "run_command", "git_diff" },
+                    maxIterations: 25,
+                    stopCriteria: "The user's goal is fully accomplished and the workspace reflects the requested change.");
+                _context.Agents.Add(demoAgent);
+                await _context.SaveChangesAsync(ct);
+                _logger.LogInformation("Seeded F29 demo autonomous agent (id={AgentId})", demoAgentId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to seed F29 demo agent, but continuing with startup");
+        }
     }
 
     /// <summary>

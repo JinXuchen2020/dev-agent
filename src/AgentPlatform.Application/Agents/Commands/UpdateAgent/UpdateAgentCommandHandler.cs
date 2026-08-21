@@ -55,6 +55,13 @@ internal sealed class UpdateAgentCommandHandler : IRequestHandler<UpdateAgentCom
             agent.SetStatus(status);
         }
 
+        if (request.AllowedToolNames is not null)
+            agent.UpdateAllowedToolNames(request.AllowedToolNames);
+        if (request.MaxIterations is not null)
+            agent.UpdateMaxIterations(request.MaxIterations.Value);
+        if (request.StopCriteria is not null)
+            agent.UpdateStopCriteria(request.StopCriteria);
+
         _repository.Update(agent);
 
         var auditLog = AuditLog.Record(

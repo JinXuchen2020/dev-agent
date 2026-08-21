@@ -1,5 +1,6 @@
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Application.Routing.Services;
+using AgentPlatform.Domain.Aggregates.ToolDefinitions;
 using AgentPlatform.Domain.Enums;
 using AgentPlatform.Domain.ValueObjects;
 using Microsoft.Extensions.Logging;
@@ -51,11 +52,11 @@ public class AgentRoutingSteps
         _primaryModel = primaryModel;
 
         _modelClient
-            .ChatAsync(primaryModel, Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<CancellationToken>())
+            .ChatAsync(primaryModel, Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<IReadOnlyList<ToolDefinition>>(), Arg.Any<CancellationToken>())
             .Returns<Task<ModelResponse>>(_ => throw new TimeoutException("Model timeout"));
 
         _modelClient
-            .ChatAsync(Arg.Is<string>(m => m != primaryModel), Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<CancellationToken>())
+            .ChatAsync(Arg.Is<string>(m => m != primaryModel), Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<IReadOnlyList<ToolDefinition>>(), Arg.Any<CancellationToken>())
             .Returns(args =>
             {
                 var modelId = args.Arg<string>();
@@ -133,7 +134,7 @@ public class AgentRoutingSteps
     public void Given所有模型调用都抛出HttpRequestException()
     {
         _modelClient
-            .ChatAsync(Arg.Any<string>(), Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<CancellationToken>())
+            .ChatAsync(Arg.Any<string>(), Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<IReadOnlyList<ToolDefinition>>(), Arg.Any<CancellationToken>())
             .Returns<Task<ModelResponse>>(_ => throw new HttpRequestException("HTTP request failed"));
     }
 
@@ -156,11 +157,11 @@ public class AgentRoutingSteps
         _primaryModel = primaryModel;
 
         _modelClient
-            .ChatAsync(primaryModel, Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<CancellationToken>())
+            .ChatAsync(primaryModel, Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<IReadOnlyList<ToolDefinition>>(), Arg.Any<CancellationToken>())
             .Returns<Task<ModelResponse>>(_ => throw new InvalidOperationException("Invalid operation"));
 
         _modelClient
-            .ChatAsync(Arg.Is<string>(m => m != primaryModel), Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<CancellationToken>())
+            .ChatAsync(Arg.Is<string>(m => m != primaryModel), Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<IReadOnlyList<ToolDefinition>>(), Arg.Any<CancellationToken>())
             .Returns(args =>
             {
                 var modelId = args.Arg<string>();
@@ -184,7 +185,7 @@ public class AgentRoutingSteps
         _specifiedModel = modelId;
 
         _modelClient
-            .ChatAsync(modelId, Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<CancellationToken>())
+            .ChatAsync(modelId, Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<IReadOnlyList<ToolDefinition>>(), Arg.Any<CancellationToken>())
             .Returns(args => Task.FromResult(new ModelResponse(
                 $"Response from {modelId}",
                 new TokenUsage(10, 20),
@@ -196,7 +197,7 @@ public class AgentRoutingSteps
     public void Given其他模型调用返回成功()
     {
         _modelClient
-            .ChatAsync(Arg.Is<string>(m => m != _specifiedModel), Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<CancellationToken>())
+            .ChatAsync(Arg.Is<string>(m => m != _specifiedModel), Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<IReadOnlyList<ToolDefinition>>(), Arg.Any<CancellationToken>())
             .Returns(args =>
             {
                 var modelId = args.Arg<string>();

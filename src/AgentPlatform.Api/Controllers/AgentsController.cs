@@ -1,7 +1,9 @@
 using AgentPlatform.Api.Models;
 using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Application.Agents.Agentic;
 using AgentPlatform.Application.Agents.Commands.CreateAgent;
 using AgentPlatform.Application.Agents.Commands.DeleteAgent;
+using AgentPlatform.Application.Agents.Commands.RunAgent;
 using AgentPlatform.Application.Agents.Commands.UpdateAgent;
 using AgentPlatform.Application.Agents.Queries.GetAgent;
 using AgentPlatform.Application.Agents.Queries.GetAgents;
@@ -62,7 +64,10 @@ public sealed class AgentsController : ControllerBase
             request.ModelName ?? _defaults.ModelName,
             request.ModelApiUrl ?? _defaults.ModelApiUrl,
             request.SystemPrompt ?? _defaults.SystemPrompt,
-            _tenant.GetTenantId());
+            _tenant.GetTenantId(),
+            AllowedToolNames: request.AllowedToolNames,
+            MaxIterations: request.MaxIterations,
+            StopCriteria: request.StopCriteria);
 
         var agent = await _mediator.Send(command, ct);
         return Ok(AgentResponse.From(agent));
@@ -115,7 +120,10 @@ public sealed class AgentsController : ControllerBase
             request.ModelName,
             request.ModelApiUrl,
             request.SystemPrompt,
-            request.Status), ct);
+            request.Status,
+            request.AllowedToolNames,
+            request.MaxIterations,
+            request.StopCriteria), ct);
 
         if (agent is null) return NotFound();
         return Ok(AgentResponse.From(agent));
@@ -133,6 +141,36 @@ public sealed class AgentsController : ControllerBase
         var deleted = await _mediator.Send(new DeleteAgentCommand(id), ct);
         if (!deleted) return NotFound();
         return NoContent();
+    }
+
+    /// <summary>
+    /// Runs an autonomous agentic control loop for the agent against the supplied goal and returns
+    /// the final answer plus a per-step trace of tool calls and their results.
+    /// </summary>
+    /// <param name="id">The unique identifier of the agent to drive.</param>
+    /// <param name="request">The request payload containing the goal.</param>
+    /// <param name="ct">A token to observe for cancellation of the request.</param>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpPost("{id}/runs")]
+    public async Task<IActionResult> RunAgent(Guid id, [FromBody] RunAgentGoalRequest request, CancellationToken ct)
+    {
+        AgenticRunResult result;
+        try
+        {
+            result = await _mediator.Send(new RunAgentGoalCommand(id, request.Goal), ct);
+        }
+        catch (InvalidOperationException)
+        {
+            // Agent not found (handler contract) → 404 rather than 500.
+            return NotFound();
+        }
+        return Ok(new AgenticRunResponse(
+            result.FinalAnswer,
+            result.Iterations,
+            result.TotalTokensIn,
+            result.TotalTokensOut,
+            result.Trace.Select(t => new AgenticTraceStepResponse(
+                t.Iteration, t.ToolName, t.ArgumentsJson, t.Result, t.Success)).ToList()));
     }
 }
 

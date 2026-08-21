@@ -38,4 +38,11 @@ public record ToolExecutionResult(
     bool Success,
     string Output,
     TokenUsage? TokenUsage = null,
-    string? ErrorMessage = null);
+    string? ErrorMessage = null)
+{
+    /// <summary>Creates a successful result carrying the tool's textual output.</summary>
+    public static ToolExecutionResult Ok(string output) => new(true, output);
+
+    /// <summary>Creates a failed result carrying the error message.</summary>
+    public static ToolExecutionResult Fail(string error) => new(false, string.Empty, ErrorMessage: error);
+}

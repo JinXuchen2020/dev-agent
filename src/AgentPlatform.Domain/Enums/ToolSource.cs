@@ -12,5 +12,8 @@ public enum ToolSource
     SkillPackage,
 
     /// <summary>The tool is provided by an external MCP (Model Context Protocol) server.</summary>
-    McpServer
+    McpServer,
+
+    /// <summary>The tool lets the agent read/write/run inside its isolated workspace sandbox (Codex-style coding autonomy).</summary>
+    Workspace
 }

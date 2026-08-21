@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Application.Diagnostics;
+using AgentPlatform.Domain.Aggregates.ToolDefinitions;
 using AgentPlatform.Domain.Enums;
 using AgentPlatform.Domain.ValueObjects;
 using Microsoft.Extensions.Configuration;
@@ -10,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
 
 namespace AgentPlatform.Infrastructure.Models;
 
@@ -139,6 +141,45 @@ internal sealed class SemanticKernelModelClient : IModelClient
         var chatHistory = new ChatHistory();
         foreach (var m in messages)
         {
+            // Assistant message that proposed tool calls on a previous turn: echo them back so the
+            // model sees its own tool_calls (OpenAI requires tool messages to be preceded by tool_calls).
+            // SK 1.30 ctor: FunctionCallContent(functionName, pluginName, id, arguments).
+            if (m.ToolCalls is { Count: > 0 } && m.Role == AgentPlatform.Domain.Enums.MessageRole.Agent)
+            {
+                var items = new ChatMessageContentItemCollection();
+                foreach (var call in m.ToolCalls)
+                {
+                    KernelArguments? args = null;
+                    if (!string.IsNullOrWhiteSpace(call.ArgumentsJson) && call.ArgumentsJson != "{}")
+                    {
+                        try
+                        {
+                            var dict = JsonSerializer.Deserialize<Dictionary<string, object?>>(call.ArgumentsJson);
+                            if (dict is not null) args = new KernelArguments(dict);
+                        }
+                        catch (JsonException)
+                        {
+                            // fall back to no arguments
+                        }
+                    }
+                    items.Add(new FunctionCallContent(functionName: call.Name, id: call.Id, arguments: args));
+                }
+                chatHistory.Add(new ChatMessageContent(AuthorRole.Assistant, items: items));
+                continue;
+            }
+
+            // Tool result message: pair it to the originating assistant tool call.
+            // SK 1.30 ctor: FunctionResultContent(functionName, pluginName, callId, result).
+            if (m.Role == AgentPlatform.Domain.Enums.MessageRole.Tool && !string.IsNullOrEmpty(m.ToolCallId))
+            {
+                var toolItems = new ChatMessageContentItemCollection
+                {
+                    new FunctionResultContent(functionName: m.ToolName, callId: m.ToolCallId!, result: m.Content)
+                };
+                chatHistory.Add(new ChatMessageContent(AuthorRole.Tool, items: toolItems));
+                continue;
+            }
+
             chatHistory.Add(new ChatMessageContent(
                 m.Role switch
                 {
@@ -153,16 +194,73 @@ internal sealed class SemanticKernelModelClient : IModelClient
         return chatHistory;
     }
 
+    private static OpenAIFunction ToOpenAIFunction(ToolDefinition tool)
+    {
+        // SK 1.30 declares tools via KernelFunctionMetadata → OpenAIFunction (OpenAIFunction's own
+        // constructor is internal). We mirror the tool's JSON parameter schema into parameter metadata
+        // so the model sees the real argument contract.
+        var schema = string.IsNullOrWhiteSpace(tool.ParametersSchema) ? "{}" : tool.ParametersSchema;
+        var parameters = new List<KernelParameterMetadata>();
+        try
+        {
+            using var doc = JsonDocument.Parse(schema);
+            if (doc.RootElement.TryGetProperty("properties", out var props) && props.ValueKind == JsonValueKind.Object)
+            {
+                var required = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (doc.RootElement.TryGetProperty("required", out var req) && req.ValueKind == JsonValueKind.Array)
+                    foreach (var r in req.EnumerateArray())
+                        if (r.ValueKind == JsonValueKind.String)
+                            required.Add(r.GetString()!);
+
+                foreach (var prop in props.EnumerateObject())
+                {
+                    string? description = null;
+                    if (prop.Value.TryGetProperty("description", out var d) && d.ValueKind == JsonValueKind.String)
+                        description = d.GetString();
+
+                    parameters.Add(new KernelParameterMetadata(prop.Name)
+                    {
+                        Description = description,
+                        IsRequired = required.Contains(prop.Name)
+                    });
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Parameters schema is optional; declare the function without parameter metadata.
+        }
+
+        var metadata = new KernelFunctionMetadata(tool.Name)
+        {
+            Description = tool.Description ?? string.Empty,
+            Parameters = parameters
+        };
+        return metadata.ToOpenAIFunction();
+    }
+
+    private static string SerializeArguments(KernelArguments? args)
+    {
+        if (args is null) return "{}";
+        if (args is IDictionary<string, object?> dict)
+            return JsonSerializer.Serialize(dict);
+        return JsonSerializer.Serialize(args);
+    }
+
     /// <summary>
     /// Sends a chat completion request to the registered model and returns the response with token usage metrics.
+    /// When <paramref name="tools"/> is supplied the model may propose tool calls (declared only — execution
+    /// stays with the caller via <see cref="ToolCallBehavior.EnableFunctions"/> with auto-invoke disabled).
     /// </summary>
     /// <param name="modelId">The identifier of the registered model to invoke.</param>
     /// <param name="messages">The conversation history to send to the model.</param>
+    /// <param name="tools">Optional tool definitions the model is allowed to invoke.</param>
     /// <param name="ct">A token to monitor for cancellation requests.</param>
     /// <returns>A task that completes with a <see cref="ModelResponse"/> containing the reply content and token usage.</returns>
     public async Task<ModelResponse> ChatAsync(
         string modelId,
         IReadOnlyList<ChatMessage> messages,
+        IReadOnlyList<ToolDefinition>? tools = null,
         CancellationToken ct = default)
     {
         if (!_services.TryGetValue(modelId, out var service))
@@ -173,7 +271,19 @@ internal sealed class SemanticKernelModelClient : IModelClient
         var modelName = modelId.Contains(':') ? modelId.Split(':')[1] : modelId;
 
         var chatHistory = ToChatHistory(messages);
-        var reply = await service.GetChatMessageContentAsync(chatHistory, cancellationToken: ct);
+
+        OpenAIPromptExecutionSettings? settings = null;
+        if (tools is { Count: > 0 })
+        {
+            settings = new OpenAIPromptExecutionSettings
+            {
+                ToolCallBehavior = ToolCallBehavior.EnableFunctions(tools.Select(ToOpenAIFunction), autoInvoke: false)
+            };
+        }
+
+        var reply = settings is null
+            ? await service.GetChatMessageContentAsync(chatHistory, cancellationToken: ct)
+            : await service.GetChatMessageContentAsync(chatHistory, settings, kernel: null, cancellationToken: ct);
         sw.Stop();
 
         // Record model call metrics
@@ -203,11 +313,18 @@ internal sealed class SemanticKernelModelClient : IModelClient
             }
         }
 
+        var calls = reply.Items.OfType<FunctionCallContent>()
+            .Select(c => new ToolCall(c.Id ?? string.Empty, c.FunctionName, SerializeArguments(c.Arguments)))
+            .ToList();
+
+        var finishReason = calls.Count > 0 ? "tool_calls" : "stop";
+
         return new ModelResponse(
             reply.Content ?? string.Empty,
             new TokenUsage(promptTokens, completionTokens),
             modelId,
-            "stop");
+            finishReason,
+            calls.Count > 0 ? calls : null);
     }
 
     /// <summary>

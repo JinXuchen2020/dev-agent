@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Domain.Aggregates.ToolDefinitions;
 using Microsoft.Extensions.Logging;
 
 namespace AgentPlatform.Infrastructure.Models.RoutingMiddleware;
@@ -36,12 +37,13 @@ internal sealed class ModelTelemetryDecorator : IModelClient
     public async Task<ModelResponse> ChatAsync(
         string modelId,
         IReadOnlyList<ChatMessage> messages,
+        IReadOnlyList<ToolDefinition>? tools = null,
         CancellationToken ct = default)
     {
         var sw = Stopwatch.StartNew();
         try
         {
-            var result = await _inner.ChatAsync(modelId, messages, ct);
+            var result = await _inner.ChatAsync(modelId, messages, tools, ct);
             sw.Stop();
             _logger.LogInformation(
                 "Model {ModelId} call succeeded in {Elapsed}ms, tokens: {Tokens}",

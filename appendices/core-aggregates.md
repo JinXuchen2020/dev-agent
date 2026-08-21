@@ -121,6 +121,10 @@ public class Agent                                // 聚合根
     public AgentRole Role { get; private init; }                  // 角色枚举
     public ModelEndpoint ModelEndpoint { get; private set; }      // 模型端点（值对象）
     public string SystemPrompt { get; private set; }              // 系统提示词
+    // F29 自主控制循环字段（EF 迁移 AddAgentAgenticFields）
+    public string AllowedToolNamesJson { get; private set; }      // 允许工具白名单（JSON 文本列）
+    public int MaxIterations { get; private set; }                // 迭代硬上限（默认 25）
+    public string? StopCriteria { get; private set; }             // 自然语言停止条件
     public IReadOnlyList<ToolDefinition> Tools => _tools;          // 关联的原生工具列表
     public IReadOnlyList<string> SkillPackages => _skillPackageNames;  // SK Plugin 名称列表
     public IReadOnlyList<string> McpServers => _mcpServerNames;        // MCP Server 名称列表

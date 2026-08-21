@@ -8,6 +8,12 @@ export interface Agent {
   status?: string;
   systemPrompt: string;
   createdAt: string;
+  /** F29 agentic: allow-list of tool names the autonomous loop may invoke. */
+  allowedToolNames?: string[] | null;
+  /** F29 agentic: upper bound on ReAct iterations. */
+  maxIterations?: number;
+  /** F29 agentic: optional natural-language stop condition. */
+  stopCriteria?: string | null;
 }
 
 export interface CreateAgentRequest {
@@ -19,6 +25,12 @@ export interface CreateAgentRequest {
   systemPrompt?: string | null;
   /** Optional id of the source agent configuration this agent was instantiated from (provenance only). */
   configurationId?: string | null;
+  /** F29 agentic: allow-list of tool names the autonomous loop may invoke. */
+  allowedToolNames?: string[] | null;
+  /** F29 agentic: upper bound on ReAct iterations (default 25). */
+  maxIterations?: number | null;
+  /** F29 agentic: optional natural-language stop condition. */
+  stopCriteria?: string | null;
 }
 
 // PATCH-style update: all fields optional; backend applies only the supplied ones.
@@ -30,6 +42,27 @@ export interface UpdateAgentRequest {
   modelApiUrl?: string | null;
   systemPrompt?: string | null;
   status?: string | null;
+  allowedToolNames?: string[] | null;
+  maxIterations?: number | null;
+  stopCriteria?: string | null;
+}
+
+/** F29: a single step in an autonomous agent run (tool invocation or final answer). */
+export interface AgenticTraceStepResponse {
+  iteration: number;
+  toolName: string | null;
+  argumentsJson: string | null;
+  result: string;
+  success: boolean;
+}
+
+/** F29: response of POST /api/v1/agents/{id}/runs. */
+export interface AgenticRunResponse {
+  finalAnswer: string;
+  iterations: number;
+  totalTokensIn: number;
+  totalTokensOut: number;
+  trace: AgenticTraceStepResponse[];
 }
 
 export interface ApiKey {

@@ -49,5 +49,8 @@ public enum StepType
     Delay = 13,
 
     /// <summary>人工审批门（HITL）：暂停工作流等待人工输入/批准，恢复后续跑。</summary>
-    UserInput = 14
+    UserInput = 14,
+
+    /// <summary>自主 Agent 节点：以 agent + goal 跑 ReAct 控制循环（F29 Agentic Agent Primitive）。</summary>
+    Agentic = 15
 }

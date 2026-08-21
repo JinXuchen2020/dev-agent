@@ -1,0 +1,16 @@
+namespace AgentPlatform.Application.Agents.Agentic;
+
+/// <summary>
+/// The outcome of running an agentic control loop against a goal.
+/// </summary>
+/// <param name="FinalAnswer">The model's final answer once it stops invoking tools.</param>
+/// <param name="Iterations">The number of plan/act/observe iterations performed.</param>
+/// <param name="Trace">Per-iteration trace of tool calls and model steps.</param>
+/// <param name="TotalTokensIn">Total prompt tokens consumed across the loop.</param>
+/// <param name="TotalTokensOut">Total completion tokens produced across the loop.</param>
+public sealed record AgenticRunResult(
+    string FinalAnswer,
+    int Iterations,
+    IReadOnlyList<AgenticTraceStep> Trace,
+    int TotalTokensIn,
+    int TotalTokensOut);

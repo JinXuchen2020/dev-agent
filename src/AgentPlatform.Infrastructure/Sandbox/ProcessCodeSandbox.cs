@@ -60,17 +60,17 @@ internal sealed class ProcessCodeSandbox : ICodeSandbox
     }
 
     public Task<SandboxResult> RunCommandAsync(string command,
-        int timeoutSeconds = 30, CancellationToken ct = default)
+        int timeoutSeconds = 30, CancellationToken ct = default, string? workingDirectory = null)
     {
         var shell = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "cmd.exe" : "/bin/sh";
         var shellArg = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
             ? $"/c {EscapeArg(command)}"
             : $"-c {EscapeArg(command)}";
-        return RunProcessAsync(shell, shellArg, timeoutSeconds, ct, command, "shell");
+        return RunProcessAsync(shell, shellArg, timeoutSeconds, ct, command, "shell", workingDirectory);
     }
 
     private async Task<SandboxResult> RunProcessAsync(string? fileName, string? arguments,
-        int timeoutSeconds, CancellationToken ct, string source, string language)
+        int timeoutSeconds, CancellationToken ct, string source, string language, string? workingDirectory = null)
     {
         var sw = Stopwatch.StartNew();
         if (fileName is null)
@@ -84,6 +84,7 @@ internal sealed class ProcessCodeSandbox : ICodeSandbox
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
+            WorkingDirectory = workingDirectory ?? string.Empty,
         };
         if (!_settings.NetworkEnabled)
             psi.Environment["AGENT_PLATFORM_SANDBOX_OFFLINE"] = "1";

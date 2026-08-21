@@ -8,6 +8,7 @@ import type {
   CreateAgentConfigurationRequest,
   UpdateAgentConfigurationRequest,
   ConfigurationAgentTemplate,
+  AgenticRunResponse,
   Workflow,
   WorkflowDetail,
   ExecutionLog,
@@ -107,6 +108,10 @@ export const updateAgent = (id: string, data: UpdateAgentRequest) =>
 
 export const deleteAgent = (id: string) =>
   api.delete<void>(`/agents/${id}`).then(() => undefined);
+
+// F29: run an autonomous agentic control loop for the agent against a goal.
+export const runAgentGoal = (id: string, goal: string) =>
+  api.post<AgenticRunResponse>(`/agents/${id}/runs`, { goal }).then((r) => r.data);
 
 // Agent Roles
 export const getAgentRoles = () => api.get<AgentRole[]>('/agent-roles').then((r) => r.data);

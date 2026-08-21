@@ -22,9 +22,10 @@ public interface ICodeSandbox
     /// <param name="command">The shell command to execute.</param>
     /// <param name="timeoutSeconds">The maximum number of seconds to allow before the command is aborted. Defaults to 30.</param>
     /// <param name="ct">A cancellation token to observe while waiting for the operation to complete.</param>
+    /// <param name="workingDirectory">An optional working directory to run the command in. When null the sandbox defaults are used.</param>
     /// <returns>A task whose result contains the outcome of the sandbox execution.</returns>
     Task<SandboxResult> RunCommandAsync(string command,
-        int timeoutSeconds = 30, CancellationToken ct = default);
+        int timeoutSeconds = 30, CancellationToken ct = default, string? workingDirectory = null);
 }
 
 /// <summary>

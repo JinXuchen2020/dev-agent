@@ -13,6 +13,9 @@ namespace AgentPlatform.Api.Models;
 /// <param name="ModelApiUrl">The new API endpoint URL for the model.</param>
 /// <param name="SystemPrompt">The new system prompt.</param>
 /// <param name="Status">The new operational status (e.g. "Active", "Inactive").</param>
+/// <param name="AllowedToolNames">Optional new allow-list of tool names for the agentic loop. Null = unchanged.</param>
+/// <param name="MaxIterations">Optional new upper bound on ReAct iterations. Null = unchanged.</param>
+/// <param name="StopCriteria">Optional new natural-language stop condition. Null = unchanged.</param>
 public record UpdateAgentRequest(
     string? Name,
     string? RoleCode,
@@ -20,4 +23,7 @@ public record UpdateAgentRequest(
     string? ModelName,
     string? ModelApiUrl,
     string? SystemPrompt,
-    string? Status);
+    string? Status,
+    List<string>? AllowedToolNames,
+    int? MaxIterations,
+    string? StopCriteria);

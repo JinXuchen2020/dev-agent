@@ -38,7 +38,10 @@ internal sealed class CreateAgentCommandHandler : IRequestHandler<CreateAgentCom
             role,
             endpoint,
             request.SystemPrompt,
-            request.TenantId);
+            request.TenantId,
+            request.AllowedToolNames,
+            request.MaxIterations ?? 25,
+            request.StopCriteria);
 
         _repository.Add(agent);
 
