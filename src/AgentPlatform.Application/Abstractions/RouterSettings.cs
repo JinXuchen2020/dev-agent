@@ -54,8 +54,11 @@ public sealed class RouterSettings
 
     /// <summary>
     /// Gets or sets the overall timeout in seconds for a single model invocation.
+    /// Agentic 多轮任务里每一轮模型调用都可能携带很长的工具历史；设 0（默认）表示
+    /// 禁用单次调用超时，让长生成可以一直跑到完成（配合前端"无限运行直到目标达成"）。
+    /// 若担心半开流挂死，可配置一个正数（如 300）作为单次调用的兜底上限。
     /// </summary>
-    public double TimeoutSeconds { get; set; } = 30;
+    public double TimeoutSeconds { get; set; } = 0;
 }
 
 /// <summary>

@@ -221,17 +221,20 @@ internal sealed class DockerCodeSandbox : ICodeSandbox
     {
         try
         {
+            // Docker 守护进程卡死时 GetContainerLogsAsync/CopyOutputToAsync 可能无限挂起，
+            // 这里用 30s 超时兜底；超时后按空日志降级（日志读取失败不阻断主流程）。
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             using var stream = await client.Containers.GetContainerLogsAsync(
-                id, true, new ContainerLogsParameters { ShowStdout = true, ShowStderr = true }, CancellationToken.None)
+                id, true, new ContainerLogsParameters { ShowStdout = true, ShowStderr = true }, cts.Token)
                 .ConfigureAwait(false);
             using var ms = new MemoryStream();
             // tty 参数必须与容器 Tty=true 一致：否则 MultiplexedStream 会按多路复用帧去解析纯文本，
             // 导致输出被截断为空（这正是 ubuntu-latest CI 上集成测试 stdout 为空的根因）。
             // Tty=true 时 stdout/stderr 已合并为单一裸流，全部写入 ms。
-            await stream.CopyOutputToAsync(null, ms, null, CancellationToken.None).ConfigureAwait(false);
+            await stream.CopyOutputToAsync(null, ms, null, cts.Token).ConfigureAwait(false);
             ms.Position = 0;
             using var reader = new StreamReader(ms);
-            var text = await reader.ReadToEndAsync().ConfigureAwait(false);
+            var text = await reader.ReadToEndAsync(cts.Token).ConfigureAwait(false);
             return (text, string.Empty);
         }
         catch (Exception ex)

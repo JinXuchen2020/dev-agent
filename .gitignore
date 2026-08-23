@@ -152,3 +152,8 @@ qa-report.json
 test-results.bak-*/
 playwright-report.bak-*/
 *.bak-*/
+
+# ──────────────────────────────────────────────
+# Runtime artifacts (agent run outputs, not source)
+# ──────────────────────────────────────────────
+src/AgentPlatform.Api/data/

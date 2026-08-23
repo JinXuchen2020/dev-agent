@@ -21,7 +21,9 @@ internal sealed class ResiliencePipelineProvider : IResiliencePipelineProvider
     {
         var settings = routerOptions.Value;
 
-        _pipeline = new ResiliencePipelineBuilder()
+        // TimeoutSeconds <= 0（默认）表示禁用单次调用超时，不加入 Polly 超时策略；
+        // 设正数时才作为单次模型调用的兜底上限（防半开流挂死）。
+        var builder = new ResiliencePipelineBuilder()
             .AddRetry(new RetryStrategyOptions
             {
                 MaxRetryAttempts = settings.MaxRetryAttempts,
@@ -39,9 +41,14 @@ internal sealed class ResiliencePipelineProvider : IResiliencePipelineProvider
                 ShouldHandle = new PredicateBuilder()
                     .Handle<HttpRequestException>()
                     .Handle<TaskCanceledException>()
-            })
-            .AddTimeout(TimeSpan.FromSeconds(settings.TimeoutSeconds))
-            .Build();
+            });
+
+        if (settings.TimeoutSeconds > 0)
+        {
+            builder = builder.AddTimeout(TimeSpan.FromSeconds(settings.TimeoutSeconds));
+        }
+
+        _pipeline = builder.Build();
     }
 
     /// <summary>

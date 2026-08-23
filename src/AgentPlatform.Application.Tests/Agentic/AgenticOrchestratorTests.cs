@@ -1,9 +1,12 @@
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Application.Agents.Agentic;
+using AgentPlatform.Application.Routing.Services;
 using AgentPlatform.Application.Tools;
 using AgentPlatform.Domain.Aggregates.Agents;
+using AgentPlatform.Domain.Aggregates.AgentRoleDefinitions;
 using AgentPlatform.Domain.Aggregates.ToolDefinitions;
 using AgentPlatform.Domain.Enums;
+using AgentPlatform.Domain.Repositories;
 using AgentPlatform.Domain.ValueObjects;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -17,8 +20,10 @@ namespace AgentPlatform.Application.Tests.Agentic;
 /// </summary>
 public class AgenticOrchestratorTests
 {
-    private readonly IModelClient _modelClient = Substitute.For<IModelClient>();
+    private readonly IModelRouter _router = Substitute.For<IModelRouter>();
+    private readonly ITenantProvider _tenantProvider = Substitute.For<ITenantProvider>();
     private readonly FakeToolRegistry _registry = new();
+    private readonly IAgentRoleDefinitionRepository _roleRepo = Substitute.For<IAgentRoleDefinitionRepository>();
 
     private static readonly ToolDefinition ReadFileTool = new(
         Guid.NewGuid(), "read_file", "Read a file inside the workspace",
@@ -36,7 +41,11 @@ public class AgenticOrchestratorTests
             _registry,
             executors,
             NullLogger<ToolCallingDispatcher>.Instance);
-        return new AgenticOrchestrator(_modelClient, dispatcher, _registry);
+        _tenantProvider.GetTenantId().Returns(Guid.NewGuid());
+        var workspaceRoot = Substitute.For<IWorkspaceRootProvider>();
+        workspaceRoot.WorkspaceRoot.Returns(System.IO.Path.GetTempPath());
+        var artifactStore = Substitute.For<IArtifactStore>();
+        return new AgenticOrchestrator(_router, _tenantProvider, dispatcher, _registry, workspaceRoot, artifactStore, _roleRepo);
     }
 
     private static Agent CreateAgent(
@@ -66,18 +75,14 @@ public class AgenticOrchestratorTests
         executor.ExecuteAsync(Arg.Any<ToolDefinition>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(ToolExecutionResult.Ok("file contents"));
 
-        _modelClient.ChatAsync(
-                Arg.Any<string>(),
-                Arg.Any<IReadOnlyList<ChatMessage>>(),
-                Arg.Any<IReadOnlyList<ToolDefinition>>(),
-                Arg.Any<CancellationToken>())
+        _router.RouteAsync(Arg.Any<RoutingRequest>(), Arg.Any<CancellationToken>())
             .Returns(
                 new ModelResponse("", new TokenUsage(10, 20), "gpt-4o", "tool_calls",
                     new[] { new ToolCall("call_1", "read_file", "{\"path\":\"a.txt\"}") }),
                 new ModelResponse("Task complete.", new TokenUsage(10, 20), "gpt-4o", "stop"));
 
         var result = await CreateOrchestrator(executor)
-            .RunGoalAsync("read a.txt and summarize", CreateAgent(), CancellationToken.None);
+            .RunGoalAsync("read a.txt and summarize", CreateAgent(), Guid.NewGuid(), CancellationToken.None);
 
         Assert.Equal("Task complete.", result.FinalAnswer);
         Assert.Equal(2, result.Iterations);
@@ -87,11 +92,9 @@ public class AgenticOrchestratorTests
         Assert.Contains(result.Trace, t => t.ToolName is null && t.Result == "Task complete.");
 
         // Tool 结果必须回喂模型（Tool role + call id 配对）。
-        await _modelClient.Received(2).ChatAsync(
-            Arg.Any<string>(),
-            Arg.Is<IReadOnlyList<ChatMessage>>(m =>
-                m.Any(x => x.Role == MessageRole.Tool && x.ToolCallId == "call_1" && x.ToolName == "read_file")),
-            Arg.Any<IReadOnlyList<ToolDefinition>>(),
+        await _router.Received(2).RouteAsync(
+            Arg.Is<RoutingRequest>(r =>
+                r.Messages.Any(x => x.Role == MessageRole.Tool && x.ToolCallId == "call_1" && x.ToolName == "read_file")),
             Arg.Any<CancellationToken>());
     }
 
@@ -104,16 +107,41 @@ public class AgenticOrchestratorTests
         executor.ExecuteAsync(Arg.Any<ToolDefinition>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(ToolExecutionResult.Ok("x"));
 
-        _modelClient.ChatAsync(
-                Arg.Any<string>(), Arg.Any<IReadOnlyList<ChatMessage>>(),
-                Arg.Any<IReadOnlyList<ToolDefinition>>(), Arg.Any<CancellationToken>())
+        _router.RouteAsync(Arg.Any<RoutingRequest>(), Arg.Any<CancellationToken>())
             .Returns(new ModelResponse("", new TokenUsage(1, 1), "gpt-4o", "tool_calls",
                 new[] { new ToolCall("call_1", "read_file", "{}") }));
 
-        // 迭代上限硬保护：模型永不收手 → 必须抛异常而不是死循环。
+        // 显式配置有限上限（3）时：模型永不收手 → 必须抛异常而不是死循环。
+        // 注意：默认 MaxIterations=0 表示无上限，不会触达此分支。
         var agent = CreateAgent(maxIterations: 3);
         await Assert.ThrowsAsync<AgentIterationLimitExceededException>(
-            () => CreateOrchestrator(executor).RunGoalAsync("loop forever", agent, CancellationToken.None));
+            () => CreateOrchestrator(executor).RunGoalAsync("loop forever", agent, Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task RunGoal_NoMaxIterations_RunsUntilDone()
+    {
+        _registry.Register(ReadFileTool);
+        var executor = Substitute.For<IToolExecutor>();
+        executor.Source.Returns(ToolSource.Workspace);
+        executor.ExecuteAsync(Arg.Any<ToolDefinition>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(ToolExecutionResult.Ok("x"));
+
+        // 模型前两次要求工具调用，第三次收手 → 无上限（0）时必须正常跑完，不抛异常。
+        _router.RouteAsync(Arg.Any<RoutingRequest>(), Arg.Any<CancellationToken>())
+            .Returns(
+                new ModelResponse("", new TokenUsage(1, 1), "gpt-4o", "tool_calls",
+                    new[] { new ToolCall("call_1", "read_file", "{}") }),
+                new ModelResponse("", new TokenUsage(1, 1), "gpt-4o", "tool_calls",
+                    new[] { new ToolCall("call_2", "read_file", "{}") }),
+                new ModelResponse("Done at last.", new TokenUsage(1, 1), "gpt-4o", "stop"));
+
+        var agent = CreateAgent(maxIterations: 0);
+        var result = await CreateOrchestrator(executor)
+            .RunGoalAsync("multi-step task", agent, Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal("Done at last.", result.FinalAnswer);
+        Assert.Equal(3, result.Iterations);
     }
 
     [Fact]
@@ -128,9 +156,7 @@ public class AgenticOrchestratorTests
             .Returns(ToolExecutionResult.Ok("should not happen"));
 
         // Agent 白名单只允许 read_file —— 模型提议 write_file 必须被拦下。
-        _modelClient.ChatAsync(
-                Arg.Any<string>(), Arg.Any<IReadOnlyList<ChatMessage>>(),
-                Arg.Any<IReadOnlyList<ToolDefinition>>(), Arg.Any<CancellationToken>())
+        _router.RouteAsync(Arg.Any<RoutingRequest>(), Arg.Any<CancellationToken>())
             .Returns(
                 new ModelResponse("", new TokenUsage(1, 1), "gpt-4o", "tool_calls",
                     new[] { new ToolCall("call_1", "write_file", "{\"path\":\"b.txt\"}") }),
@@ -138,7 +164,7 @@ public class AgenticOrchestratorTests
 
         var agent = CreateAgent(allowedToolNames: new[] { "read_file" });
         var result = await CreateOrchestrator(executor)
-            .RunGoalAsync("write b.txt", agent, CancellationToken.None);
+            .RunGoalAsync("write b.txt", agent, Guid.NewGuid(), CancellationToken.None);
 
         Assert.Equal("Done.", result.FinalAnswer);
         var blocked = Assert.Single(result.Trace, t => t.ToolName == "write_file");
@@ -150,22 +176,68 @@ public class AgenticOrchestratorTests
     [Fact]
     public async Task RunGoal_NoAllowedTools_PassesEmptyTools_And_StopsOnPlainAnswer()
     {
-        _modelClient.ChatAsync(
-                Arg.Any<string>(), Arg.Any<IReadOnlyList<ChatMessage>>(),
-                Arg.Any<IReadOnlyList<ToolDefinition>>(), Arg.Any<CancellationToken>())
+        _router.RouteAsync(Arg.Any<RoutingRequest>(), Arg.Any<CancellationToken>())
             .Returns(new ModelResponse("Reasoning only.", new TokenUsage(5, 5), "gpt-4o", "stop"));
 
         var agent = CreateAgent(allowedToolNames: Array.Empty<string>());
         var result = await CreateOrchestrator()
-            .RunGoalAsync("answer without tools", agent, CancellationToken.None);
+            .RunGoalAsync("answer without tools", agent, Guid.NewGuid(), CancellationToken.None);
 
         Assert.Equal("Reasoning only.", result.FinalAnswer);
         Assert.Equal(1, result.Iterations);
-        await _modelClient.Received(1).ChatAsync(
-            Arg.Any<string>(),
-            Arg.Any<IReadOnlyList<ChatMessage>>(),
-            Arg.Is<IReadOnlyList<ToolDefinition>>(t => t.Count == 0),
+        await _router.Received(1).RouteAsync(
+            Arg.Is<RoutingRequest>(r => r.Tools != null && r.Tools.Count == 0),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RunGoal_RoleSystemPrompt_PrependedBeforeAgentPrompt()
+    {
+        string? capturedSystem = null;
+        _router.RouteAsync(Arg.Any<RoutingRequest>(), Arg.Any<CancellationToken>())
+            .Returns(ci =>
+            {
+                var req = (RoutingRequest)ci[0]!;
+                capturedSystem = req.Messages.FirstOrDefault(m => m.Role == MessageRole.System)?.Content;
+                return new ModelResponse("Done.", new TokenUsage(1, 1), "gpt-4o", "stop");
+            });
+
+        // 角色定义（DB 权威）里带系统提示词：按 agent.Role.RoleCode="development" 命中。
+        const string rolePrompt = "You are a senior backend engineer focused on correctness.";
+        _roleRepo.GetByRoleCodeAsync("development", Arg.Any<CancellationToken>())
+            .Returns(new AgentRoleDefinition(Guid.NewGuid(), "Developer", "development", "代码实现", rolePrompt));
+
+        var agent = CreateAgent(); // 默认 Role = AgentType.Development
+        await CreateOrchestrator().RunGoalAsync("do something", agent, Guid.NewGuid(), CancellationToken.None);
+
+        Assert.NotNull(capturedSystem);
+        var roleIdx = capturedSystem!.IndexOf(rolePrompt, StringComparison.Ordinal);
+        var agentIdx = capturedSystem.IndexOf("You are a coding agent.", StringComparison.Ordinal);
+        Assert.True(roleIdx >= 0, "角色提示词应被注入");
+        Assert.True(agentIdx > roleIdx, "角色提示词应在 agent 自定义提示词之前");
+    }
+
+    [Fact]
+    public async Task RunGoal_NoRoleDefinition_DoesNotPrepend()
+    {
+        string? capturedSystem = null;
+        _router.RouteAsync(Arg.Any<RoutingRequest>(), Arg.Any<CancellationToken>())
+            .Returns(ci =>
+            {
+                var req = (RoutingRequest)ci[0]!;
+                capturedSystem = req.Messages.FirstOrDefault(m => m.Role == MessageRole.System)?.Content;
+                return new ModelResponse("Done.", new TokenUsage(1, 1), "gpt-4o", "stop");
+            });
+
+        // 角色定义查不到 → 不应有任何角色提示词注入，system prompt 以 agent 自定义开头。
+        _roleRepo.GetByRoleCodeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns((AgentRoleDefinition?)null);
+
+        var agent = CreateAgent();
+        await CreateOrchestrator().RunGoalAsync("do something", agent, Guid.NewGuid(), CancellationToken.None);
+
+        Assert.NotNull(capturedSystem);
+        Assert.StartsWith("You are a coding agent.", capturedSystem, StringComparison.Ordinal);
     }
 
     private sealed class FakeToolRegistry : IToolRegistry

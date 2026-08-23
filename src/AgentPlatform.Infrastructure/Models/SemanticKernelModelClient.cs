@@ -20,6 +20,12 @@ namespace AgentPlatform.Infrastructure.Models;
 /// </summary>
 internal sealed class SemanticKernelModelClient : IModelClient
 {
+    // Shared, long-lived HttpClient whose handler chain rewrites tool-call arguments into the
+    // JSON-object shape Agnes requires (see OpenAIArgumentsNormalizer). Reused across every service
+    // this client builds, so we never exhaust sockets.
+    private static readonly HttpClient SharedHttpClient =
+        new(new OpenAIArgumentsNormalizer(new HttpClientHandler()), disposeHandler: false);
+
     private readonly Dictionary<string, IChatCompletionService> _services;
     private readonly ILogger<SemanticKernelModelClient> _logger;
 
@@ -41,10 +47,7 @@ internal sealed class SemanticKernelModelClient : IModelClient
         if (!string.IsNullOrEmpty(openAiKey))
         {
             var modelName = modelDefaults.Value.ModelName;
-            var kernel = Kernel.CreateBuilder()
-                .AddOpenAIChatCompletion(modelName, openAiKey)
-                .Build();
-            var service = kernel.GetRequiredService<IChatCompletionService>();
+            var service = BuildService(modelName, null, openAiKey);
             _services[modelName] = service;
             _services[$"openai:{modelName}"] = service;
         }
@@ -56,15 +59,7 @@ internal sealed class SemanticKernelModelClient : IModelClient
             var apiUrl = modelDefaults.Value.ModelApiUrl;
             if (!string.IsNullOrEmpty(apiUrl))
             {
-#pragma warning disable SKEXP0010
-                var kernel = Kernel.CreateBuilder()
-                    .AddOpenAIChatCompletion(
-                        modelId: modelName,
-                        endpoint: new Uri(apiUrl),
-                        apiKey: deepSeekKey)
-                    .Build();
-#pragma warning restore SKEXP0010
-                var service = kernel.GetRequiredService<IChatCompletionService>();
+                var service = BuildService(modelName, apiUrl, deepSeekKey);
                 _services[modelName] = service;
                 _services[$"deepseek:{modelName}"] = service;
             }
@@ -74,15 +69,7 @@ internal sealed class SemanticKernelModelClient : IModelClient
         if (!string.IsNullOrEmpty(vllmUrl))
         {
             var vllmModel = configuration["VLLM:Model"] ?? modelDefaults.Value.ModelName ?? "local-llm";
-#pragma warning disable SKEXP0010
-            var kernel = Kernel.CreateBuilder()
-                .AddOpenAIChatCompletion(
-                    modelId: vllmModel,
-                    endpoint: new Uri(vllmUrl),
-                    apiKey: "not-needed")
-                .Build();
-#pragma warning restore SKEXP0010
-            var service = kernel.GetRequiredService<IChatCompletionService>();
+            var service = BuildService(vllmModel, vllmUrl, "not-needed");
             _services[vllmModel] = service;
             _services[$"vllm:{vllmModel}"] = service;
         }
@@ -117,23 +104,40 @@ internal sealed class SemanticKernelModelClient : IModelClient
         ArgumentException.ThrowIfNullOrWhiteSpace(provider);
 
         var services = new Dictionary<string, IChatCompletionService>();
-        var builder = Kernel.CreateBuilder();
-        if (!string.IsNullOrEmpty(baseUrl))
-        {
-#pragma warning disable SKEXP0010
-            builder.AddOpenAIChatCompletion(modelName, new Uri(baseUrl), apiKey);
-#pragma warning restore SKEXP0010
-        }
-        else
-        {
-            builder.AddOpenAIChatCompletion(modelName, apiKey);
-        }
-
-        var service = builder.Build().GetRequiredService<IChatCompletionService>();
+        var service = BuildService(modelName, baseUrl, apiKey);
         services[modelName] = service;
         services[$"{provider}:{modelName}"] = service;
 
         return new SemanticKernelModelClient(services);
+    }
+
+    /// <summary>
+    /// Builds an <see cref="IChatCompletionService"/> backed by the shared HttpClient whose handler
+    /// chain normalizes tool-call arguments for Agnes. Uses the public
+    /// <c>OpenAIChatCompletionService</c> constructor so the custom HttpClient can be injected directly —
+    /// <c>AddOpenAIChatCompletion</c> would otherwise spin up its own HttpClient and bypass the normalizer.
+    /// </summary>
+    private static IChatCompletionService BuildService(string modelName, string? baseUrl, string apiKey)
+    {
+#pragma warning disable SKEXP0010
+        if (!string.IsNullOrEmpty(baseUrl))
+        {
+            return new OpenAIChatCompletionService(
+                modelId: modelName,
+                endpoint: new Uri(baseUrl),
+                apiKey: apiKey,
+                organization: null,
+                httpClient: SharedHttpClient,
+                loggerFactory: null);
+        }
+
+        return new OpenAIChatCompletionService(
+            modelId: modelName,
+            apiKey: apiKey,
+            organization: null,
+            httpClient: SharedHttpClient,
+            loggerFactory: null);
+#pragma warning restore SKEXP0010
     }
 
     private static ChatHistory ToChatHistory(IReadOnlyList<ChatMessage> messages)
@@ -154,8 +158,16 @@ internal sealed class SemanticKernelModelClient : IModelClient
                     {
                         try
                         {
-                            var dict = JsonSerializer.Deserialize<Dictionary<string, object?>>(call.ArgumentsJson);
-                            if (dict is not null) args = new KernelArguments(dict);
+                            // 反序列化为原生 CLR 类型（string/number/bool/null/dict），不要保留 JsonElement。
+                            // JsonSerializer.Deserialize<Dictionary<string, object?>> 会把标量值解析成 JsonElement，
+                            // 而 KernelArguments 持有 JsonElement 时 SK 序列化出的 arguments 不是标准 JSON object，
+                            // 导致 Agnes（OpenAI 兼容）报 "arguments must be a JSON object" 400。
+                            var raw = JsonSerializer.Deserialize<JsonElement>(call.ArgumentsJson);
+                            if (raw.ValueKind == JsonValueKind.Object)
+                            {
+                                var native = ToNativeObject(raw) as Dictionary<string, object?>;
+                                if (native is not null) args = new KernelArguments(native);
+                            }
                         }
                         catch (JsonException)
                         {
@@ -248,6 +260,43 @@ internal sealed class SemanticKernelModelClient : IModelClient
     }
 
     /// <summary>
+    /// Recursively converts a <see cref="JsonElement"/> graph into native CLR types
+    /// (string / JsonElement-less numbers / bool / null / nested dictionaries / lists) so that
+    /// <see cref="KernelArguments"/> holds plain values. This keeps SK's tool-call argument
+    /// serialization standard when sent back to OpenAI-compatible endpoints (e.g. Agnes).
+    /// </summary>
+    private static object? ToNativeObject(JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.String:
+                return element.GetString();
+            case JsonValueKind.Number:
+                if (element.TryGetInt32(out var i)) return i;
+                if (element.TryGetInt64(out var l)) return l;
+                return element.GetDouble();
+            case JsonValueKind.True:
+                return true;
+            case JsonValueKind.False:
+                return false;
+            case JsonValueKind.Null:
+                return null;
+            case JsonValueKind.Object:
+                var dict = new Dictionary<string, object?>();
+                foreach (var prop in element.EnumerateObject())
+                    dict[prop.Name] = ToNativeObject(prop.Value);
+                return dict;
+            case JsonValueKind.Array:
+                var list = new List<object?>();
+                foreach (var item in element.EnumerateArray())
+                    list.Add(ToNativeObject(item));
+                return list;
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>
     /// Sends a chat completion request to the registered model and returns the response with token usage metrics.
     /// When <paramref name="tools"/> is supplied the model may propose tool calls (declared only — execution
     /// stays with the caller via <see cref="ToolCallBehavior.EnableFunctions"/> with auto-invoke disabled).
@@ -264,7 +313,15 @@ internal sealed class SemanticKernelModelClient : IModelClient
         CancellationToken ct = default)
     {
         if (!_services.TryGetValue(modelId, out var service))
+        {
+            // 未配置任何 provider（全局 OpenAI/DeepSeek/VLLM 全空，且当前租户无对应 BYO 凭据）
+            // 时，抛出明确错误而非静默返回模拟回复。
+            if (_services.Count == 0)
+                throw new InvalidOperationException(
+                    $"未配置任何模型 provider，无法调用模型 '{modelId}'。请配置平台级 LLM 端点 " +
+                    "(OpenAI:Key / DeepSeek:Key / VLLM:Url) 或在「我的凭据」中添加 BYO 模型凭据。");
             throw new ArgumentException($"Model '{modelId}' not registered", nameof(modelId));
+        }
 
         var sw = Stopwatch.StartNew();
         var provider = modelId.Contains(':') ? modelId.Split(':')[0] : "unknown";
@@ -340,7 +397,15 @@ internal sealed class SemanticKernelModelClient : IModelClient
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         if (!_services.TryGetValue(modelId, out var service))
+        {
+            // 未配置任何 provider（全局 OpenAI/DeepSeek/VLLM 全空，且当前租户无对应 BYO 凭据）
+            // 时，抛出明确错误而非静默返回模拟回复。
+            if (_services.Count == 0)
+                throw new InvalidOperationException(
+                    $"未配置任何模型 provider，无法调用模型 '{modelId}'。请配置平台级 LLM 端点 " +
+                    "(OpenAI:Key / DeepSeek:Key / VLLM:Url) 或在「我的凭据」中添加 BYO 模型凭据。");
             throw new ArgumentException($"Model '{modelId}' not registered", nameof(modelId));
+        }
 
         var chatHistory = ToChatHistory(messages);
         var chunks = service.GetStreamingChatMessageContentsAsync(chatHistory, cancellationToken: ct);

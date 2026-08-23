@@ -47,7 +47,7 @@ builder.Services.AddAuthConfiguration(builder.Configuration);
 builder.Services.AddInfrastructureConfiguration(builder.Configuration);
 
 builder.Services.AddApplication();
-builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
 builder.Services.AddScoped<AgentPlatform.Infrastructure.Security.IJwtTokenService, JwtTokenService>();
 
 // JWT startup guard — reject dev default key outside development
@@ -70,19 +70,22 @@ if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("QuickStart
 }
 
 // ── Model client mode diagnostic ──────────────────────────────
-// 明确当前模型模式，避免「无密钥 + Stub 回退」时用户误以为配置正常却只收到模拟回复。
+// 运行环境不再静默回退 Stub：未配置任何模型 provider 时，调用将直接报错。
 {
     var modelModeLogger = app.Services.GetRequiredService<ILogger<Program>>();
-    var modelProviderCfg = app.Configuration.GetSection("ModelClient:Provider").Value;
     var llmConfiguredNow = !string.IsNullOrEmpty(app.Configuration["OpenAI:Key"])
         || !string.IsNullOrEmpty(app.Configuration["DeepSeek:Key"])
         || !string.IsNullOrEmpty(app.Configuration["VLLM:Url"]);
-    if (string.Equals(modelProviderCfg, "Stub", StringComparison.Ordinal) || !llmConfiguredNow)
-        modelModeLogger.LogWarning(
-            "模型客户端使用 StubModelClient（未配置真实 LLM：OpenAI:Key / DeepSeek:Key / VLLM:Url 全为空）。" +
-            "会话消息将返回模拟回复。要接入真实模型请设置上述任一密钥。");
+
+    if (app.Environment.IsEnvironment("Test") || app.Environment.IsEnvironment("Integration"))
+        modelModeLogger.LogInformation("模型客户端：测试环境使用 StubModelClient（仅测试隔离，不影响运行环境）。");
+    else if (llmConfiguredNow)
+        modelModeLogger.LogInformation("模型客户端已接入真实 LLM 端点（平台级配置）。");
     else
-        modelModeLogger.LogInformation("模型客户端已接入真实 LLM 端点（{Provider}）。", modelProviderCfg);
+        modelModeLogger.LogWarning(
+            "未配置任何平台级模型 provider（OpenAI:Key / DeepSeek:Key / VLLM:Url 全为空）。" +
+            "调用模型时若当前租户未在「我的凭据」中添加模型，将直接报错。" +
+            "请配置真实 LLM 端点，或在「我的凭据」中添加 BYO 模型凭据。");
 }
 
 // ── OpenAPI / Swagger / Scalar pipeline ───────────────────────────

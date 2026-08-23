@@ -15,7 +15,7 @@ namespace AgentPlatform.Application.Agents.Commands.CreateAgent;
 /// <param name="TenantId">The unique identifier of the tenant that owns the agent.</param>
 /// <param name="ConfigurationId">Optional identifier of the source agent configuration definition this agent was instantiated from (used for provenance/audit tracing only).</param>
 /// <param name="AllowedToolNames">Optional allow-list of tool names the agentic loop may invoke. Null = none permitted.</param>
-/// <param name="MaxIterations">Optional upper bound on ReAct iterations. Null = default (25).</param>
+/// <param name="MaxIterations">Optional upper bound on ReAct iterations. Null/0 = no upper bound (run until done).</param>
 /// <param name="StopCriteria">Optional natural-language stop condition the orchestrator evaluates each iteration.</param>
 public record CreateAgentCommand(
     string Name,

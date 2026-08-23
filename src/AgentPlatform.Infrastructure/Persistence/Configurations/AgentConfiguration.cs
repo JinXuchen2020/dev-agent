@@ -39,7 +39,7 @@ internal sealed class AgentConfiguration : IEntityTypeConfiguration<Agent>
         builder.Ignore(a => a.McpServers);
         // ── F29 Agentic Agent Primitive：自主控制循环的可配置项 ──
         builder.Property(a => a.AllowedToolNamesJson).HasColumnName("AllowedToolNamesJson").HasDefaultValue("[]").IsRequired();
-        builder.Property(a => a.MaxIterations).HasColumnName("MaxIterations").HasDefaultValue(25).IsRequired();
+        builder.Property(a => a.MaxIterations).HasColumnName("MaxIterations").HasDefaultValue(0).IsRequired();
         builder.Property(a => a.StopCriteria).HasColumnName("StopCriteria").HasMaxLength(500);
     }
 }

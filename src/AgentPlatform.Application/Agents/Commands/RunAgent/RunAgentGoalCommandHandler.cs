@@ -26,6 +26,6 @@ internal sealed class RunAgentGoalCommandHandler : IRequestHandler<RunAgentGoalC
         if (agent is null)
             throw new InvalidOperationException($"Agent '{request.AgentId}' not found.");
 
-        return await _orchestrator.RunGoalAsync(request.Goal, agent, ct);
+        return await _orchestrator.RunGoalAsync(request.Goal, agent, request.RunId, ct);
     }
 }

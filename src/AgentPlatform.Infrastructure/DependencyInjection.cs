@@ -20,6 +20,7 @@ using AgentPlatform.Infrastructure.Sandbox;
 using AgentPlatform.Infrastructure.Security;
 using AgentPlatform.Infrastructure.Services;
 using AgentPlatform.Infrastructure.Tools;
+using AgentPlatform.Infrastructure.Artifacts;
 using AgentPlatform.Infrastructure.VectorStore;
 using AgentPlatform.Infrastructure.Tokenizers;
 using AgentPlatform.Infrastructure.Workflows;
@@ -27,6 +28,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
@@ -49,9 +51,10 @@ public static class DependencyInjection
     /// </summary>
     /// <param name="services">The service collection to add infrastructure services to.</param>
     /// <param name="configuration">The application configuration used to resolve connection strings and provider settings.</param>
+    /// <param name="environment">The hosting environment, used to isolate stub model clients to test environments only.</param>
     /// <returns>The modified <see cref="IServiceCollection"/> so additional registrations can be chained.</returns>
     public static IServiceCollection AddInfrastructure(
-        this IServiceCollection services, IConfiguration configuration)
+        this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
         // 支持可插拔数据库架构 - 使用条件编译
         var dbType = configuration["Database:Type"] ?? "sqlite";
@@ -77,15 +80,17 @@ public static class DependencyInjection
         });
 
         var modelProvider = configuration.GetSection("ModelClient:Provider").Value;
-        // 是否配置了真实 LLM 端点：OpenAI / DeepSeek / VLLM 任一有值即视为已接入。
+        // 是否配置了真实 LLM 端点：OpenAI / DeepSeek / VLLM 任一有值即视为已接入（平台级）。
         var llmConfigured = !string.IsNullOrEmpty(configuration["OpenAI:Key"])
             || !string.IsNullOrEmpty(configuration["DeepSeek:Key"])
             || !string.IsNullOrEmpty(configuration["VLLM:Url"]);
 
-        // 显式选择 Stub，或未配置任何真实 LLM 端点时，回退到 StubModelClient，
-        // 保证无密钥的本地/开发/演示环境「发送消息」不会因模型未注册而 500。
-        // 一旦配置任一真实端点，自动切换回 SemanticKernelModelClient，无需改 Provider。
-        if (string.Equals(modelProvider, "Stub", StringComparison.Ordinal) || !llmConfigured)
+        // Stub 仅用于测试环境隔离（Test / Integration），避免 BDD / 契约测试触发真实网络调用。
+        // 运行环境（Development / QuickStart / Production / Staging 等）一律注册真实模型客户端：
+        // 未配置 provider 时不再静默回退 Stub，而是由 SemanticKernelModelClient 在调用时抛出
+        // 明确错误（由 ModelRouter 透传给上层，前端收到真实报错而非模拟回复）。
+        var isTestEnv = environment.IsEnvironment("Test") || environment.IsEnvironment("Integration");
+        if (string.Equals(modelProvider, "Stub", StringComparison.Ordinal) && isTestEnv)
         {
             var stubResponse = configuration.GetSection("ModelClient:StubResponse").Value
                 ?? "这是模拟回复，平台已正常运行。";
@@ -417,7 +422,15 @@ public static class DependencyInjection
         services.AddScoped<IToolExecutor, SkillPackageExecutor>();
         services.AddScoped<IToolExecutor, McpClient>();
         // ── F29 Agentic Agent Primitive：workspace / FS 工具执行器（在沙箱内读写跑）──
-        services.AddScoped<IToolExecutor, WorkspaceToolExecutor>();
+        // WorkspaceToolExecutor 既作为工具执行器，又实现 IWorkspaceRootProvider；
+        // 注册为具名 scoped 实例，三个接口共用同一实例，保证编排器读到本次 run 的真实临时工作区根目录。
+        services.AddScoped<WorkspaceToolExecutor>();
+        services.AddScoped<IToolExecutor>(sp => sp.GetRequiredService<WorkspaceToolExecutor>());
+        services.AddScoped<IWorkspaceRootProvider>(sp => sp.GetRequiredService<WorkspaceToolExecutor>());
+        // 产物快照：把 run 结束时的临时工作区持久化到 data/agent-runs/{runId}/，供平台预览/下载。
+        services.AddScoped<IArtifactStore, ArtifactStore>();
+        // 运行历史记录（落库 + 查询）。
+        services.AddScoped<IAgentRunRecorder, AgentRunRecorder>();
 
         // Register execution log cleanup background job
         services.AddHostedService<ExecutionLogCleanupJob>();

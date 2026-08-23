@@ -65,6 +65,25 @@ export interface AgenticRunResponse {
   trace: AgenticTraceStepResponse[];
 }
 
+/** F29: a single Server-Sent Event emitted by POST /api/v1/agents/{id}/runs/stream. */
+export interface AgenticStreamEvent {
+  type: 'iteration' | 'tool_call' | 'tool_result' | 'answer_delta' | 'done' | 'error' | 'run_start';
+  iteration?: number;
+  toolName?: string;
+  argumentsJson?: string;
+  output?: string;
+  success?: boolean;
+  delta?: string;
+  finalAnswer?: string;
+  tokensIn?: number;
+  tokensOut?: number;
+  error?: string;
+  // 运行产生的产物清单（done 事件附带），用于平台内预览/下载。
+  artifacts?: { path: string; size: number; contentType?: string }[];
+  // 本次 run 的 id（run_start 事件附带），用于完成后拉取产物。
+  runId?: string;
+}
+
 export interface ApiKey {
   id: string;
   name: string;

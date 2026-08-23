@@ -14,7 +14,7 @@ namespace AgentPlatform.Infrastructure.Tools;
 /// reusing the existing code-sandbox substrate (network-disabled, resource-limited, output-truncated).
 /// Path-escape and dangerous-command guardrails keep an autonomous agent from touching the host.
 /// </summary>
-internal sealed class WorkspaceToolExecutor : IToolExecutor, IDisposable
+internal sealed class WorkspaceToolExecutor : IToolExecutor, IWorkspaceRootProvider, IDisposable
 {
     private readonly ILogger<WorkspaceToolExecutor> _logger;
     private readonly ICodeSandbox _sandbox;
@@ -138,6 +138,10 @@ internal sealed class WorkspaceToolExecutor : IToolExecutor, IDisposable
             return _root;
         }
     }
+
+    // IWorkspaceRootProvider：编排器在 run 结束时读取本目录快照为持久化产物。
+    // 首次访问 EnsureRoot() 已在工具执行时物化；此处显式调用以保证目录一定存在。
+    string IWorkspaceRootProvider.WorkspaceRoot => EnsureRoot();
 
     private string ResolvePath(string relativePath)
     {

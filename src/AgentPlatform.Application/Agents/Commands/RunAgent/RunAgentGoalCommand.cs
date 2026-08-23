@@ -11,4 +11,5 @@ namespace AgentPlatform.Application.Agents.Commands.RunAgent;
 /// </summary>
 /// <param name="AgentId">The identifier of the agent to drive.</param>
 /// <param name="Goal">The objective the agent should accomplish.</param>
-public record RunAgentGoalCommand(Guid AgentId, string Goal) : ICommand<AgenticRunResult>;
+/// <param name="RunId">A caller-supplied identifier used to scope and persist run artifacts.</param>
+public record RunAgentGoalCommand(Guid AgentId, string Goal, Guid RunId = default) : ICommand<AgenticRunResult>;

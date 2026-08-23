@@ -62,11 +62,79 @@ internal sealed class ProcessCodeSandbox : ICodeSandbox
     public Task<SandboxResult> RunCommandAsync(string command,
         int timeoutSeconds = 30, CancellationToken ct = default, string? workingDirectory = null)
     {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            // Windows 上优先用 Git Bash 执行（与 Linux 的 /bin/sh 对齐）：agent 生成的命令多为
+            // bash 语法（ls / && / 引号嵌套），cmd.exe /c 解析会错乱甚至挂起（引号不平衡时等待输入），
+            // 且 cmd 报错是 GBK 编码导致乱码（如「系统找不到指定的路径」）。找不到 bash 时回退 cmd.exe。
+            var bash = ResolveBashPath();
+            if (!string.IsNullOrEmpty(bash))
+                return RunProcessAsync(bash, $"-c {EscapeArg(command)}", timeoutSeconds, ct, command, "shell", workingDirectory);
+        }
+
         var shell = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "cmd.exe" : "/bin/sh";
         var shellArg = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
             ? $"/c {EscapeArg(command)}"
             : $"-c {EscapeArg(command)}";
         return RunProcessAsync(shell, shellArg, timeoutSeconds, ct, command, "shell", workingDirectory);
+    }
+
+    private static string? _bashPath;
+    private static readonly object BashPathLock = new();
+
+    private static readonly string[] GitBashCandidates =
+    {
+        @"C:\Program Files\Git\bin\bash.exe",
+        @"C:\Program Files\Git\usr\bin\bash.exe",
+        @"C:\Program Files (x86)\Git\bin\bash.exe",
+        @"C:\Program Files (x86)\Git\usr\bin\bash.exe",
+    };
+
+    /// <summary>
+    /// 探测 Git Bash 可执行文件路径（带缓存）。先查常见安装位置，再查 PATH（where bash）。
+    /// 找不到返回 null / 空串（调用方回退 cmd.exe）；结果缓存避免每次重复探测。
+    /// </summary>
+    private static string? ResolveBashPath()
+    {
+        if (_bashPath is not null) return _bashPath;
+        lock (BashPathLock)
+        {
+            if (_bashPath is not null) return _bashPath;
+            foreach (var candidate in GitBashCandidates)
+            {
+                if (File.Exists(candidate))
+                {
+                    _bashPath = candidate;
+                    return candidate;
+                }
+            }
+            try
+            {
+                var psi = new ProcessStartInfo("where", "bash")
+                {
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                };
+                using var proc = Process.Start(psi);
+                if (proc is not null)
+                {
+                    var line = proc.StandardOutput.ReadLine();
+                    proc.WaitForExit(3000);
+                    if (!string.IsNullOrWhiteSpace(line) && File.Exists(line.Trim()))
+                    {
+                        _bashPath = line.Trim();
+                        return line.Trim();
+                    }
+                }
+            }
+            catch
+            {
+                // PATH 中无 bash，忽略并回退 cmd.exe。
+            }
+            _bashPath = string.Empty; // 缓存"不可用"结果，避免每次重复探测
+            return null;
+        }
     }
 
     private async Task<SandboxResult> RunProcessAsync(string? fileName, string? arguments,

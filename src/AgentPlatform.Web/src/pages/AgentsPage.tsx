@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Typography, Tag, Button, Modal, Form, Select, Input, InputNumber, App as AntApp, Popconfirm, Space, theme, Empty, Skeleton, Alert } from 'antd';
-import type { Agent, AgentRole, PlatformModelDto, CreateAgentRequest, UpdateAgentRequest, AgentConfiguration, ConfigurationAgentTemplate, AgenticRunResponse } from '../types';
+import { useNavigate } from 'react-router-dom';
+import { Typography, Tag, Button, Modal, Form, Select, Input, InputNumber, App as AntApp, Popconfirm, Space, theme, Empty, Skeleton } from 'antd';
+import type { Agent, AgentRole, PlatformModelDto, CreateAgentRequest, UpdateAgentRequest, AgentConfiguration, ConfigurationAgentTemplate } from '../types';
 import { AgentConfigurationStatus } from '../types';
-import { getAgents, getAgentRoles, getPlatformModels, createAgent, updateAgent, deleteAgent, getAgentConfigurations, getAgentConfigurationTemplate, runAgentGoal } from '../services/api';
+import { getAgents, getAgentRoles, getPlatformModels, createAgent, updateAgent, deleteAgent, getAgentConfigurations, getAgentConfigurationTemplate } from '../services/api';
 import { useAppStore } from '../stores/appStore';
 import { useTranslation } from 'react-i18next';
 import Card from '../components/Card';
@@ -16,61 +17,76 @@ const WORKSPACE_TOOL_OPTIONS = ['read_file', 'write_file', 'edit_file', 'list_fi
 
 const AgentsPage: React.FC = () => {
   const { t } = useTranslation();
-  const renderAgentCard = (agent: Agent) => (
-    <Card
-      title={agent.name}
-      extra={
-        <Space size={4}>
-          {canRun && (
-            <Button size="small" onClick={() => openRun(agent)}>
-              {t('pages.agents.runAgent')}
+  const navigate = useNavigate();
+  const renderAgentCard = (agent: Agent) => {
+    const actions = (
+      <Space size={4}>
+        {canRun && (
+          <Button size="small" onClick={() => navigate('/agent-run?agentId=' + agent.id)}>
+            {t('pages.agents.runAgent')}
+          </Button>
+        )}
+        {isAdmin && (
+          <>
+            <Button size="small" onClick={() => openEdit(agent)}>
+              {t('common.edit')}
             </Button>
-          )}
-          {isAdmin && (
-            <>
-              <Button size="small" onClick={() => openEdit(agent)}>
-                {t('common.edit')}
+            <Popconfirm
+              title={t('pages.agents.deleteConfirm')}
+              okText={t('common.delete')}
+              cancelText={t('common.cancel')}
+              onConfirm={() => handleDelete(agent)}
+            >
+              <Button size="small" danger>
+                {t('common.delete')}
               </Button>
-              <Popconfirm
-                title={t('pages.agents.deleteConfirm')}
-                okText={t('common.delete')}
-                cancelText={t('common.cancel')}
-                onConfirm={() => handleDelete(agent)}
-              >
-                <Button size="small" danger>
-                  {t('common.delete')}
-                </Button>
-              </Popconfirm>
-            </>
-          )}
-        </Space>
-      }
-    >
-      <Space direction="vertical" size={6} style={{ width: '100%' }}>
-        <span style={{ color: colors.textMuted, fontSize: 13 }}>
-          {t('pages.agents.roleLabel')}: {agent.roleCode ?? '-'}
-        </span>
-        <span style={{ color: colors.textMuted, fontSize: 13 }}>
-          {t('pages.agents.modelLabel')}: {agent.modelName ?? '-'}
-        </span>
-        <span style={{ color: colors.textMuted, fontSize: 13 }}>
-          {t('pages.agents.colCreated')}: {new Date(agent.createdAt).toLocaleString()}
-        </span>
-        {agent.systemPrompt && (
-          <Paragraph ellipsis={{ rows: 2 }} style={{ color: colors.textMuted, fontSize: 13, margin: 0 }}>
-            {agent.systemPrompt}
-          </Paragraph>
+            </Popconfirm>
+          </>
         )}
-        {agent.allowedToolNames && agent.allowedToolNames.length > 0 && (
-          <Space size={4} wrap>
-            <Tag color="blue">{t('pages.agents.allowedTools')}: {agent.allowedToolNames.length}</Tag>
-            {agent.maxIterations != null && <Tag>{t('pages.agents.maxIterations')}: {agent.maxIterations}</Tag>}
-          </Space>
-        )}
-        <Tag color={agent.status === 'Inactive' ? 'default' : 'green'}>{agent.status ?? 'Active'}</Tag>
       </Space>
-    </Card>
-  );
+    );
+
+    return (
+      <Card>
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <div
+            style={{
+              fontSize: 15,
+              fontWeight: 600,
+              color: colors.textPrimary,
+              wordBreak: 'break-word',
+            }}
+          >
+            {agent.name}
+          </div>
+          <Space direction="vertical" size={6} style={{ width: '100%' }}>
+            <span style={{ color: colors.textMuted, fontSize: 13 }}>
+              {t('pages.agents.roleLabel')}: {agent.roleCode ?? '-'}
+            </span>
+            <span style={{ color: colors.textMuted, fontSize: 13 }}>
+              {t('pages.agents.modelLabel')}: {agent.modelName ?? '-'}
+            </span>
+            <span style={{ color: colors.textMuted, fontSize: 13 }}>
+              {t('pages.agents.colCreated')}: {new Date(agent.createdAt).toLocaleString()}
+            </span>
+            {agent.systemPrompt && (
+              <Paragraph ellipsis={{ rows: 2 }} style={{ color: colors.textMuted, fontSize: 13, margin: 0 }}>
+                {agent.systemPrompt}
+              </Paragraph>
+            )}
+            {agent.allowedToolNames && agent.allowedToolNames.length > 0 && (
+              <Space size={4} wrap>
+                <Tag color="blue">{t('pages.agents.allowedTools')}: {agent.allowedToolNames.length}</Tag>
+                {agent.maxIterations != null && <Tag>{t('pages.agents.maxIterations')}: {agent.maxIterations}</Tag>}
+              </Space>
+            )}
+            <Tag color={agent.status === 'Inactive' ? 'default' : 'green'}>{agent.status ?? 'Active'}</Tag>
+          </Space>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>{actions}</div>
+        </Space>
+      </Card>
+    );
+  };
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -79,12 +95,6 @@ const AgentsPage: React.FC = () => {
   const [roles, setRoles] = useState<AgentRole[]>([]);
   const [models, setModels] = useState<PlatformModelDto[]>([]);
   const [editing, setEditing] = useState<Agent | null>(null);
-  // F29 agentic run 弹窗状态
-  const [runAgent, setRunAgent] = useState<Agent | null>(null);
-  const [runGoal, setRunGoal] = useState('');
-  const [runLoading, setRunLoading] = useState(false);
-  const [runResult, setRunResult] = useState<AgenticRunResponse | null>(null);
-  const [runError, setRunError] = useState<string | null>(null);
   const { message } = AntApp.useApp();
   // RBAC: the backend seeds the admin role as "Admin" (capital A). Compare
   // case-insensitively so the UI gating matches the backend [Authorize] policy.
@@ -294,29 +304,6 @@ const AgentsPage: React.FC = () => {
     }
   };
 
-  const openRun = (agent: Agent) => {
-    setRunAgent(agent);
-    setRunGoal('');
-    setRunResult(null);
-    setRunError(null);
-  };
-
-  const handleRun = async () => {
-    if (!runAgent || !runGoal.trim()) return;
-    setRunLoading(true);
-    setRunResult(null);
-    setRunError(null);
-    try {
-      const result = await runAgentGoal(runAgent.id, runGoal.trim());
-      setRunResult(result);
-      message.success(t('pages.agents.runSuccess'));
-    } catch (e: unknown) {
-      setRunError((e as { message?: string }).message ?? t('pages.agents.runFailed'));
-    } finally {
-      setRunLoading(false);
-    }
-  };
-
   const modelOptions = useMemo(() => {
     // 编辑时把当前 agent 已绑定的模型也纳入选项，防止下拉里找不到。
     const all = [...models];
@@ -470,58 +457,6 @@ const AgentsPage: React.FC = () => {
               ))}
             </div>
           )}
-        </Modal>
-
-        <Modal
-          title={`${t('pages.agents.runAgent')}${runAgent ? ` — ${runAgent.name}` : ''}`}
-          open={!!runAgent}
-          onCancel={() => setRunAgent(null)}
-          footer={null}
-          width={720}
-          destroyOnHidden
-        >
-          <Space direction="vertical" size={12} style={{ width: '100%' }}>
-            <Input.TextArea
-              rows={3}
-              value={runGoal}
-              onChange={(e) => setRunGoal(e.target.value)}
-              placeholder={t('pages.agents.runGoalPlaceholder')}
-            />
-            <Button type="primary" loading={runLoading} disabled={!runGoal.trim()} onClick={handleRun} style={{ alignSelf: 'flex-start' }}>
-              {t('pages.agents.runExecute')}
-            </Button>
-            {runError && <Alert type="error" showIcon message={runError} />}
-            {runResult && (
-              <div>
-                <Alert
-                  type="success"
-                  showIcon
-                  message={t('pages.agents.runResult')}
-                  description={`${t('pages.agents.runIterations')}: ${runResult.iterations} · Tokens: ${runResult.totalTokensIn}/${runResult.totalTokensOut}`}
-                />
-                <Paragraph style={{ marginTop: 12, fontWeight: 600 }}>{t('pages.agents.runFinalAnswer')}</Paragraph>
-                <Paragraph style={{ whiteSpace: 'pre-wrap', background: colors.surfaceMuted, padding: 12, borderRadius: 8 }}>
-                  {runResult.finalAnswer}
-                </Paragraph>
-                <Paragraph style={{ marginTop: 12, fontWeight: 600 }}>{t('pages.agents.runTrace')}</Paragraph>
-                <Space direction="vertical" size={4} style={{ width: '100%' }}>
-                  {runResult.trace.map((step, i) => (
-                    <div key={i} style={{ fontSize: 13 }}>
-                      <Tag color={step.success ? 'green' : 'red'}>#{step.iteration}</Tag>
-                      {step.toolName ? (
-                        <>
-                          <Tag color="blue">{step.toolName}</Tag>
-                          <span style={{ color: colors.textMuted }}>{step.result}</span>
-                        </>
-                      ) : (
-                        <span>{step.result}</span>
-                      )}
-                    </div>
-                  ))}
-                </Space>
-              </div>
-            )}
-          </Space>
         </Modal>
     </div>
   );

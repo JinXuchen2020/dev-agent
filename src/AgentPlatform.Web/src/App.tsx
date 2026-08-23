@@ -18,6 +18,7 @@ import { SUPPORTED_LOCALES } from './locales/config';
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const AgentsPage = lazy(() => import('./pages/AgentsPage'));
+const AgentRunPage = lazy(() => import('./pages/AgentRunPage'));
 const WorkflowsPage = lazy(() => import('./pages/WorkflowsPage'));
 const WorkflowDetailPage = lazy(() => import('./pages/WorkflowDetailPage'));
 const WorkflowCanvasPage = lazy(() => import('./pages/WorkflowCanvasPage'));
@@ -109,6 +110,7 @@ const App: React.FC = () => {
                 <Route element={<AppLayout />}>
                   <Route path="/" element={<DashboardPage />} />
                   <Route path="/agents" element={<AgentsPage />} />
+                  <Route path="/agent-run" element={<AgentRunPage />} />
                   <Route path="/workflows" element={<WorkflowsPage />} />
                   <Route path="/workflows/new" element={<WorkflowCanvasPage />} />
                   <Route path="/workflows/:id" element={<WorkflowDetailPage />} />

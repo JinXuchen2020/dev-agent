@@ -3,6 +3,7 @@ using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Domain.Abstractions;
 using AgentPlatform.Domain.Aggregates.AgentConfigurations;
 using AgentPlatform.Domain.Aggregates.Agents;
+using AgentPlatform.Domain.Aggregates.AgentRuns;
 using AgentPlatform.Domain.Aggregates.Evaluation;
 using AgentPlatform.Domain.Aggregates.AuditLogs;
 using AgentPlatform.Domain.Aggregates.Conversations;
@@ -145,6 +146,11 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
     /// Gets the <see cref="DbSet{TEntity}"/> providing access to workflow debug sessions (F25).
     /// </summary>
     public DbSet<DebugSession> DebugSessions => Set<DebugSession>();
+
+    /// <summary>
+    /// Gets the <see cref="DbSet{TEntity}"/> providing access to persisted agent run history records.
+    /// </summary>
+    public DbSet<AgentRunRecord> AgentRunRecords => Set<AgentRunRecord>();
 
     /// <summary>
     /// Returns all aggregate roots currently tracked by the change tracker, used for dispatching domain events on save.

@@ -68,7 +68,7 @@ internal sealed class AgenticStepExecutor : IStepExecutor
                 return StepExecutionResult.FatalFailure($"Agent '{agentId}' not found.");
 
             _logger.LogInformation("Running agentic node for agent {AgentId} (goal: {Goal})", agentId, goal);
-            var result = await _orchestrator.RunGoalAsync(goal!, agent, ct);
+            var result = await _orchestrator.RunGoalAsync(goal!, agent, Guid.NewGuid(), ct);
 
             var artifact = JsonSerializer.Serialize(new
             {

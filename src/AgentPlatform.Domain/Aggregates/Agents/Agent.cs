@@ -101,8 +101,10 @@ public sealed class Agent : ITenantScoped, IAggregateRoot
 
     /// <summary>
     /// Gets the maximum number of agentic control-loop iterations before the run is forcibly halted.
+    /// A value of 0 (the default) means no upper bound — the loop runs until the model reports the
+    /// task complete (or the run is cancelled externally).
     /// </summary>
-    public int MaxIterations { get; private set; } = 25;
+    public int MaxIterations { get; private set; } = 0;
 
     /// <summary>
     /// Gets an optional stop-criterion phrase/rule for the agentic control loop.
@@ -127,7 +129,7 @@ public sealed class Agent : ITenantScoped, IAggregateRoot
     /// <param name="tenantId">The unique identifier of the tenant that owns the agent.</param>
     public Agent(Guid id, string name, AgentType role, ModelEndpoint modelEndpoint,
         string systemPrompt, Guid tenantId,
-        List<string>? allowedToolNames = null, int maxIterations = 25, string? stopCriteria = null)
+        List<string>? allowedToolNames = null, int maxIterations = 0, string? stopCriteria = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(systemPrompt);
@@ -141,7 +143,8 @@ public sealed class Agent : ITenantScoped, IAggregateRoot
         Status = AgentStatus.Active;
         TenantId = tenantId;
         AllowedToolNamesJson = JsonSerializer.Serialize(allowedToolNames ?? new List<string>());
-        MaxIterations = maxIterations < 1 ? 25 : maxIterations;
+        // maxIterations <= 0 表示无上限；正数作为显式上限。
+        MaxIterations = maxIterations < 0 ? 0 : maxIterations;
         StopCriteria = stopCriteria;
         CreatedAt = DateTime.UtcNow;
         UpdatedAt = CreatedAt;
@@ -249,10 +252,10 @@ public sealed class Agent : ITenantScoped, IAggregateRoot
     /// <summary>
     /// Updates the maximum number of agentic control-loop iterations.
     /// </summary>
-    /// <param name="maxIterations">The new cap; values below 1 are clamped to 1.</param>
+    /// <param name="maxIterations">The new cap; values below or equal to 0 mean no upper bound.</param>
     public void UpdateMaxIterations(int maxIterations)
     {
-        MaxIterations = maxIterations < 1 ? 1 : maxIterations;
+        MaxIterations = maxIterations < 0 ? 0 : maxIterations;
         UpdatedAt = DateTime.UtcNow;
     }
 

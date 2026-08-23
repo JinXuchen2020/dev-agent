@@ -12,7 +12,7 @@ namespace AgentPlatform.Api.Models;
 /// <param name="ModelApiUrl">The API endpoint URL for the model. When null, a configured default is applied.</param>
 /// <param name="SystemPrompt">The system prompt that shapes the agent's behavior. When null, a configured default is applied.</param>
 /// <param name="AllowedToolNames">Optional allow-list of tool names the agentic loop may invoke. Null = none permitted.</param>
-/// <param name="MaxIterations">Optional upper bound on ReAct iterations. Null = default (25).</param>
+/// <param name="MaxIterations">Optional upper bound on ReAct iterations. Null/0 = no upper bound (run until done).</param>
 /// <param name="StopCriteria">Optional natural-language stop condition for the agentic loop.</param>
 public record CreateAgentRequest(
     [Required] string Name,

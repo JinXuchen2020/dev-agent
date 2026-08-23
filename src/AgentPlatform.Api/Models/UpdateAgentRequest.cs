@@ -14,7 +14,7 @@ namespace AgentPlatform.Api.Models;
 /// <param name="SystemPrompt">The new system prompt.</param>
 /// <param name="Status">The new operational status (e.g. "Active", "Inactive").</param>
 /// <param name="AllowedToolNames">Optional new allow-list of tool names for the agentic loop. Null = unchanged.</param>
-/// <param name="MaxIterations">Optional new upper bound on ReAct iterations. Null = unchanged.</param>
+/// <param name="MaxIterations">Optional new upper bound on ReAct iterations. Null = unchanged; 0 = no upper bound.</param>
 /// <param name="StopCriteria">Optional new natural-language stop condition. Null = unchanged.</param>
 public record UpdateAgentRequest(
     string? Name,
