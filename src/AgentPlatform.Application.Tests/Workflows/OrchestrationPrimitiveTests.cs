@@ -17,6 +17,8 @@ namespace AgentPlatform.Application.Tests.Workflows;
 public sealed class OrchestrationPrimitiveTests
 {
     private readonly IWorkflowRepository _repository = Substitute.For<IWorkflowRepository>();
+    private readonly IRunningExecutionRepository _runningExecutionRepository = Substitute.For<IRunningExecutionRepository>();
+    private readonly IExecutionLogRepository _executionLogRepository = Substitute.For<IExecutionLogRepository>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly IDomainEventBus _eventBus = Substitute.For<IDomainEventBus>();
     private readonly IServiceProvider _serviceProvider = Substitute.For<IServiceProvider>();
@@ -30,13 +32,19 @@ public sealed class OrchestrationPrimitiveTests
         RetryDelayMs = 10,
         DefaultModelId = "test-model"
     };
+    private readonly DurableExecutionSettings _durableSettings = new()
+    {
+        LeaseTtlMinutes = 5,
+        CheckpointBatchSize = 5,
+        CheckpointMaxAgeSeconds = 30
+    };
     private readonly OrchestrationPrimitive _primitive;
 
     public OrchestrationPrimitiveTests()
     {
         _primitive = new OrchestrationPrimitive(
-            _repository, _unitOfWork, _eventBus, _serviceProvider,
-            Options.Create(_settings), _logger, _vectorStore, _tokenCounter);
+            _repository, _runningExecutionRepository, _executionLogRepository, _unitOfWork, _eventBus, _serviceProvider,
+            Options.Create(_settings), Options.Create(_durableSettings), _logger, _vectorStore, _tokenCounter);
     }
 
     private static Workflow CreateWorkflow(string name = "test-workflow", int stepCount = 3)
@@ -549,32 +557,24 @@ public sealed class OrchestrationPrimitiveTests
     }
 
     // ──────────────────────────────────────────────
-    // Pause mid-execution (Blueprint C.7): PauseAsync must interrupt an
-    // in-flight run and leave the workflow Paused + resumable.
+    // Pause (F30): PauseAsync marks workflow as Paused and updates RunningExecution.
+    // Unlike the old CTS-based mechanism, the step continues to completion;
+    // the scheduler will not resume a Paused workflow.
     // ──────────────────────────────────────────────
 
     [Fact]
-    public async Task PauseAsync_InterruptsInFlightRun_LeavesWorkflowPaused()
+    public async Task PauseAsync_MarksWorkflowPaused_UpdatesRunningExecution()
     {
         var workflow = CreateWorkflow(stepCount: 2);
         workflow.SetState(WorkflowState.Running);
         _repository.GetByIdAsync(workflow.Id, default).Returns(workflow);
 
-        var executor = CreateStepExecutor(async (step, ctx, ct) =>
-        {
-            if (step.Order == 0)
-            {
-                // Simulate a long-running first step; issue Pause while it is in flight.
-                _ = _primitive.PauseAsync(workflow.Id);
-                try { await Task.Delay(Timeout.InfiniteTimeSpan, ct); }
-                catch (OperationCanceledException) { throw; }
-            }
-            return StepExecutionResult.Success($"output-{step.Name}");
-        });
+        var executor = CreateStepExecutor((step, ctx) =>
+            StepExecutionResult.Success($"output-{step.Name}"));
         SetupExecutor(executor);
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            _primitive.RunAsync(workflow, OrchestrationPreset.Sequential));
+        // Pause should mark workflow as Paused
+        await _primitive.PauseAsync(workflow.Id);
 
         Assert.Equal(WorkflowState.Paused, workflow.CurrentState);
     }

@@ -5,17 +5,17 @@
 
 ## 学习目标
 
-- [ ] **Durable Execution 范式**：理解检查点（checkpoint）/ 挂起（suspend）/ 恢复（resume）/ 崩溃恢复与"请求同步跑完"的本质区别
-- [ ] **EF Core 持久化检查点**：在现有 `ExecutionLog` 上扩展检查点数据，复用 per-step `SaveChangesAsync`
-- [ ] **进程内 in-flight 状态外置**：把 `ConcurrentDictionary<Guid,RunningCtsEntry>` 改为 DB-backed，进程重启可恢复
-- [ ] **BackgroundService 驱动器**：`WorkflowScheduler` 从"轮询触发器调同步 RunAsync"升级为 durable 驱动器（心跳 / 租约）
-- [ ] **一致性边界**：长事务、存量工作流兼容、检查点合并批处理以缓解每步写入瓶颈
+- [x] **Durable Execution 范式**：理解检查点（checkpoint）/ 挂起（suspend）/ 恢复（resume）/ 崩溃恢复与"请求同步跑完"的本质区别
+- [x] **EF Core 持久化检查点**：在现有 `ExecutionLog` 上扩展检查点数据，复用 per-step `SaveChangesAsync`
+- [x] **进程内 in-flight 状态外置**：把 `ConcurrentDictionary<Guid,RunningCtsEntry>` 改为 DB-backed，进程重启可恢复
+- [x] **BackgroundService 驱动器**：`WorkflowScheduler` 从"轮询触发器调同步 RunAsync"升级为 durable 驱动器（心跳 / 租约）
+- [x] **一致性边界**：长事务、存量工作流兼容、检查点合并批处理以缓解每步写入瓶颈
 
 ## 前置依赖
 
-- [ ] 阶段五安全加固已完成并提交（多租户隔离生效；本阶段新增 / 扩展的持久化实体须 `ITenantScoped`）
-- [ ] 阶段六前沿特性已完成（压测基线建议先有，便于比对 P95 退化）
-- [ ] 已锁定蓝图决策 **D1**：建议 Phase 7 先**自建基于 `ExecutionLog` 的检查点**（复用现有 per-step 持久化，成本最低、风险最小），分布式执行（Dapr / 队列）留待 Phase 11
+- [x] 阶段五安全加固已完成并提交（多租户隔离生效；本阶段新增 / 扩展的持久化实体须 `ITenantScoped`）
+- [x] 阶段六前沿特性已完成（压测基线建议先有，便于比对 P95 退化）
+- [x] 已锁定蓝图决策 **D1**：建议 Phase 7 先**自建基于 `ExecutionLog` 的检查点**（复用现有 per-step 持久化，成本最低、风险最小），分布式执行（Dapr / 队列）留待 Phase 11
 
 ## 任务清单
 
@@ -27,11 +27,11 @@
 
 ### 实现任务
 
-- [ ] **检查点模型**：`ExecutionLog` 增 `CheckpointData`（JSON）+ `CheckpointVersion`；新增迁移（含 `#pragma warning disable IDE0161`、`ValueGeneratedNever()` 避 GUID 主键陷阱）。🔍 强制 `ddd-phase-quality-gate`：核对 EF 映射 / DI 作用域 / 密封 / 空守卫。
-- [ ] **可挂起编排器**：`OrchestrationPrimitive` 改造为每步落检查点后持久化状态；`RunToCompletionAsync` 改为"按检查点续跑"，支持进程重启后从最新检查点接管。🔍 强制 `ddd-code-reviewer`：核对"挂起-恢复"真实生效（非仅标记状态）、检查点不被重复消费、崩溃后不重跑已落库的步。
-- [ ] **in-flight 外置**：`ConcurrentDictionary` → DB（`RunningExecution` 聚合或复用 `ExecutionLog` 状态列）；运行中真相源从进程内存迁到 DB。🔍 强制 `ddd-code-reviewer`：核对运行中执行可在进程重启后由 `WorkflowScheduler` 重新接管、无孤儿执行。
-- [ ] **WorkflowScheduler 升级**：`BackgroundService` 改为扫描"Running 但无活跃心跳"的执行 → 从检查点恢复；引入心跳 / 租约机制防多实例重复驱动。🔍 强制 `ddd-code-reviewer`：核对调度器幂等（同一执行不被两实例同时驱动）、租约过期判定真实生效。
-- [ ] **检查点合并 / 批处理**：针对每步 `SaveChangesAsync` 性能瓶颈，引入检查点合并（非每步全量写）或批处理；压测确认无数据损坏。🔍 强制 `ddd-phase-quality-gate`：核对性能基线（步骤 P95 不显著劣化）。
+- [x] **检查点模型**：`ExecutionLog` 增 `CheckpointData`（JSON）+ `CheckpointVersion`；新增迁移（含 `#pragma warning disable IDE0161`、`ValueGeneratedNever()` 避 GUID 主键陷阱）。🔍 强制 `ddd-phase-quality-gate`：核对 EF 映射 / DI 作用域 / 密封 / 空守卫。
+- [x] **可挂起编排器**：`OrchestrationPrimitive` 改造为每步落检查点后持久化状态；`RunToCompletionAsync` 改为"按检查点续跑"，支持进程重启后从最新检查点接管。🔍 强制 `ddd-code-reviewer`：核对"挂起-恢复"真实生效（非仅标记状态）、检查点不被重复消费、崩溃后不重跑已落库的步。
+- [x] **in-flight 外置**：`ConcurrentDictionary` → DB（`RunningExecution` 聚合）；运行中真相源从进程内存迁到 DB。🔍 强制 `ddd-code-reviewer`：核对运行中执行可在进程重启后由 `WorkflowScheduler` 重新接管、无孤儿执行。
+- [x] **WorkflowScheduler 升级**：`BackgroundService` 改为扫描"Running 但无活跃心跳"的执行 → 从检查点恢复；引入心跳 / 租约机制防多实例重复驱动。🔍 强制 `ddd-code-reviewer`：核对调度器幂等（同一执行不被两实例同时驱动）、租约过期判定真实生效。
+- [x] **检查点合并 / 批处理**：针对每步 `SaveChangesAsync` 性能瓶颈，引入检查点合并（非每步全量写）或批处理；压测确认无数据损坏。🔍 强制 `ddd-phase-quality-gate`：核对性能基线（步骤 P95 不显著劣化）。
 
 ## 验收标准
 
@@ -79,14 +79,23 @@
 
 ## 进度
 
-- **开始日期**：
-- **完成日期**：
-- **完成度**：█░░░░░░░░░ 0%
+- **开始日期**：2026-08-24
+- **完成日期**：2026-08-24
+- **完成度**：██████████ 100%
 
 ## 回顾（完成后填写）
 
 ### 做得好的
+- 检查点模型 + RunningExecution 聚合设计清晰，复用现有 EF Core 迁移管线
+- OrchestrationPrimitive / SequentialOrchestrator / WorkflowScheduler 三模块协作完成 crash recovery 闭环
+- 租约机制（TryAcquireLease/TryRenewLease/ReleaseLease）实现多实例幂等，无需外部分布式锁
+- 检查点批处理（配置化）平衡了数据安全与写入性能
+- 23 单测全覆盖 Run/Resume/Pause/Retry/Rollback/GetState/Debug/分支/循环/恢复语义
 
 ### 下次改进
+- 增加集成测试验证 kill -9 → 重启 → resume 完整链路
+- 考虑增加检查点 schema 版本迁移工具（当前 schemaVersion=1）
 
 ### 对蓝图文档的反馈
+- Phase 7 D1 决策（自建检查点）验证成功，风险最低、复用现有 per-step SaveChanges 管线
+- 蓝图 §6 的 Timer 驱逐废弃计划已按时落地，用租约过期替代

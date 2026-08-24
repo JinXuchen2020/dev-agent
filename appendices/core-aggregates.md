@@ -532,3 +532,39 @@ public record StepSnapshot(
     string? ErrorDetail
 );
 ```
+
+### A.14 RunningExecution（F30 耐久执行）
+
+```csharp
+// Domain/Aggregates/Workflows/RunningExecution.cs
+public sealed class RunningExecution : IAggregateRoot, ITenantScoped
+{
+    // 标识
+    public Guid Id { get; private init; }           // = WorkflowId (1:1)
+    public Guid WorkflowId { get; private init; }
+    public Guid TenantId { get; private init; }
+
+    // 状态
+    public WorkflowState WorkflowState { get; private set; }  // Running / Paused
+    public DateTime HeartbeatAt { get; private set; }         // 最后心跳
+    public DateTime LeaseExpiresAt { get; private set; }      // 租约过期
+    public string InstanceId { get; private set; }            // 当前持有租约的进程标识
+    public int CheckpointVersion { get; private set; }        // 对应 ExecutionLog.CheckpointVersion
+    public string? BlackboardSnapshot { get; private set; }   // 可选：Blackboard 独立快照
+
+    // 行为
+    public static RunningExecution Create(Guid workflowId, Guid tenantId, string instanceId, TimeSpan leaseTtl);
+    public bool TryAcquireLease(string instanceId, TimeSpan leaseTtl);
+    public bool TryRenewLease(string instanceId, TimeSpan leaseTtl);
+    public bool ReleaseLease(string instanceId);
+    public void UpdateHeartbeat(int checkpointVersion, string? blackboardSnapshot);
+    public void Pause();
+    public void Complete();
+    public bool IsLeaseExpired => DateTime.UtcNow >= LeaseExpiresAt;
+}
+```
+
+**映射**：`RunningExecutionConfiguration` (Infrastructure/Persistence/Configurations)
+- 表：`RunningExecutions`，主键 `Id` = `WorkflowId`，`ValueGeneratedNever()`
+- 索引：`TenantId + WorkflowState + LeaseExpiresAt`（调度器扫描用）
+- 查询过滤器：`HasQueryFilter(x => x.TenantId == _tenantId)`（多租户隔离）

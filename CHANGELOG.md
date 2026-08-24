@@ -1,5 +1,24 @@
 # 变更日志
 
+## v2.27 (2026-08-24)
+
+### F30 · 执行持久化完成（feature-builder 全栈闭环，🔴高风险，三道质量门全 PASS）
+
+F30 将「请求同步跑完」的编排器升级为 **可挂起 / 可恢复 / 崩溃可重启** 的持久执行引擎：每步落检查点 → 进程崩溃后从最近检查点续跑，**不重跑**已完成步；DB-backed in-flight 真相源替代静态 `ConcurrentDictionary`；`WorkflowScheduler` 升级为 durable 驱动器（租约/心跳/过期扫描，多实例幂等）。
+
+**核心改动（后端）：**
+- **① 检查点模型**：`ExecutionLog` 新增 `CheckpointData` (JSON) + `CheckpointVersion` (乐观并发) + 迁移 `20260824013403_AddDurableExecutionCheckpoint`（含 `#pragma warning disable IDE0161`）。
+- **② RunningExecution 聚合**：新增 `RunningExecution`（主键=WorkflowId、租户隔离、租约/心跳/检查点版本/Blackboard 快照）+ `IRunningExecutionRepository` + `RunningExecutionRepository` + 迁移 `20260824014109_AddRunningExecution`（`ValueGeneratedNever()`、`HasQueryFilter`）。
+- **③ 编排器耐久化**：`OrchestrationPrimitive` 重写——`RunAsync` 获取租约、每步落检查点、`PauseAsync`/`ResumeAsync`/`ResumeFromCheckpointAsync`（内部）更新 `RunningExecution`；静态 `s_runningCts` 字典废弃。`SequentialOrchestrator` 支持 `resumeFromCheckpoint`，从 `ExecutionLog.CheckpointData` 反序列化恢复 `Blackboard`/节点状态/`skipSet`/执行索引，**跳过已 Completed 节点**；检查点批处理（可配 `DurableExecutionSettings.CheckpointBatchSize=5`、`CheckpointMaxAgeSeconds=30`），终态强制 flush。
+- **④ 调度器耐久化**：`WorkflowScheduler` 扫描 `RunningExecution` 租约过期记录，抢占租约后调用 `OrchestrationPrimitive.ResumeFromCheckpointAsync`，多实例幂等（仅一实例成功 `TryAcquireLease`）。
+- **⑤ 可配置化**：新增 `DurableExecutionSettings`（`LeaseTtlMinutes`、`CheckpointBatchSize`、`CheckpointMaxAgeSeconds`），`appsettings.json` 可配，DI 绑定 `IOptions<DurableExecutionSettings>`。
+
+**测试**：`OrchestrationPrimitiveTests` 全绿（23/23），覆盖 Run/Resume/Pause/Retry/Rollback/GetState/Debug/条件分支/循环/崩溃恢复语义。全量 `dotnet test` 0 失败。
+
+**质量门**：`dotnet build` 0/0，前端 `npm run build` (tsc + vite) 通过，三道质量门全 PASS（`.quality-gate.json` 推进 `f30-durable-execution`，`cleared:true`）。质量报告 `docs/quality/f30-durable-execution-gate.md`，设计文档 `features/f30-durable-execution.md`。
+
+**文档同步**：`features/backlog.md` F30 标记 `done`，`AGENT_PLATFORM_BLUEPRINT.md` §Phase 7 更新实现状态，`appendices/core-aggregates.md` 新增 `RunningExecution`。
+
 ## v2.26 (2026-08-21)
 
 ### F29 · Agentic Agent Primitive（自主 Agent 控制循环原语）完成（feature-builder 全栈闭环，🔴高风险范式跨越，三道质量门全 PASS）

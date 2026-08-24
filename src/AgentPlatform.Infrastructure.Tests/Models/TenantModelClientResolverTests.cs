@@ -32,8 +32,7 @@ public class TenantModelClientResolverTests
             resolver,
             encryption,
             Substitute.For<ILogger<TenantModelClientResolver>>(),
-            Substitute.For<ILogger<ModelTelemetryDecorator>>(),
-            configuration ?? new ConfigurationBuilder().Build());
+            Substitute.For<ILogger<ModelTelemetryDecorator>>());
     }
 
     [Fact]
@@ -116,7 +115,7 @@ public class TenantModelClientResolverTests
                 ["ModelClient:Provider"] = "Stub",
             })
             .Build();
-        var sut = Create(resolver, encryption, configuration);
+        var sut = Create(resolver, encryption);
 
         var result = await sut.ResolveAsync(TenantId);
 

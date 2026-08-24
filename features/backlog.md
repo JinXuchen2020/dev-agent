@@ -355,7 +355,7 @@
 - 最小验证路径：先做「research agent」standalone（目标→调 2-3 工具→循环→产出）→ 再包 `StepType.Agentic` 节点 → 再补前端（Agent 配置页加允许工具/最大迭代 + 运行页展示思考/工具流）。
 - 优先级：P0（置顶，二期第一个 feature，最高优先级）。
 
-### F30 · 执行持久化（Durable Execution）  [P0]  open  ⛔blocked(1期)  🔴高风险（运行时范式跨越：请求内同步 → 可挂起/恢复 durable）
+### F30 · 执行持久化（Durable Execution）  [P0]  done  🔴高风险（运行时范式跨越：请求内同步 → 可挂起/恢复 durable）
 - 设计依据：`phases/phase-7-durable-execution.md` + `docs/agent-harness-blueprint.md` §Phase 7（正式 `features/f30-*.md` 待 1 期完成后建）
 - 目标：将 `SequentialOrchestrator.RunToCompletionAsync` 的请求内同步执行改造为可挂起/恢复的 durable 执行；检查点落 `ExecutionLog`；in-flight 状态由进程内 `ConcurrentDictionary` 迁移至 DB；`WorkflowScheduler` 升级为 durable 驱动器。
 - 验收子项：

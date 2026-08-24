@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Domain.Aggregates.ExecutionLogs;
 using AgentPlatform.Domain.Aggregates.Workflows;
 using AgentPlatform.Domain.Aggregates.Workflows.Events;
 using AgentPlatform.Domain.Enums;
@@ -15,11 +17,13 @@ namespace AgentPlatform.Infrastructure.Workflows;
 /// The single orchestration primitive for the platform (Blueprint C.2).
 /// Facade that routes to the appropriate preset orchestrator (SequentialOrchestrator /
 /// NegotiationOrchestrator) and handles per-step persistence, domain event
-/// publishing, lifecycle operations, and TTL-based eviction of stale CTS entries.
+/// publishing, lifecycle operations, and durable execution with crash recovery (F30).
 /// </summary>
 internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
 {
     private readonly IWorkflowRepository _repository;
+    private readonly IRunningExecutionRepository _runningExecutionRepository;
+    private readonly IExecutionLogRepository _executionLogRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IDomainEventBus _eventBus;
     private readonly IServiceProvider _serviceProvider;
@@ -28,84 +32,63 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
     private readonly SequentialOrchestrator _sequential;
     private readonly NegotiationOrchestrator _negotiation;
 
-    // ──────────── Static Fields ────────────
+    // ──────────── Instance Fields ────────────
 
     /// <summary>
-    /// Wraps a CancellationTokenSource with a last-access timestamp for TTL eviction.
+    /// Unique identifier for this process instance (used for lease ownership).
     /// </summary>
-    private sealed class RunningCtsEntry
-    {
-        public CancellationTokenSource Cts { get; }
-        public DateTime LastAccessUtc { get; set; }
+    private readonly string _instanceId;
 
-        public RunningCtsEntry(CancellationTokenSource cts)
-        {
-            Cts = cts;
-            LastAccessUtc = DateTime.UtcNow;
-        }
-    }
-
-    // Tracks in-flight runs so PauseAsync can interrupt them (Blueprint C.7: mid-execution pause).
-    // Uses a wrapper with last-access timestamps for TTL-based stale-entry eviction.
-    private static readonly ConcurrentDictionary<Guid, RunningCtsEntry> s_runningCts = new();
+    /// <summary>
+    /// Lease TTL for durable execution (default 5 minutes).
+    /// </summary>
+    private readonly TimeSpan _leaseTtl;
 
     // Tracks the preset chosen on first RunAsync so Resume/Retry reuse the SAME preset
     // instead of re-sniffing Context (which could flip the preset mid-lifecycle).
     // Cold-start fallback (e.g. after a process restart) still uses DetectPreset.
     private static readonly ConcurrentDictionary<Guid, OrchestrationPreset> s_resolvedPresets = new();
 
-    // Timer for periodic TTL eviction of stale s_runningCts entries (every 30 min).
-    // Entries idle for more than 1 hour or already cancelled are removed.
-    private static readonly Timer s_evictionTimer = new(
-        EvictStaleCtsEntries, null, TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(30));
-
-    /// <summary>
-    /// Evicts CTS entries that are either already cancelled or have been idle
-    /// (last access) for more than 1 hour. Runs on a background timer every 30 min.
-    /// </summary>
-    private static void EvictStaleCtsEntries(object? state)
-    {
-        var threshold = DateTime.UtcNow.AddHours(-1);
-        foreach (var kvp in s_runningCts)
-        {
-            if (kvp.Value.Cts.IsCancellationRequested || kvp.Value.LastAccessUtc < threshold)
-            {
-                if (s_runningCts.TryRemove(kvp.Key, out var entry))
-                {
-                    entry.Cts.Dispose();
-                }
-            }
-        }
-    }
-
     // ──────────── Constructor ────────────
 
     public OrchestrationPrimitive(
         IWorkflowRepository repository,
+        IRunningExecutionRepository runningExecutionRepository,
+        IExecutionLogRepository executionLogRepository,
         IUnitOfWork unitOfWork,
         IDomainEventBus eventBus,
         IServiceProvider serviceProvider,
         IOptions<StateMachineSettings> settings,
+        IOptions<DurableExecutionSettings> durableSettings,
         ILogger<OrchestrationPrimitive> logger,
         IVectorStore vectorStore,
         ITokenCounter tokenCounter)
     {
         _repository = repository;
+        _runningExecutionRepository = runningExecutionRepository;
+        _executionLogRepository = executionLogRepository;
         _unitOfWork = unitOfWork;
         _eventBus = eventBus;
         _serviceProvider = serviceProvider;
         _logger = logger;
         _settings = settings.Value;
+        _durableSettings = durableSettings.Value;
+
+        // Generate unique instance ID for this process (used for lease ownership)
+        _instanceId = $"{Environment.MachineName}-{Environment.ProcessId}-{Guid.NewGuid().ToString("N")[..8]}";
+        _leaseTtl = TimeSpan.FromMinutes(_durableSettings.LeaseTtlMinutes);
 
         // Create internal orchestrators, delegating the heavy lifting.
         _sequential = new SequentialOrchestrator(
-            repository, unitOfWork, eventBus, serviceProvider,
-            logger, _settings, vectorStore, tokenCounter);
+            repository, executionLogRepository, unitOfWork, eventBus, serviceProvider,
+            logger, _settings, vectorStore, tokenCounter, _durableSettings);
 
         _negotiation = new NegotiationOrchestrator(
             repository, unitOfWork, eventBus, serviceProvider,
             logger, _settings, vectorStore, tokenCounter);
     }
+
+    private readonly DurableExecutionSettings _durableSettings;
 
     // ──────────── Public API (IOrchestrationPrimitive) ────────────
 
@@ -121,10 +104,6 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
                 $"Workflow {workflow.Id} cannot be started (state: {workflow.CurrentState})");
 
         // Ensure the workflow is persisted before starting.
-        // Only INSERT when this is a brand-new, untracked aggregate (the create-and-run
-        // path). When the workflow was loaded from the repository (re-run / resume / retry)
-        // it is already tracked, and calling Add would re-insert the row and violate the
-        // primary-key unique constraint (DbUpdateException: UNIQUE constraint failed: Workflows.Id).
         workflow.SetState(WorkflowState.Running);
         var alreadyTracked = _unitOfWork.GetTrackedAggregates()
             .OfType<Workflow>()
@@ -135,21 +114,40 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
         }
         await _unitOfWork.SaveChangesAsync(ct);
 
+        // Create or update RunningExecution record (acquire lease)
+        var runningExec = await _runningExecutionRepository.GetByWorkflowIdAsync(workflow.Id, ct);
+        if (runningExec == null)
+        {
+            runningExec = RunningExecution.Create(workflow.Id, workflow.TenantId, _instanceId, _leaseTtl);
+            _runningExecutionRepository.Add(runningExec);
+        }
+        else
+        {
+            // Attempt to acquire lease (will succeed if expired or same instance)
+            if (!runningExec.TryAcquireLease(_instanceId, _leaseTtl))
+            {
+                throw new InvalidOperationException(
+                    $"Workflow {workflow.Id} is already running on another instance (lease held by {runningExec.InstanceId})");
+            }
+            runningExec.SetWorkflowState(WorkflowState.Running);
+            _runningExecutionRepository.Update(runningExec);
+        }
+        await _unitOfWork.SaveChangesAsync(ct);
+
         // Publish WorkflowStarted
         await _eventBus.PublishAsync(
             new WorkflowStarted(workflow.Id, workflow.Name, workflow.TenantId), ct);
 
         // Register a cancellable source so PauseAsync can interrupt an in-flight run (Blueprint C.7).
         var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var entry = new RunningCtsEntry(linkedCts);
-        s_runningCts[workflow.Id] = entry;
         var linkedToken = linkedCts.Token;
+
         try
         {
             switch (preset)
             {
                 case OrchestrationPreset.Sequential:
-                    await _sequential.RunSequentialAsync(workflow, linkedToken);
+                    await _sequential.RunSequentialAsync(workflow, linkedToken, _runningExecutionRepository, _instanceId, _leaseTtl);
                     break;
                 case OrchestrationPreset.Negotiation:
                     await _negotiation.RunNegotiationAsync(workflow, linkedToken);
@@ -163,25 +161,82 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
             // Timeout (inner CTS fired) OR external Pause (linked CTS cancelled) —
             // both leave the workflow resumable.
             _logger.LogWarning("Workflow {WorkflowId} execution interrupted (timeout or pause)", workflow.Id);
-            workflow.SetState(WorkflowState.Paused);
-            _repository.Update(workflow);
-            await _unitOfWork.SaveChangesAsync(ct);
+            await HandleInterruptionAsync(workflow, runningExec, ct);
             throw;
         }
         catch (OperationCanceledException)
         {
             // Explicit cancellation (outer ct was cancelled mid-execution)
-            // Set Paused so the workflow is resumable — otherwise it stays Running permanently.
             _logger.LogWarning("Workflow {WorkflowId} execution was cancelled by caller", workflow.Id);
-            workflow.SetState(WorkflowState.Paused);
-            _repository.Update(workflow);
-            // Use CancellationToken.None because ct is already cancelled
-            await _unitOfWork.SaveChangesAsync(CancellationToken.None);
+            await HandleInterruptionAsync(workflow, runningExec, CancellationToken.None);
             throw;
         }
         finally
         {
-            s_runningCts.TryRemove(workflow.Id, out _);
+            linkedCts.Dispose();
+        }
+
+        return workflow;
+    }
+
+    /// <summary>
+    /// Resumes a workflow from its persisted checkpoint (called by WorkflowScheduler after crash recovery).
+    /// </summary>
+    internal async Task<Workflow> ResumeFromCheckpointAsync(Guid workflowId, CancellationToken ct = default)
+    {
+        var workflow = await LoadWorkflowAsync(workflowId, ct);
+        if (workflow.CurrentState != WorkflowState.Running)
+            throw new InvalidOperationException($"Workflow {workflowId} is not in Running state (state: {workflow.CurrentState})");
+
+        // Reload preset — prefer the one chosen on first RunAsync (stable across resume).
+        var preset = ResolvePreset(workflow, workflowId);
+
+        // Acquire lease for this instance
+        var runningExec = await _runningExecutionRepository.GetByWorkflowIdAsync(workflowId, ct);
+        if (runningExec == null)
+        {
+            runningExec = RunningExecution.Create(workflow.Id, workflow.TenantId, _instanceId, _leaseTtl);
+            _runningExecutionRepository.Add(runningExec);
+        }
+        else if (!runningExec.TryAcquireLease(_instanceId, _leaseTtl))
+        {
+            throw new InvalidOperationException(
+                $"Workflow {workflowId} lease could not be acquired (held by {runningExec.InstanceId})");
+        }
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var linkedToken = linkedCts.Token;
+
+        try
+        {
+            switch (preset)
+            {
+                case OrchestrationPreset.Sequential:
+                    await _sequential.RunSequentialAsync(workflow, linkedToken, _runningExecutionRepository, _instanceId, _leaseTtl, resumeFromCheckpoint: true);
+                    break;
+                case OrchestrationPreset.Negotiation:
+                    // Negotiation orchestrator doesn't support checkpoint resume yet; fall back to normal run
+                    await _negotiation.RunNegotiationAsync(workflow, linkedToken);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(preset), preset, null);
+            }
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            _logger.LogWarning("Workflow {WorkflowId} checkpoint resume interrupted", workflow.Id);
+            await HandleInterruptionAsync(workflow, runningExec, ct);
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Workflow {WorkflowId} checkpoint resume cancelled by caller", workflow.Id);
+            await HandleInterruptionAsync(workflow, runningExec, CancellationToken.None);
+            throw;
+        }
+        finally
+        {
             linkedCts.Dispose();
         }
 
@@ -194,12 +249,12 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
         if (workflow.CurrentState != WorkflowState.Running)
             throw new InvalidOperationException($"Workflow {workflowId} is not running (state: {workflow.CurrentState})");
 
-        // Interrupt the in-flight run, if one is registered, so an executing step aborts
-        // immediately instead of finishing (Blueprint C.7: mid-execution pause).
-        if (s_runningCts.TryGetValue(workflowId, out var entry))
+        // Update RunningExecution to Paused (releases lease implicitly)
+        var runningExec = await _runningExecutionRepository.GetByWorkflowIdAsync(workflowId, ct);
+        if (runningExec != null)
         {
-            entry.LastAccessUtc = DateTime.UtcNow;
-            entry.Cts.Cancel();
+            runningExec.Pause();
+            _runningExecutionRepository.Update(runningExec);
         }
 
         workflow.SetState(WorkflowState.Paused);
@@ -214,7 +269,6 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
         if (workflow.CurrentState != WorkflowState.Paused)
             throw new InvalidOperationException($"Workflow {workflowId} is not paused (state: {workflow.CurrentState})");
 
-        // Reload preset — prefer the one chosen on first RunAsync (stable across resume).
         var preset = ResolvePreset(workflow, workflowId);
         workflow.SetState(WorkflowState.Running);
         _repository.Update(workflow);
@@ -235,7 +289,6 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
         _repository.Update(workflow);
         await _unitOfWork.SaveChangesAsync(ct);
 
-        // Re-run from the reset step, reusing the stable preset.
         workflow.SetState(WorkflowState.Running);
         await RunAsync(workflow, ResolvePreset(workflow, workflowId), ct);
     }
@@ -244,7 +297,6 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
     {
         var workflow = await LoadWorkflowAsync(workflowId, ct);
 
-        // Precise rollback: reset target and all subsequent steps to Pending (Blueprint C.6)
         foreach (var step in workflow.Steps.Where(s => s.Order >= targetStepOrder))
         {
             step.SetState(WorkflowState.Pending);
@@ -284,9 +336,8 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
     public async Task<DebugStepResult> DebugStepAsync(Guid workflowId, Blackboard blackboard, CancellationToken ct = default)
     {
         var workflow = await LoadWorkflowAsync(workflowId, ct);
-        // Block only when a real (non-debug) run is in flight; debug stepping is allowed
-        // even though the workflow shows Running between steps.
-        if (s_runningCts.ContainsKey(workflowId))
+        var runningExec = await _runningExecutionRepository.GetByWorkflowIdAsync(workflowId, ct);
+        if (runningExec != null && runningExec.WorkflowState == WorkflowState.Running)
             throw new InvalidOperationException($"Workflow {workflowId} is currently running; debug-step is not allowed.");
 
         return await _sequential.DebugStepAsync(workflow, blackboard, ct);
@@ -295,7 +346,8 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
     public async Task<WorkflowState> DebugResumeAsync(Guid workflowId, Blackboard blackboard, CancellationToken ct = default)
     {
         var workflow = await LoadWorkflowAsync(workflowId, ct);
-        if (s_runningCts.ContainsKey(workflowId))
+        var runningExec = await _runningExecutionRepository.GetByWorkflowIdAsync(workflowId, ct);
+        if (runningExec != null && runningExec.WorkflowState == WorkflowState.Running)
             throw new InvalidOperationException($"Workflow {workflowId} is currently running; debug-resume is not allowed.");
 
         return await _sequential.DebugResumeAsync(workflow, blackboard, ct);
@@ -304,18 +356,39 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
     public async Task<DebugStepResult> DebugRetryNodeAsync(Guid workflowId, Guid nodeId, Blackboard blackboard, CancellationToken ct = default)
     {
         var workflow = await LoadWorkflowAsync(workflowId, ct);
-        if (s_runningCts.ContainsKey(workflowId))
+        var runningExec = await _runningExecutionRepository.GetByWorkflowIdAsync(workflowId, ct);
+        if (runningExec != null && runningExec.WorkflowState == WorkflowState.Running)
             throw new InvalidOperationException($"Workflow {workflowId} is currently running; debug-retry is not allowed.");
 
         return await _sequential.DebugRetryNodeAsync(workflow, nodeId, blackboard, ct);
     }
 
-    // ──────────── Preset Resolution ────────────
+    // ──────────── Internal Helpers ────────
+
+    private async Task HandleInterruptionAsync(Workflow workflow, RunningExecution? runningExec, CancellationToken ct)
+    {
+        workflow.SetState(WorkflowState.Paused);
+        _repository.Update(workflow);
+
+        if (runningExec != null)
+        {
+            runningExec.Pause();
+            _runningExecutionRepository.Update(runningExec);
+        }
+
+        try
+        {
+            await _unitOfWork.SaveChangesAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            // If ct is cancelled, use CancellationToken.None to persist the Paused state
+            await _unitOfWork.SaveChangesAsync(CancellationToken.None);
+        }
+    }
 
     private OrchestrationPreset ResolvePreset(Workflow workflow, Guid workflowId)
     {
-        // Prefer the preset recorded when the workflow first ran; fall back to
-        // heuristic sniffing only for cold starts (in-memory cache lost on restart).
         return s_resolvedPresets.TryGetValue(workflowId, out var cached)
             ? cached
             : DetectPreset(workflow);
@@ -323,16 +396,10 @@ internal sealed class OrchestrationPrimitive : IOrchestrationPrimitive
 
     private static OrchestrationPreset DetectPreset(Workflow workflow)
     {
-        // Cold-start fallback ONLY (ResolvePreset prefers the cached choice).
-        // Heuristic: a structured marker in Context selects negotiation; otherwise
-        // default to sequential (the fast path). Anchored to the exact JSON key so a
-        // step name/result containing the word "negotiation" cannot trigger it.
         return workflow.Context?.Contains("\"preset\":\"negotiation\"", StringComparison.OrdinalIgnoreCase) == true
             ? OrchestrationPreset.Negotiation
             : OrchestrationPreset.Sequential;
     }
-
-    // ──────────── Helpers ────────────
 
     private async Task<Workflow> LoadWorkflowAsync(Guid workflowId, CancellationToken ct)
     {

@@ -122,6 +122,8 @@ public static class DependencyInjection
         services.AddScoped<IEvaluationDatasetRepository, EvaluationDatasetRepository>();
         // ── F25 工作流调试会话（租户隔离）仓储 ──
         services.AddScoped<IDebugSessionRepository, DebugSessionRepository>();
+        // ── F30 执行持久化：RunningExecution 仓储（耐久调度与崩溃恢复）──
+        services.AddScoped<IRunningExecutionRepository, RunningExecutionRepository>();
         services.AddSingleton<IYamlConfigurationParser, YamlConfigurationParserService>();
         // 单例工具注册表：启动时把平台内置 workspace 工具（Codex 式自主编码能力）注册进去，
         // 供 AgenticOrchestrator 按 agent 的 AllowedToolNames 白名单动态选用（F29）。
@@ -383,6 +385,15 @@ public static class DependencyInjection
             AllowCriticOverride = bool.TryParse(smSection["AllowCriticOverride"], out var allowOverride) && allowOverride
         };
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(stateMachineSettings));
+
+        var deSection = configuration.GetSection("DurableExecution");
+        var durableExecutionSettings = new DurableExecutionSettings
+        {
+            LeaseTtlMinutes = int.TryParse(deSection["LeaseTtlMinutes"], out var leaseTtl) ? leaseTtl : 5,
+            CheckpointBatchSize = int.TryParse(deSection["CheckpointBatchSize"], out var batchSize) ? batchSize : 5,
+            CheckpointMaxAgeSeconds = int.TryParse(deSection["CheckpointMaxAgeSeconds"], out var maxAge) ? maxAge : 30
+        };
+        services.AddSingleton(Microsoft.Extensions.Options.Options.Create(durableExecutionSettings));
 
         var elSection = configuration.GetSection("ExecutionLog");
         var executionLogSettings = new ExecutionLogSettings

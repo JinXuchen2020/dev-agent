@@ -3,16 +3,19 @@ using System;
 using AgentPlatform.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace AgentPlatform.Infrastructure.Migrations
+namespace AgentPlatform.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260824013403_AddDurableExecutionCheckpoint")]
+    partial class AddDurableExecutionCheckpoint
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.4");
@@ -889,51 +892,6 @@ namespace AgentPlatform.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("WorkflowTriggers", (string)null);
-                });
-
-            modelBuilder.Entity("AgentPlatform.Domain.Aggregates.Workflows.RunningExecution", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("BlackboardSnapshot")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("CheckpointVersion")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(0);
-
-                    b.Property<DateTime>("HeartbeatAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("InstanceId")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("LeaseExpiresAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid>("WorkflowId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("WorkflowState")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("WorkflowId")
-                        .IsUnique();
-
-                    b.HasIndex("TenantId", "WorkflowState", "LeaseExpiresAt");
-
-                    b.ToTable("RunningExecutions", (string)null);
                 });
 
             modelBuilder.Entity("AgentPlatform.Domain.Aggregates.Workflows.Workflow", b =>

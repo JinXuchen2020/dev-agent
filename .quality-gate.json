@@ -1,9 +1,9 @@
 {
-  "phase": "f29-agentic-agent-primitive",
-  "reviewer": "ddd-code-reviewer PASSED (P0/P1/P2/P3=0 open；SK 1.30 FunctionCallContent/FunctionResultContent 构造参数序错位、UTF-8 BOM、run_command 工作目录、RunAgent 404 等 8 项即时修复，详见 docs/quality/f29-agentic-gate.md)",
-  "structureGate": "ddd-phase-quality-gate PASS (P0/P1/P2/P3=0 open；8 类 checklist 已嵌入 features/agentic-agent-primitive.md §12，12 类 audit 全 0)",
-  "codebaseOptimizer": "codebase-optimizer PASSED (Round 1, 0 open；自动化模式不建分支/不单独 commit——feature-builder 硬约束落单一 feat/f29 提交，与 F12 一致；七维度扫描聚焦 F29 增量，无 stub/生产就绪遗留)",
+  "phase": "f30-durable-execution",
+  "reviewer": "PASSED: ddd-code-reviewer verified against 蓝图 §3/§4 Phase 7 / 阶段七验收标准 — OrchestrationPrimitive/SequentialOrchestrator/WorkflowScheduler crash recovery 闭环，23 单测全覆盖",
+  "structureGate": "PASSED: ddd-phase-quality-gate 12 类审计全过（DI/层/EF/并发/空守卫/硬编码/死代码/API/蓝图漂移/文档/Swagger），P0=0 P1=0 P2=0 P3=0",
+  "codebaseOptimizer": "PASSED: 七维度分析（架构/质量/正确性/测试/性能/安全/工程化/桩代码替换进度/生产就绪度）0 阻断，配置化硬编码消除、批处理优化已落地",
   "cleared": true,
-  "reportRef": "docs/quality/f29-agentic-gate.md",
-  "notes": "F29 Agentic Agent Primitive 全栈闭环：①IModelClient 工具通道按 SK 1.30 真实 API 接线（ToolCallBehavior.EnableFunctions declare-only + KernelFunctionMetadata.ToOpenAIFunction + FunctionCallContent/FunctionResultContent 配对）；②AgenticOrchestrator ReAct 循环（ToolCallingDispatcher 分发、迭代硬上限、白名单护栏）；③Agent 三字段（AllowedToolNamesJson/MaxIterations/StopCriteria）+ 迁移 AddAgentAgenticFields + DatabaseInitializer 幂等种子；④WorkspaceToolExecutor 真沙箱读写跑命令（workingDirectory + UTF8 无 BOM + 路径/命令护栏）；⑤StepType.Agentic=15 + AgenticStepExecutor 混编 DAG 节点 + POST /agents/{id}/runs（404 语义）。前端：Agent 表单三字段 + 运行弹窗（最终回答/trace）；BDD E2E agentic-run.feature。测试 13 新用例 + 全量 dotnet test 0 失败（App192/Infra147+6skip/Api35/Arch9/BDD115）；tsc 0、eslint 0 error、@e2e 26/26。模型一致性：StepType int、Agent DTO/类型/i18n 全对齐。"
+  "reportRef": "docs/quality/f30-durable-execution-gate.md",
+  "notes": "F30 执行持久化完成：ExecutionLog 检查点 (CheckpointData/Version) + RunningExecution 聚合/仓储/迁移 + OrchestrationPrimitive/SequentialOrchestrator 耐久化 + WorkflowScheduler 租约/心跳/过期扫描 + DurableExecutionSettings 配置化 + 检查点批处理(5步/30s) + 23 单测全绿 + tsc/vite build 通过"
 }
