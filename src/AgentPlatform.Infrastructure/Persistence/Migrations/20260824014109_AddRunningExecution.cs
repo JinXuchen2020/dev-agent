@@ -24,7 +24,7 @@ namespace AgentPlatform.Infrastructure.Persistence.Migrations
                     LeaseExpiresAt = table.Column<DateTime>(type: "TEXT", nullable: false),
                     InstanceId = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
                     CheckpointVersion = table.Column<int>(type: "INTEGER", nullable: false, defaultValue: 0),
-                    BlackboardSnapshot = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                    BlackboardSnapshot = table.Column<string>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>
                 {

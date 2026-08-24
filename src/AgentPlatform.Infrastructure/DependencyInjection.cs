@@ -330,6 +330,7 @@ public static class DependencyInjection
         // Single engine: OrchestrationPrimitive replaced the legacy WorkflowStateMachineEngine,
         // AutoGenAgentOrchestrator and StubWorkflowEngine.
         services.AddScoped<IOrchestrationPrimitive, OrchestrationPrimitive>();
+        services.AddScoped<OrchestrationPrimitive>();
 
         // Obsolete - replaced by IOrchestrationPrimitive (Blueprint C.2).
         // Registered only to satisfy DI contract while awaiting removal in Phase 3.

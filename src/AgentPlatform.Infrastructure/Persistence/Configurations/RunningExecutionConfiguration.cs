@@ -45,7 +45,7 @@ internal sealed class RunningExecutionConfiguration : IEntityTypeConfiguration<R
             .HasDefaultValue(0);
 
         builder.Property(x => x.BlackboardSnapshot)
-            .HasColumnType("nvarchar(max)");
+            .HasColumnType("TEXT");
 
         // Query filter for tenant isolation is applied in AppDbContext.OnModelCreating via ITenantScoped
 

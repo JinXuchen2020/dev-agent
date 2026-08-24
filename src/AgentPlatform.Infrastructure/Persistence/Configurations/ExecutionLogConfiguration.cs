@@ -44,7 +44,7 @@ internal sealed class ExecutionLogConfiguration : IEntityTypeConfiguration<Execu
 
         // F30 Durable Execution: Checkpoint fields
         builder.Property(x => x.CheckpointData)
-            .HasColumnType("nvarchar(max)");
+            .HasColumnType("TEXT");
 
         builder.Property(x => x.CheckpointVersion)
             .IsRequired()

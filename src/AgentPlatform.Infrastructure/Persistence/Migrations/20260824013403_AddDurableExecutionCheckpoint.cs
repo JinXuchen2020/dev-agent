@@ -14,7 +14,7 @@ namespace AgentPlatform.Infrastructure.Persistence.Migrations
             migrationBuilder.AddColumn<string>(
                 name: "CheckpointData",
                 table: "ExecutionLogs",
-                type: "nvarchar(max)",
+                type: "TEXT",
                 nullable: true);
 
             migrationBuilder.AddColumn<int>(

@@ -5,5 +5,6 @@
   "codebaseOptimizer": "PASSED: 七维度分析（架构/质量/正确性/测试/性能/安全/工程化/桩代码替换进度/生产就绪度）0 阻断，配置化硬编码消除、批处理优化已落地",
   "cleared": true,
   "reportRef": "docs/quality/f30-durable-execution-gate.md",
-  "notes": "F30 执行持久化完成：ExecutionLog 检查点 (CheckpointData/Version) + RunningExecution 聚合/仓储/迁移 + OrchestrationPrimitive/SequentialOrchestrator 耐久化 + WorkflowScheduler 租约/心跳/过期扫描 + DurableExecutionSettings 配置化 + 检查点批处理(5步/30s) + 23 单测全绿 + tsc/vite build 通过"
+  "notes": "F30 执行持久化完成：ExecutionLog 检查点 (CheckpointData/Version) + RunningExecution 聚合/仓储/迁移 + OrchestrationPrimitive/SequentialOrchestrator 耐久化 + WorkflowScheduler 租约/心跳/过期扫描 + DurableExecutionSettings 配置化 + 检查点批处理(5步/30s) + 23 单测全绿 + tsc/vite build 通过",
+  "followUpFix": "提交后修正：① F30 两迁移 (AddDurableExecutionCheckpoint/AddRunningExecution) 与对应 EF 配置中列类型 nvarchar(max) 改 TEXT（SQLite 无 nvarchar 亲和性，须用 TEXT，迁移尚未在共享库应用前就地订正）；② DI 补 services.AddScoped<OrchestrationPrimitive>() 以支持直接解析具体类型。纯配置/类型字符串修正，无新逻辑，门结论不变。"
 }
