@@ -11,8 +11,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AgentPlatform.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260824014109_AddRunningExecution")]
-    partial class AddRunningExecution
+    [Migration("20260825021915_AddAgentMessageLog")]
+    partial class AddAgentMessageLog
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -65,6 +65,53 @@ namespace AgentPlatform.Infrastructure.Persistence.Migrations
                     b.HasIndex("TenantId", "Status");
 
                     b.ToTable("AgentConfigurations", (string)null);
+                });
+
+            modelBuilder.Entity("AgentPlatform.Domain.Aggregates.AgentMessages.AgentMessageLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ConsumedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CorrelationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("MessageType")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ReceiverId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Round")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("SenderId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WorkflowId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CorrelationId");
+
+                    b.HasIndex("TenantId", "WorkflowId");
+
+                    b.HasIndex("WorkflowId", "ConsumedAt");
+
+                    b.ToTable("AgentMessageLogs", (string)null);
                 });
 
             modelBuilder.Entity("AgentPlatform.Domain.Aggregates.AgentRoleDefinitions.AgentRoleDefinition", b =>
@@ -452,7 +499,7 @@ namespace AgentPlatform.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("CheckpointData")
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("CheckpointVersion")
                         .ValueGeneratedOnAdd()
@@ -900,7 +947,7 @@ namespace AgentPlatform.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("BlackboardSnapshot")
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("CheckpointVersion")
                         .ValueGeneratedOnAdd()

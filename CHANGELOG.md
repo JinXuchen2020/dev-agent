@@ -1,5 +1,20 @@
 # 变更日志
 
+## v2.29 (2026-08-25)
+
+### F32 · Agent 消息总线 + 多 Agent 协作完成（feature-builder 全栈闭环，🟡中风险，三道质量门全 PASS）
+
+F32 为平台引入「agent 社会原语」：进程内消息总线（Channel<T> 有界背压、写穿持久化、幂等消费）+ Negotiation 预设升级为**真并行多 agent 协作**——绑定 agent 的步骤经 Task.WhenAll 并发提案（时间窗重叠实证），critic 拒绝自动 Critique+Handoff 定向移交并携带反馈上下文，预算/停滞/环路指纹三防线熔断。
+
+**核心改动：**
+- **① 总线**：`IAgentMessageBus` + `InProcessAgentMessageBus`（每 receiver 有界 Channel 256；SCOPED=运行级隔离）；`AgentMessage` 契约（CorrelationId/Round/Type/Payload）
+- **② 并行协作**：NegotiationOrchestrator 双模式——协作门禁（绑定 agent + 基础设施齐备）→ 并行提案相位（纯网络 I/O，EF 触碰严格留在线程外）；无绑定 agent 诚实降级既有串行循环
+- **③ 持久化+幂等**：`AgentMessageLog` 聚合（ITenantScoped，迁移 AddAgentMessageLog）；TryMarkConsumed 条件更新幂等门；RepublishUnconsumed 跨轮重投
+- **④ 防治+可观测**：单轮预算 64 / 停滞 120s / 环路指纹 ≥3 三防线熔断 Paused+告警日志；CorrelationId 全链 trace 回放
+- **附带修复**：`nvarchar(max)` 列类型在 SQLite EnsureCreated/MigrateAsync 的 DDL 语法错误（曾致 Api.Tests 31 例连锁失败）——统一改 `text` 并回改 F30 迁移，跨三大数据库提供商安全
+
+**测试**：新增 7 例（总线持久化/去重/隔离/重投 4 + 双 agent 并行重叠/handoff 定向/预算熔断 3）。全绿 App217 / Infra151+6skip / Api35 / Arch9；build 0/0。前端零改动。设计文档 `features/f32-agent-message-bus.md` §8。
+
 ## v2.28 (2026-08-25)
 
 ### F31 · Agent 运行时实体化 + 模型接通完成（feature-builder 全栈闭环，🔴高风险，三道质量门全 PASS）

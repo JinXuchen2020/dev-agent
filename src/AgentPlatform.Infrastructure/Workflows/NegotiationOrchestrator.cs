@@ -1,7 +1,10 @@
+using System.Security.Cryptography;
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Application.Diagnostics;
 using AgentPlatform.Application.Routing;
+using AgentPlatform.Application.Routing.Services;
 using AgentPlatform.Domain.Abstractions;
+using AgentPlatform.Domain.Aggregates.Agents;
 using AgentPlatform.Domain.Aggregates.Workflows;
 using AgentPlatform.Domain.Aggregates.Workflows.Events;
 using AgentPlatform.Domain.Enums;
@@ -17,7 +20,7 @@ namespace AgentPlatform.Infrastructure.Workflows;
 /// Handles negotiation preset orchestration: LLM-driven step selection with
 /// critic-based convergence termination (Blueprint C.2 — Negotiation preset).
 /// </summary>
-internal sealed class NegotiationOrchestrator
+internal sealed partial class NegotiationOrchestrator
 {
     private readonly IWorkflowRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
@@ -49,6 +52,21 @@ internal sealed class NegotiationOrchestrator
     }
 
     public async Task RunNegotiationAsync(Workflow workflow, CancellationToken ct)
+    {
+        // F32: 协作模式门禁——绑定 agent 且总线基础设施齐备时走真并行协商；
+        // 否则诚实降级到既有串行选择循环（无绑定 agent = 无并行对象，而非并行伪装成串行）。
+        var collaboration = TryBuildCollaborationContext(workflow);
+        if (collaboration is not null)
+        {
+            await RunCollaborativeLoopAsync(workflow, collaboration, ct);
+            return;
+        }
+
+        await RunLegacyLoopAsync(workflow, ct);
+    }
+
+    /// <summary>既有单步选择循环原样保留（F32 前行为基线；无 agent 工作流与旧测试契约不变）。</summary>
+    private async Task RunLegacyLoopAsync(Workflow workflow, CancellationToken ct)
     {
         using var scope = _serviceProvider.CreateScope();
         var selectionStrategy = scope.ServiceProvider.GetRequiredService<ISelectionStrategy>();

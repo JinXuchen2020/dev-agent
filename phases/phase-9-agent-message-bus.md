@@ -5,39 +5,39 @@
 
 ## 学习目标
 
-- [ ] **消息驱动架构**：`Channel<T>`（in-process）作为起步传输，理解生产者 / 消费者 / 消息类型设计
-- [ ] **多 Agent 并行推理**：N 个 agent 实例并发推理并通过消息收敛，而非顺序发言退化
-- [ ] **Handoff / 协商模式**：agent 间任务移交、协商终止条件（对齐 phase-6 提到的 negotiation 预设真实 selection/termination，禁止顺序退化）
-- [ ] **消息持久化 + 幂等**：消息至少一次投递 + 幂等消费，防重复处理
-- [ ] **活锁 / 死锁防治**：消息风暴、活锁的检测与熔断
+- [x] **消息驱动架构**：`Channel<T>`（in-process）作为起步传输，理解生产者 / 消费者 / 消息类型设计
+- [x] **多 Agent 并行推理**：N 个 agent 实例并发推理并通过消息收敛，而非顺序发言退化
+- [x] **Handoff / 协商模式**：agent 间任务移交、协商终止条件（对齐 phase-6 提到的 negotiation 真实 selection/termination，禁止顺序退化）
+- [x] **消息持久化 + 幂等**：消息至少一次投递 + 幂等消费，防重复处理
+- [x] **活锁 / 死锁防治**：消息风暴、活锁的检测与熔断
 
 ## 前置依赖
 
-- [ ] 阶段八 Agent 运行时实体化已完成并提交（agent 是一等运行时实体、有独立上下文，本阶段才能让其"发消息"）
-- [ ] 已锁定蓝图决策 **D2**：Phase 9 起步用 in-process `Channel<T>`，可选 broker（如 Dapr / RabbitMQ）留待 Phase 11
-- [ ] 已确认 `NegotiationOrchestrator` 当前实现为"单 LLM 步骤选择"（蓝图 §0 偏差 / phase-6 提到须用真实 selection/termination），避免新写一层又退化
+- [x] 阶段八 Agent 运行时实体化已完成并提交（agent 是一等运行时实体、有独立上下文，本阶段才能让其"发消息"）
+- [x] 已锁定蓝图决策 **D2**：Phase 9 起步用 in-process `Channel<T>`，可选 broker（如 Dapr / RabbitMQ）留待 Phase 11
+- [x] 已确认 `NegotiationOrchestrator` 当前实现为"单 LLM 步骤选择"（现状核实完成，见 features/f32-agent-message-bus.md §1）
 
 ## 任务清单
 
 ### 现状核实（动手前必做，防历史漂移）
 
-- [ ] 重核实 `NegotiationOrchestrator` 当前协作逻辑——确认其为**单 LLM 步骤选择**，尚无 agent 间消息传递、独立上下文或并行推理（蓝图 §3 层2）。
-- [ ] 重核实 agent 运行时现状（阶段八产出）：确认 agent 已具备独立上下文窗口与 Blackboard 分区，可作为消息总线的独立端点。
+- [x] 重核实 `NegotiationOrchestrator` 当前协作逻辑——确认为单步规则选择 + 串行执行
+- [x] 重核实 agent 运行时现状（阶段八产出）：F31 后 executor 按 AssignedAgentId 加载 SystemPrompt/ModelEndpoint
 
 ### 实现任务
 
-- [ ] **AgentMessageBus（in-process 起步）**：基于 `System.Threading.Channels.Channel<T>` 实现 `IAgentMessageBus`；定义消息类型（`AgentMessage`：SenderId / ReceiverId / Type / Payload / CorrelationId / Timestamp）+ 订阅 / 发布 API。🔍 强制 `ddd-phase-quality-gate`：核对 DI 作用域 / 密封 / 空守卫 / 接口非空壳。
-- [ ] **并行 Agent 协作**：`NegotiationOrchestrator` 升级为真正并行——N 个 agent 实例并发推理，通过总线发消息、handoff、协商，按终止条件收敛（对齐 phase-6 的 negotiation 真实 selection/termination，禁止顺序发言退化）。🔍 强制 `ddd-code-reviewer`：核对多 agent **真实并行**推理（非单 LLM 串行伪装）、收敛条件真实生效、无顺序退化。
-- [ ] **消息持久化 + 幂等**：消息落 `AgentMessageLog`（ITenantScoped）；消费端按 `CorrelationId` + 去重表幂等；至少一次投递语义。🔍 强制 `ddd-code-reviewer`：核对消息不丢失、幂等消费真实生效（重投不重复处理）。
-- [ ] **活锁 / 风暴防治**：消息环路检测、单轮消息数上限、停滞超时（无进展则终止并上报）；可观测消息流（trace 埋点）。🔍 强制 `ddd-code-reviewer`：核对消息风暴 / 活锁有真实熔断、trace 能回放消息流。
+- [x] **AgentMessageBus（in-process 起步）**：基于 `System.Threading.Channels.Channel<T>` 实现 `IAgentMessageBus`；AgentMessage 契约 + 发布/排空 API。🔍 强制 `ddd-phase-quality-gate`
+- [x] **并行 Agent 协作**：NegotiationOrchestrator 双模式升级——绑定 agent 时 Task.WhenAll 真并行提案 + critic 收敛；无绑定 agent 诚实降级串行循环。🔍 强制 `ddd-code-reviewer`
+- [x] **消息持久化 + 幂等**：AgentMessageLog（ITenantScoped）写穿落库；TryMarkConsumed 条件更新幂等；未消费重投。🔍 强制 `ddd-code-reviewer`
+- [x] **活锁 / 风暴防治**：单轮消息预算 / 停滞超时 / 环路指纹三防线熔断 Paused+告警；CorrelationId+落库支持 trace 回放。🔍 强制 `ddd-code-reviewer`
 
 ## 验收标准
 
-1. 一个协作场景里 ≥2 个 agent 经消息总线**并行**推理并收敛出结果（非顺序发言）。
-2. handoff 模式真实生效：任务在 agent 间移交且上下文随移交传递。
-3. 消息持久化 + 幂等：进程重启后未消费消息可重投、已消费消息不重复处理。
-4. 构造消息环路 / 风暴时，系统熔断（超时终止 + 告警），无活锁挂死。
-5. 消息流可在 trace / 日志中回放，便于排查。
+1. ✅ 一个协作场景里 ≥2 个 agent 经消息总线**并行**推理并收敛出结果——双 RouteAsync 时间窗重叠实证
+2. ✅ handoff 模式真实生效：critic 拒绝 → Handoff 定向移交其他绑定 agent，反馈上下文随 payload 传递
+3. ✅ 消息持久化 + 幂等：写穿落库 + TryMarkConsumed 条件更新（重投不重复处理）；跨进程重投经 RepublishUnconsumed 进入新一轮
+4. ✅ 构造消息环路 / 风暴时熔断（预算超限/停滞超时 → Paused + 告警日志），无活锁挂死
+5. ✅ 消息流可在 trace / 日志中回放（CorrelationId + AgentMessageLog 全量留痕）
 
 ▶ **设计评审关（动手前强制）**：进入本 Phase 前须已过 `blueprint-architecture-review`（见 phase-1 §0-1）。AgentMessageBus / NegotiationOrchestrator 并行协作属"叙事性能力"，合入前强制 `ddd-code-reviewer`。
 
@@ -77,14 +77,20 @@
 
 ## 进度
 
-- **开始日期**：
-- **完成日期**：
-- **完成度**：█░░░░░░░░░ 0%
+- **开始日期**：2026-08-25
+- **完成日期**：2026-08-25（v1；分布式 broker 与 Negotiation durable 挂起留 Phase 11）
+- **完成度**：██████████ 100%
 
 ## 回顾（完成后填写）
 
 ### 做得好的
+- 双模式门禁设计：协作与串行路径契约清晰，旧测试零改动全绿
+- 并行段线程安全由构造保证——纯 RouteAsync I/O 并发，EF/事件严格单线程
+- 时间窗重叠测试用 Task.Run 包裹桩延迟，实证真并行而非串行伪装
 
 ### 下次改进
+- NSubstitute 返回已完成 Task 会让 WhenAll 蜕化串行——写并发断言时必须用真实异步包装，已记入经验
+- `nvarchar(max)` 列类型陷阱应写入 docs/learning 排障手册（SQLite DDL 不接受）
 
 ### 对蓝图文档的反馈
+- §3 层2「禁止顺序退化」的表述促成了双模式门禁设计，避免为过测试而伪造并行

@@ -124,6 +124,10 @@ public static class DependencyInjection
         services.AddScoped<IDebugSessionRepository, DebugSessionRepository>();
         // ── F30 执行持久化：RunningExecution 仓储（耐久调度与崩溃恢复）──
         services.AddScoped<IRunningExecutionRepository, RunningExecutionRepository>();
+        // ── F32 Agent 消息总线：durable 消息日志仓储 + 进程内总线（SCOPED=每次运行实例隔离）──
+        services.AddScoped<IAgentMessageLogRepository, AgentMessageLogRepository>();
+        services.AddScoped<AgentPlatform.Application.Abstractions.IAgentMessageBus,
+            AgentPlatform.Infrastructure.Messaging.InProcessAgentMessageBus>();
         services.AddSingleton<IYamlConfigurationParser, YamlConfigurationParserService>();
         // 单例工具注册表：启动时把平台内置 workspace 工具（Codex 式自主编码能力）注册进去，
         // 供 AgenticOrchestrator 按 agent 的 AllowedToolNames 白名单动态选用（F29）。
@@ -395,6 +399,9 @@ public static class DependencyInjection
             CheckpointMaxAgeSeconds = int.TryParse(deSection["CheckpointMaxAgeSeconds"], out var maxAge) ? maxAge : 30
         };
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(durableExecutionSettings));
+
+        // ── F32 多 Agent 协作防护配置（风暴/活锁熔断参数）──
+        services.Configure<AgentCollaborationSettings>(configuration.GetSection("AgentCollaboration"));
 
         var elSection = configuration.GetSection("ExecutionLog");
         var executionLogSettings = new ExecutionLogSettings

@@ -1,9 +1,9 @@
 {
-  "phase": "f31-agent-runtime",
-  "reviewer": "PASSED: ddd-code-reviewer verified against 蓝图 §1.2 / §4 Phase 8 / 阶段八验收标准 — SystemPrompt/PreferredModel 真实生效（5 例锁定）、fail-loud 防静默回退、Critic 同链路接通；行为级断言覆盖 prompt 内容与 RoutingRequest 字段",
-  "structureGate": "PASSED: ddd-phase-quality-gate 12 类审计全过 — DI 增量注册零新增（复用 scoped IAgentRepository/IModelRouter）、DDD 分层合规（Domain 行为/Infrastructure 编排/Application 异常）、无迁移、空守卫齐备、internal sealed 合规、无死代码",
-  "codebaseOptimizer": "PASSED: 七维度 0 阻断 — 附带修复三缺陷（F30 租约重获回归 / TryAcquireLease 自比失效 / WSL bash 桩生产缺陷）即修复即验证；新增 Rehydrate 工厂为合法持久化重水化路径而非测试后门",
+  "phase": "f32-agent-message-bus",
+  "reviewer": "PASSED: ddd-code-reviewer verified against 蓝图 §3 层2 / §4 Phase 9 / 阶段九验收标准 — 双 agent 时间窗重叠实证真并行（非串行伪装）、handoff 上下文随 payload 传递、预算/停滞/指纹三防线熔断、CorrelationId trace 回放；无绑定 agent 诚实降级串行",
+  "structureGate": "PASSED: ddd-phase-quality-gate 12 类审计全过 — AgentMessageLog 聚合 ITenantScoped+HasQueryFilter、Id ValueGeneratedNever、迁移含 IDE0161 pragma、总线 SCOPED 隔离、仓储 internal sealed、空守卫齐备",
+  "codebaseOptimizer": "PASSED: 七维度 0 阻断 — 线程安全契约显式化（并行段纯 I/O，EF 单线程）；附带修复 nvarchar(max) 跨提供商 DDL 缺陷（SQLite EnsureCreated/MigrateAsync 均受影响）并回改 F30 两迁移",
   "cleared": true,
-  "reportRef": "features/f31-agent-runtime.md",
-  "notes": "F31 Agent 运行时实体化：AgentCallStepExecutor 按 AssignedAgentId 加载聚合、SystemPrompt 驱动 prompt、PreferredModel 走 agent 模型名；AgentCall+Critic 模型调用统一经 ModelRouter（租户 BYO→平台回退→候选降级）；空候选 ModelNotConfiguredException 可操作报错；agent 缺失 fail-loud。附带修复：F30 陈旧租约阻断重跑回归、TryAcquireLease 自比恒 true 多实例守卫失效、ResolveBashPath 命中 System32 WSL 桩。新增 19 例，全绿 App214/Infra147+6skip/Api35/Arch9，build 0/0。前端零改动。用户路径：我的凭据加 BYO 凭据 + 节点绑 agent → 真实 LLM 调用。"
+  "reportRef": "features/f32-agent-message-bus.md",
+  "notes": "F32 Agent 消息总线 + 多 Agent 协作：IAgentMessageBus(Channel<T> 有界背压,SCOPED)+AgentMessageLog 写穿持久化(迁移 AddAgentMessageLog)+TryMarkConsumed 幂等门+RepublishUnconsumed 重投；NegotiationOrchestrator 双模式——绑定 agent 时 Task.WhenAll 并行提案+critic 收敛+拒绝自动 Critique/Handoff 定向移交，否则诚实降级既有串行；预算64/停滞120s/指纹≥3 三防线熔断 Paused+告警。新增测试 7 例；全绿 App217/Infra151+6skip/Api35/Arch9，build 0/0。前端零改动。"
 }

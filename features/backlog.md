@@ -377,15 +377,15 @@
 - 优先级：P0（与 F30 组成最小闭环）。本 feature 的 agent 配置实体化是 **F29（Agentic Agent Primitive）** 控制循环消费的底座；F29 的 ① 模型工具调用通道在 F31 之上扩展，二者共同构成「可自主 agent」。
 - **完成记录（2026-08-25）**：feature-builder 全栈闭环（分支 `feat/f31-agent-runtime`，基于 f30）。附带修复三项：① F30 回归——陈旧 RunningExecution 租约阻断重跑/恢复（TryAcquireLease 移除 Running-only 门禁，触发器集成 2 例转绿实证）；② 领域 bug——TryAcquireLease 属性自比恒 true 致多实例租约守卫失效（改参数 vs 持有者比较 + Rehydrate 工厂）；③ 生产缺陷——ResolveBashPath 兜底命中 System32 WSL 桩致无 Git Bash 的 Windows 全部 run_command 必败（排除系统目录桩 + echo 实测探针）。全绿：App 214 / Infra 147+6skip / Api 35 / Arch 9，build 0/0。三道质量门 PASS。
 
-### F32 · Agent 消息总线 + 多 Agent 协作  [P1]  open  ⛔blocked(1期)  🟡中风险（依赖 F31 agent 实体化）
-- 设计依据：`phases/phase-9-agent-message-bus.md` + `docs/agent-harness-blueprint.md` §Phase 9
+### F32 · Agent 消息总线 + 多 Agent 协作  [P1]  done  🟡中风险（依赖 F31 agent 实体化）
+- 设计依据：`phases/phase-9-agent-message-bus.md` + `docs/agent-harness-blueprint.md` §Phase 9；设计文档 `features/f32-agent-message-bus.md`（§7 决策 D1–D5 锁定，§8 完成记录）
 - 目标：引入 agent 间消息原语；进程内 `Channel<T>` 起步总线；`NegotiationOrchestrator` 真并行推理；handoff / 幂等 / 活锁防治。
 - 验收子项：
-  - **D2** 总线传输决策（进程内 Channel vs 分布式消息队列）。
-  - **①** 消息总线基础设施（Channel<T> + 路由）。
-  - **②** 多 Agent 协作编排（NegotiationOrchestrator，真并行）。
-  - **③** handoff / 幂等 / 活锁防治。
-- 优先级：P1（依赖 F31）。
+  - **D2** 总线传输决策 → ✅ in-process Channel<T>（有界 256 背压），SCOPED 隔离，broker 留 Phase 11
+  - **①** 消息总线基础设施 → ✅ IAgentMessageBus + InProcessAgentMessageBus + AgentMessageLog 写穿持久化（迁移 AddAgentMessageLog）
+  - **②** 多 Agent 协作编排 → ✅ Negotiation 双模式：绑定 agent 时 Task.WhenAll 真并行提案（时间窗重叠实证）+ critic 收敛；无绑定 agent 诚实降级串行
+  - **③** handoff / 幂等 / 活锁防治 → ✅ critic 拒绝自动 Critique+Handoff（反馈上下文随 payload）；TryMarkConsumed 条件更新幂等 + 未消费重投；预算/停滞/指纹三防线熔断 Paused+告警
+- **完成记录（2026-08-25）**：feature-builder 全栈闭环（分支 `feat/f32-agent-message-bus`，基于 f31）。附带修复：`nvarchar(max)` 列类型在 SQLite EnsureCreated/MigrateAsync 的 DDL 语法错误（Api 31 例连锁失败根因）——统一改 `text` 并回改 F30 两迁移。新增测试 7 例（总线 4 + 协作 3）；全绿 App217/Infra151+6skip/Api35/Arch9，build 0/0，前端零改动。三道质量门 PASS。
 
 ### F33 · 语义记忆层  [P1]  open  ⛔blocked(1期)  🟡中风险（依赖既有 IVectorStore）
 - 设计依据：`phases/phase-10-semantic-memory.md` + `docs/agent-harness-blueprint.md` §Phase 10
