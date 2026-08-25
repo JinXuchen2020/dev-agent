@@ -304,7 +304,7 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
  await testRunner.WhenAsync("路由层触发降级策略", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 35
- await testRunner.ThenAsync("应抛出 AllModelsFailedException", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+ await testRunner.ThenAsync("应抛出 ModelNotConfiguredException", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();

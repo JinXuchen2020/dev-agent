@@ -32,7 +32,7 @@ Scenario: 不可重试异常直接抛出
 Scenario: 空候选列表时抛出异常
 	Given 候选模型列表为空
 	When 路由层触发降级策略
-	Then 应抛出 AllModelsFailedException
+	Then 应抛出 ModelNotConfiguredException
 
 Scenario: 指定偏好模型时优先使用
 	Given 模型 "qwen" 调用返回成功
