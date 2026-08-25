@@ -21,11 +21,13 @@ When('我在智能体表单勾选允许工具 {string}', async ({ page }, tool: 
   await page.keyboard.press('Escape');
 });
 
-// F29: 定位智能体卡片并点击「运行」按钮（卡片标题上溯容器，与删除按钮同法）。
+// F29: 定位智能体卡片并点击「运行」按钮。
+// 卡片容器用 .entity-card（Card 组件根类名）+ hasText 定位，不依赖 antd Space 等内部嵌套层级
+// （e7641bd 曾把标题从 Card title 移入 body，ancestor::div[1] 随之失效）。
 // antd 二字按钮 accessible name 会插入空格（"运 行"），用宽松正则 /运\s*行/ 兼容。
 // .first()：历史重名智能体存在时取第一张卡片。
 When('我点击智能体 {string} 的运行按钮', async ({ page }, name: string) => {
-  const card = page.getByText(name, { exact: true }).first().locator('xpath=ancestor::div[1]');
+  const card = page.locator('.entity-card', { hasText: name }).first();
   await card.getByRole('button', { name: /运\s*行/ }).click();
 });
 
@@ -49,10 +51,9 @@ Then('页面出现智能体 {string}', async ({ page }, name: string) => {
 });
 
 When('我删除智能体 {string}', async ({ page }, name: string) => {
-  // 智能体卡片用自定义 Card 组件，根元素是普通 <div>（无 .ant-card class），无法用 .ant-card 定位。
-  // 改为从 agent 标题文本上溯到其所在卡片容器（标题的直接父 div），再点其中的删除按钮。
+  // 卡片容器用 .entity-card（Card 组件根类名）+ hasText 定位，不依赖卡片内部嵌套层级。
   // antd 二字按钮 accessible name 会插入空格（"删 除"），用宽松正则 /删\s*除/ 兼容。
-  const card = page.getByText(name, { exact: true }).locator('xpath=ancestor::div[1]');
+  const card = page.locator('.entity-card', { hasText: name }).first();
   await card.getByRole('button', { name: /删\s*除/ }).click();
   // Popconfirm 气泡内的确认按钮（common.delete="删除"），作用域限定避免误点触发按钮。
   await page.locator('.ant-popconfirm').getByRole('button', { name: /删\s*除/ }).click();

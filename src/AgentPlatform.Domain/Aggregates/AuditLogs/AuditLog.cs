@@ -130,6 +130,7 @@ public enum AuditActionType
     DeleteEvaluationDataset,
 
     /// <summary>A workflow debug session was started/reset (F25).</summary>
+    EvaluationGate,
     DebugRun,
 
     /// <summary>A node was retried during a debug session (F25).</summary>

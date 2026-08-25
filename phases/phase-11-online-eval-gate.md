@@ -26,7 +26,7 @@
 
 ### 实现任务
 
-- [ ] **生产前 Eval 门禁**：把 `EvaluationDatasetsController POST /run` 封装为"变更前自动回归"——模型 / prompt / agent 配置变更时自动跑数据集，未达阈值阻断部署。🔍 强制 `ddd-code-reviewer`：核对门禁**真实阻断**（非仅报告）、阈值来自数据集定义、失败路径真实生效。
+- [x] **生产前 Eval 门禁**（F34 v1，2026-08-25）：`RunEvaluationGateCommand` 阈值解析链（显式 > 配置默认 0.8）+ 空数据集恒拦守卫；端点 `POST /evaluation-datasets/{id}/gate/{workflowId}` 通过 200 / 未达 **422 阻断**；审计 `AuditActionType.EvaluationGate`。详见 features/f34-online-eval-gate.md §5。🔍 强制 `ddd-code-reviewer`：核对门禁**真实阻断**（非仅报告）、阈值来自数据集定义、失败路径真实生效。
 - [ ] **影子流量回归**：对生产流量做影子副本跑新版本，与基线比对输出差异，异常才拦截；不污染生产状态。🔍 强制 `ddd-code-reviewer`：核对影子流量隔离（不写生产、不影响在线）、差异判定真实生效。
 - [ ] **在线监控告警**：基于 `ExecutionLogEntry` 的 token / cost / latency 实时聚合，成本归因到 agent / tenant；超阈值告警通道（阶段五 `AuditLog` / 通知）。🔍 强制 `ddd-phase-quality-gate`：核对指标聚合真实、告警通道真实存在、阈值可配。
 - [ ] **CI 自动回归**：eval 门禁挂 CI 流水线，PR / 部署前自动跑，失败阻断。🔍 强制 `ddd-phase-quality-gate`：核对 CI 配置真实接入、失败阻断逻辑生效。
@@ -79,14 +79,20 @@
 
 ## 进度
 
-- **开始日期**：
-- **完成日期**：
-- **完成度**：█░░░░░░░░░ 0%
+- **开始日期**：2026-08-25（F34 v1）
+- **完成日期**：v1 门禁 2026-08-25；其余任务（影子流量自动化/监控告警/CI 接入/队列化/异常回放）按 backlog 延后独立排期
+- **完成度**：██░░░░░░░░ ~17%（v1 验收①门禁已落地）
 
 ## 回顾（完成后填写）
 
 ### 做得好的
+- v1 聚焦单一验收①，复用 RunEvaluation 克隆管线零复制回归逻辑，影子隔离白嫖
+- 空数据集显式守卫堵住「无数据即放行」漏洞；422 阻断语义对流水线友好
+- 审计新增 EvaluationGate 动作，score vs threshold 全留痕
 
 ### 下次改进
+- 队列化落地时复用 F30 租约机制防多 worker 重复驱动
+- CI YAML 样例与门禁端点一并发布更顺滑
 
 ### 对蓝图文档的反馈
+- §Phase 11 六任务体量实际是一个完整季度；F34 按 backlog 拆出 v1 单验收是正确切分

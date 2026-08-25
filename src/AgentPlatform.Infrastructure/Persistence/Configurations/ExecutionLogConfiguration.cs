@@ -42,6 +42,14 @@ internal sealed class ExecutionLogConfiguration : IEntityTypeConfiguration<Execu
 
         builder.Property(x => x.CompletedAt);
 
+        // F30 Durable Execution: Checkpoint fields
+        builder.Property(x => x.CheckpointData)
+            .HasColumnType("TEXT");
+
+        builder.Property(x => x.CheckpointVersion)
+            .IsRequired()
+            .HasDefaultValue(0);
+
         // OwnsMany for ExecutionLogEntry collection
         builder.Navigation(x => x.Entries)
             .UsePropertyAccessMode(PropertyAccessMode.Field);

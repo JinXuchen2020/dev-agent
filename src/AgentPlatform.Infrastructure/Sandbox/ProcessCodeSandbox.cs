@@ -119,13 +119,24 @@ internal sealed class ProcessCodeSandbox : ICodeSandbox
                 using var proc = Process.Start(psi);
                 if (proc is not null)
                 {
-                    var line = proc.StandardOutput.ReadLine();
-                    proc.WaitForExit(3000);
-                    if (!string.IsNullOrWhiteSpace(line) && File.Exists(line.Trim()))
+                    // F31 修复：逐行验证而非只取第一行。System32\bash.exe 是 WSL 桩——无发行版时
+                    // 对任何调用输出乱码横幅并返回非零（曾导致所有 run_command 在无 Git Bash 的
+                    // Windows 机器上必败）。排除系统目录桩 + 用 `bash -c echo` 实测可用性。
+                    foreach (var line in proc.StandardOutput.ReadToEnd().Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                     {
-                        _bashPath = line.Trim();
-                        return line.Trim();
+                        var path = line.Trim();
+                        if (path.Length == 0 || !File.Exists(path)) continue;
+                        if (path.Contains("\\System32\\", StringComparison.OrdinalIgnoreCase)
+                            || path.Contains("\\SysWOW64\\", StringComparison.OrdinalIgnoreCase)
+                            || path.Contains("WindowsApps", StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        if (ProbeBashWorks(path))
+                        {
+                            _bashPath = path;
+                            return path;
+                        }
                     }
+                    proc.WaitForExit(3000);
                 }
             }
             catch
@@ -134,6 +145,32 @@ internal sealed class ProcessCodeSandbox : ICodeSandbox
             }
             _bashPath = string.Empty; // 缓存"不可用"结果，避免每次重复探测
             return null;
+        }
+    }
+
+    /// <summary>
+    /// 实测候选 bash 是否真的可用：执行 <c>bash -c echo</c> 并要求退出码 0。
+    /// WSL 桩（System32\bash.exe，无发行版）会在此暴露——输出横幅且退出码非零。
+    /// </summary>
+    private static bool ProbeBashWorks(string bashPath)
+    {
+        try
+        {
+            using var probe = Process.Start(new ProcessStartInfo(bashPath, "-c \"echo ok\"")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            });
+            if (probe is null) return false;
+            var output = probe.StandardOutput.ReadToEnd();
+            probe.WaitForExit(3000);
+            return probe.ExitCode == 0 && output.Trim() == "ok";
+        }
+        catch
+        {
+            return false;
         }
     }
 

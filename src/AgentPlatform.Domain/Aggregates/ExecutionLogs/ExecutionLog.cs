@@ -131,4 +131,26 @@ public sealed class ExecutionLog : IAggregateRoot
     /// Clears all pending domain events. No-op as ExecutionLog does not raise events.
     /// </summary>
     public void ClearDomainEvents() { }
+
+    /// <summary>
+    /// Gets the serialized checkpoint data (Blackboard + execution context + step index) for durable resume.
+    /// </summary>
+    public string? CheckpointData { get; private set; }
+
+    /// <summary>
+    /// Gets the checkpoint version for optimistic concurrency control during resume.
+    /// </summary>
+    public int CheckpointVersion { get; private set; }
+
+    /// <summary>
+    /// Updates the checkpoint with serialized execution state.
+    /// </summary>
+    /// <param name="data">JSON-serialized checkpoint data.</param>
+    public void UpdateCheckpoint(string data)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(data);
+        CheckpointData = data;
+        CheckpointVersion++;
+        // UpdatedAt is not on ExecutionLog; domain events not raised for checkpoint updates
+    }
 }

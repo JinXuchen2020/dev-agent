@@ -122,6 +122,17 @@ public static class DependencyInjection
         services.AddScoped<IEvaluationDatasetRepository, EvaluationDatasetRepository>();
         // ── F25 工作流调试会话（租户隔离）仓储 ──
         services.AddScoped<IDebugSessionRepository, DebugSessionRepository>();
+        // ── F30 执行持久化：RunningExecution 仓储（耐久调度与崩溃恢复）──
+        services.AddScoped<IRunningExecutionRepository, RunningExecutionRepository>();
+        // ── F32 Agent 消息总线：durable 消息日志仓储 + 进程内总线（SCOPED=每次运行实例隔离）──
+        services.AddScoped<IAgentMessageLogRepository, AgentMessageLogRepository>();
+        services.AddScoped<AgentPlatform.Application.Abstractions.IAgentMessageBus,
+            AgentPlatform.Infrastructure.Messaging.InProcessAgentMessageBus>();
+        // ── F33 语义记忆：episodic 写回与语义召回（复用 IVectorStore 租户隔离）──
+        services.Configure<AgentPlatform.Application.Abstractions.SemanticMemorySettings>(
+            configuration.GetSection("SemanticMemory"));
+        services.AddScoped<AgentPlatform.Application.Abstractions.ISemanticMemoryService,
+            AgentPlatform.Infrastructure.Memory.SemanticMemoryService>();
         services.AddSingleton<IYamlConfigurationParser, YamlConfigurationParserService>();
         // 单例工具注册表：启动时把平台内置 workspace 工具（Codex 式自主编码能力）注册进去，
         // 供 AgenticOrchestrator 按 agent 的 AllowedToolNames 白名单动态选用（F29）。
@@ -328,6 +339,7 @@ public static class DependencyInjection
         // Single engine: OrchestrationPrimitive replaced the legacy WorkflowStateMachineEngine,
         // AutoGenAgentOrchestrator and StubWorkflowEngine.
         services.AddScoped<IOrchestrationPrimitive, OrchestrationPrimitive>();
+        services.AddScoped<OrchestrationPrimitive>();
 
         // Obsolete - replaced by IOrchestrationPrimitive (Blueprint C.2).
         // Registered only to satisfy DI contract while awaiting removal in Phase 3.
@@ -384,6 +396,18 @@ public static class DependencyInjection
         };
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(stateMachineSettings));
 
+        var deSection = configuration.GetSection("DurableExecution");
+        var durableExecutionSettings = new DurableExecutionSettings
+        {
+            LeaseTtlMinutes = int.TryParse(deSection["LeaseTtlMinutes"], out var leaseTtl) ? leaseTtl : 5,
+            CheckpointBatchSize = int.TryParse(deSection["CheckpointBatchSize"], out var batchSize) ? batchSize : 5,
+            CheckpointMaxAgeSeconds = int.TryParse(deSection["CheckpointMaxAgeSeconds"], out var maxAge) ? maxAge : 30
+        };
+        services.AddSingleton(Microsoft.Extensions.Options.Options.Create(durableExecutionSettings));
+
+        // ── F32 多 Agent 协作防护配置（风暴/活锁熔断参数）──
+        services.Configure<AgentCollaborationSettings>(configuration.GetSection("AgentCollaboration"));
+
         var elSection = configuration.GetSection("ExecutionLog");
         var executionLogSettings = new ExecutionLogSettings
         {
@@ -411,6 +435,11 @@ public static class DependencyInjection
         services.AddScoped<INotificationHandler<DomainEventNotification<StepFailed>>, StepFailedEventHandler>();
         services.AddScoped<INotificationHandler<DomainEventNotification<WorkflowCompleted>>, WorkflowCompletedEventHandler>();
         services.AddScoped<INotificationHandler<DomainEventNotification<WorkflowRolledBack>>, WorkflowRolledBackEventHandler>();
+        // ── F33 语义记忆 episodic 写回（成功经验 + 失败教训）──
+        services.AddScoped<INotificationHandler<DomainEventNotification<WorkflowCompleted>>,
+            AgentPlatform.Application.EventHandlers.SemanticMemoryWriteBackHandler>();
+        services.AddScoped<INotificationHandler<DomainEventNotification<WorkflowRolledBack>>,
+            AgentPlatform.Application.EventHandlers.SemanticMemoryWriteBackHandler>();
 
         // AutoGenAgentOrchestrator + AutoGenSettings removed (Phase 3 cleanup): the [Obsolete]
         // orchestrator and its dead config block are gone; OrchestrationPrimitive is the only engine.

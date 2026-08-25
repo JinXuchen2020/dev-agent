@@ -1,5 +1,86 @@
 # 变更日志
 
+## v2.31 (2026-08-25)
+
+### F34 · 在线评估门禁完成（feature-builder 全栈闭环，🟢低风险，三道质量门全 PASS）——二期 F29–F34 全部收口
+
+F34 v1 将 F24 离线评估升级为**带阻断语义的部署门禁**：CI/发布流水线调用门禁端点，通过率未达阈值返回 HTTP 422（body 含完整报告），达成则 200——「真实阻断」而非仅报告。执行复用 RunEvaluation 一次性克隆路径，影子隔离零生产写入。
+
+**核心改动：**
+- **RunEvaluationGateCommand/Handler**：阈值解析链（请求显式 > `EvaluationSettings.GateMinPassRate`=0.8）；越界阈值抛 ArgumentOutOfRange；**空数据集显式守卫恒不通过**（防「无数据即放行」）
+- **端点**：`POST /api/v1/evaluation-datasets/{datasetId}/gate/{workflowId}`（Admin/Operator），remarks 含 CI curl 阻断用法示例
+- **审计归因**：新增 `AuditActionType.EvaluationGate`（Aggregates 生效枚举，字符串存储无迁移），details 记录 score vs threshold 与 PASS/BLOCK
+
+**测试**：新增 `RunEvaluationGateCommandHandlerTests` 5 例（超阈值通过+审计断言、低于阈值阻断、显式覆盖配置、空数据集零阈值仍拦、越界抛错）。全绿 App226 / Infra154+6skip / Api35 / Arch9；build 0/0。前端零改动。设计文档 `features/f34-online-eval-gate.md` §5 含二期收口说明。
+
+**延后项（独立排期）**：CI YAML 接入样例、队列化执行/水平扩展、监控告警聚合、异常回放诊断入口。
+
+## v2.30 (2026-08-25)
+
+### F33 · 语义记忆层完成（feature-builder 全栈闭环，🟡中风险，三道质量门全 PASS）
+
+F33 把平台从「文件注入式记忆」升级为语义记忆引擎：跨运行经验沉淀 + 语义召回注入，并打通 Summary/Retrieval 到 LLM prompt 的「最后一公里」（修复上下文通道建而不用的隐性漂移）。
+
+**核心改动：**
+- **① Embedding 管线**：`ISemanticMemoryService` 复用 IVectorStore（租户隔离、Pg/InMemory 双实现），集合 `semantic-memory`；内容寻址 docId 同内容去重
+- **② Episodic 写回**：WorkflowCompleted / WorkflowRolledBack 双事件 handler——成功经验与失败教训（含 errorDetail）均沉淀；Enabled 开关；异常仅告警不影响主流程
+- **③ 自动 Compaction**：BuildWorkflowContext 溢出步骤由硬截断丢弃改为按当前节点语义召回 Top-K 经验（负数键 `[semantic-recall]` 注入 Summary）；服务缺席优雅退回现状
+- **Prompt 打通**：AgentCallStepExecutor 新增 History summary / Relevant knowledge 区块——Summary（含召回）与 Retrieval.Chunks 首次真正进入模型输入
+
+**测试**：新增 7 例（服务写穿/确定性 id/召回透传 3 · 写回 handler completed/rolled_back/disabled 3 · prompt 渲染 1）。全绿 App221 / Infra154+6skip / Api35 / Arch9；build 0/0。前端零改动。设计文档 `features/f33-semantic-memory.md` §6。
+
+## v2.29 (2026-08-25)
+
+### F32 · Agent 消息总线 + 多 Agent 协作完成（feature-builder 全栈闭环，🟡中风险，三道质量门全 PASS）
+
+F32 为平台引入「agent 社会原语」：进程内消息总线（Channel<T> 有界背压、写穿持久化、幂等消费）+ Negotiation 预设升级为**真并行多 agent 协作**——绑定 agent 的步骤经 Task.WhenAll 并发提案（时间窗重叠实证），critic 拒绝自动 Critique+Handoff 定向移交并携带反馈上下文，预算/停滞/环路指纹三防线熔断。
+
+**核心改动：**
+- **① 总线**：`IAgentMessageBus` + `InProcessAgentMessageBus`（每 receiver 有界 Channel 256；SCOPED=运行级隔离）；`AgentMessage` 契约（CorrelationId/Round/Type/Payload）
+- **② 并行协作**：NegotiationOrchestrator 双模式——协作门禁（绑定 agent + 基础设施齐备）→ 并行提案相位（纯网络 I/O，EF 触碰严格留在线程外）；无绑定 agent 诚实降级既有串行循环
+- **③ 持久化+幂等**：`AgentMessageLog` 聚合（ITenantScoped，迁移 AddAgentMessageLog）；TryMarkConsumed 条件更新幂等门；RepublishUnconsumed 跨轮重投
+- **④ 防治+可观测**：单轮预算 64 / 停滞 120s / 环路指纹 ≥3 三防线熔断 Paused+告警日志；CorrelationId 全链 trace 回放
+- **附带修复**：`nvarchar(max)` 列类型在 SQLite EnsureCreated/MigrateAsync 的 DDL 语法错误（曾致 Api.Tests 31 例连锁失败）——统一改 `text` 并回改 F30 迁移，跨三大数据库提供商安全
+
+**测试**：新增 7 例（总线持久化/去重/隔离/重投 4 + 双 agent 并行重叠/handoff 定向/预算熔断 3）。全绿 App217 / Infra151+6skip / Api35 / Arch9；build 0/0。前端零改动。设计文档 `features/f32-agent-message-bus.md` §8。
+
+## v2.28 (2026-08-25)
+
+### F31 · Agent 运行时实体化 + 模型接通完成（feature-builder 全栈闭环，🔴高风险，三道质量门全 PASS）
+
+F31 消除蓝图标记的最高优先缺陷「配而不生效」：给节点绑定的智能体在执行时真实生效——SystemPrompt 驱动 prompt、模型经 ModelRouter 按「租户 BYO 优先 → 平台回退 → 候选降级」解析。**用户从此只需在「我的凭据」加一条 BYO 凭据，工作流节点即可真实调用 LLM**（此前该路径对 BYO 完全无效）。
+
+**核心改动：**
+- **AgentCallStepExecutor 实体化**：按 `AssignedAgentId` 加载聚合（租户过滤器防跨租户）；绑定 agent → 真实 SystemPrompt + `PreferredModel=agent.ModelEndpoint.ModelName`；未绑定 → 向后兼容通用模板；agent 缺失 → fail-loud 明确报错
+- **CriticStepExecutor 接通 Router**：不再硬编码 DefaultModelId 直连平台客户端；AllowCriticOverride fail-loud/open 语义保持
+- **ModelRouter 空候选守卫**：新增 `ModelNotConfiguredException`（指明「我的凭据 / 平台 Key」两条配置路径），替代笼统 AllModelsFailedException
+
+**附带修复三项（实现过程中实证暴露）：**
+1. **F30 回归**：陈旧 RunningExecution 租约阻断重跑/恢复——`TryAcquireLease` 移除「仅 Running 可租」门禁；WorkflowTriggersIntegrationTests 2 例转绿实证
+2. **多实例租约守卫失效 bug**：TryAcquireLease 属性自比恒 true → 任意实例可抢活跃租约；改为参数 vs 持有者正确比较 + 新增 `Rehydrate` 工厂
+3. **生产缺陷**：`ResolveBashPath` 兜底命中 System32 WSL 桩——无 Git Bash 的 Windows 上所有 run_command 必败且报乱码；排除系统目录桩 + echo 实测探针
+
+**测试**：新增 19 例（AgentCall 5 / Critic 4 / RouterNotConfigured 2 / RunningExecution 8）。全绿 App 214 / Infra 147+6skip / Api 35 / Arch 9；build 0/0。前端零改动。质量报告见 `features/f31-agent-runtime.md` §8。
+
+## v2.27 (2026-08-24)
+
+### F30 · 执行持久化完成（feature-builder 全栈闭环，🔴高风险，三道质量门全 PASS）
+
+F30 将「请求同步跑完」的编排器升级为 **可挂起 / 可恢复 / 崩溃可重启** 的持久执行引擎：每步落检查点 → 进程崩溃后从最近检查点续跑，**不重跑**已完成步；DB-backed in-flight 真相源替代静态 `ConcurrentDictionary`；`WorkflowScheduler` 升级为 durable 驱动器（租约/心跳/过期扫描，多实例幂等）。
+
+**核心改动（后端）：**
+- **① 检查点模型**：`ExecutionLog` 新增 `CheckpointData` (JSON) + `CheckpointVersion` (乐观并发) + 迁移 `20260824013403_AddDurableExecutionCheckpoint`（含 `#pragma warning disable IDE0161`）。
+- **② RunningExecution 聚合**：新增 `RunningExecution`（主键=WorkflowId、租户隔离、租约/心跳/检查点版本/Blackboard 快照）+ `IRunningExecutionRepository` + `RunningExecutionRepository` + 迁移 `20260824014109_AddRunningExecution`（`ValueGeneratedNever()`、`HasQueryFilter`）。
+- **③ 编排器耐久化**：`OrchestrationPrimitive` 重写——`RunAsync` 获取租约、每步落检查点、`PauseAsync`/`ResumeAsync`/`ResumeFromCheckpointAsync`（内部）更新 `RunningExecution`；静态 `s_runningCts` 字典废弃。`SequentialOrchestrator` 支持 `resumeFromCheckpoint`，从 `ExecutionLog.CheckpointData` 反序列化恢复 `Blackboard`/节点状态/`skipSet`/执行索引，**跳过已 Completed 节点**；检查点批处理（可配 `DurableExecutionSettings.CheckpointBatchSize=5`、`CheckpointMaxAgeSeconds=30`），终态强制 flush。
+- **④ 调度器耐久化**：`WorkflowScheduler` 扫描 `RunningExecution` 租约过期记录，抢占租约后调用 `OrchestrationPrimitive.ResumeFromCheckpointAsync`，多实例幂等（仅一实例成功 `TryAcquireLease`）。
+- **⑤ 可配置化**：新增 `DurableExecutionSettings`（`LeaseTtlMinutes`、`CheckpointBatchSize`、`CheckpointMaxAgeSeconds`），`appsettings.json` 可配，DI 绑定 `IOptions<DurableExecutionSettings>`。
+
+**测试**：`OrchestrationPrimitiveTests` 全绿（23/23），覆盖 Run/Resume/Pause/Retry/Rollback/GetState/Debug/条件分支/循环/崩溃恢复语义。全量 `dotnet test` 0 失败。
+
+**质量门**：`dotnet build` 0/0，前端 `npm run build` (tsc + vite) 通过，三道质量门全 PASS（`.quality-gate.json` 推进 `f30-durable-execution`，`cleared:true`）。质量报告 `docs/quality/f30-durable-execution-gate.md`，设计文档 `features/f30-durable-execution.md`。
+
+**文档同步**：`features/backlog.md` F30 标记 `done`，`AGENT_PLATFORM_BLUEPRINT.md` §Phase 7 更新实现状态，`appendices/core-aggregates.md` 新增 `RunningExecution`。
+
 ## v2.26 (2026-08-21)
 
 ### F29 · Agentic Agent Primitive（自主 Agent 控制循环原语）完成（feature-builder 全栈闭环，🔴高风险范式跨越，三道质量门全 PASS）

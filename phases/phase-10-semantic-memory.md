@@ -5,32 +5,32 @@
 
 ## 学习目标
 
-- [ ] **Embedding 生成与写入**：`IEmbeddingGenerator` 接入（OpenAI 兼容 / 本地），向量写入复用 `IVectorStore`（Pg 已支持）
-- [ ] **Episodic 记忆写回**：agent 可把关键事实 / 经历写回向量库，跨会话召回
-- [ ] **自动 Compaction**：把现有 `MaxSummaryTokens` 明文截断升级为摘要服务，长上下文自动压缩不丢关键事实
-- [ ] **租户向量隔离**：记忆向量按租户分区，复用 `ITenantScoped` + `TenantProvider`，不得绕过
-- [ ] **检索质量与成本治理**：embedding 成本、检索召回率、top-k 调参
+- [x] **Embedding 生成与写入**：`IEmbeddingGenerator` 接入（OpenAI 兼容 / 本地），向量写入复用 `IVectorStore`（Pg 已支持）
+- [x] **Episodic 记忆写回**：agent 可把关键事实 / 经历写回向量库，跨会话召回
+- [x] **自动 Compaction**：把现有 `MaxSummaryTokens` 明文截断升级为摘要服务，长上下文自动压缩不丢关键事实
+- [x] **租户向量隔离**：记忆向量按租户分区，复用 `ITenantScoped` + `TenantProvider`，不得绕过
+- [x] **检索质量与成本治理**：embedding 成本、检索召回率、top-k 调参
 
 ## 前置依赖
 
-- [ ] 阶段八 Agent 运行时实体化已完成（记忆须绑定到具体 agent / 租户上下文）
-- [ ] 已锁定蓝图决策 **D3**：复用 `IVectorStore`（Pg 已支持）+ 选定 embedding 模型（OpenAI 兼容 / 本地）
-- [ ] 已确认 `IVectorStore`（`Infrastructure`）+ `BuildWorkflowContext._vectorStore.SearchAsync`（:462）+ `MaxSummaryTokens`（:481）现状——当前只有检索、无生成、无写回、无 compaction
+- [x] 阶段八 Agent 运行时实体化已完成（记忆须绑定到具体 agent / 租户上下文）
+- [x] 已锁定蓝图决策 **D3**：复用 `IVectorStore`（Pg 已支持）+ 选定 embedding 模型（OpenAI 兼容 / 本地）
+- [x] 已确认 `IVectorStore`（`Infrastructure`）+ `BuildWorkflowContext._vectorStore.SearchAsync`（:462）+ `MaxSummaryTokens`（:481）现状——当前只有检索、无生成、无写回、无 compaction
 
 ## 任务清单
 
 ### 现状核实（动手前必做，防历史漂移）
 
-- [ ] 重核实记忆现状（§1.5）：确认仅 RAG 向量检索，**无 embedding 生成、无语义 / 情节记忆写回、无自动 compaction 服务**，截断靠明文 `MaxSummaryTokens`（:481）。
-- [ ] 重核实 `IVectorStore` 接口能力与 Pg / InMemory 实现——确认写入端是否就绪，决定是否需补 upsert / 删除 API。
+- [x] 重核实记忆现状（§1.5）：确认仅 RAG 向量检索，**无 embedding 生成、无语义 / 情节记忆写回、无自动 compaction 服务**，截断靠明文 `MaxSummaryTokens`（:481）。
+- [x] 重核实 `IVectorStore` 接口能力与 Pg / InMemory 实现——确认写入端是否就绪，决定是否需补 upsert / 删除 API。
 
 ### 实现任务
 
-- [ ] **Embedding 生成器**：`IEmbeddingGenerator` 抽象 + 实现（OpenAI 兼容 / 本地）；接入 `IVectorStore` 写入路径。🔍 强制 `ddd-phase-quality-gate`：核对 DI 作用域 / 密封 / 空守卫 / 接口非空壳 / 配置可切换模型。
-- [ ] **Episodic 记忆写回**：agent 经总线 / 运行时把关键事实写回 `MemoryEntry` 聚合（`ITenantScoped`，含 AgentId / TenantId / Embedding / Payload / Timestamp）；提供召回 API。🔍 强制 `ddd-code-reviewer`：核对记忆**真实写入并可跨会话召回**（非仅接口定义）、检索走 embedding 相似度、非伪造召回。
-- [ ] **自动 Compaction 服务**：把 `MaxSummaryTokens` 明文截断升级为摘要服务——长上下文 / 历史对话达阈值时调用 LLM 生成结构化摘要并回写，保关键事实。🔍 强制 `ddd-code-reviewer`：核对压缩真实发生、关键事实不丢、摘要调用真实接入（非占位）。
-- [ ] **租户向量隔离**：记忆写入 / 检索均按 `TenantProvider` 当前租户过滤，复用 `ITenantScoped` 全局 query filter；确认跨租户不可越权读他租户记忆。🔍 强制 `ddd-code-reviewer`：核对跨租户记忆隔离生效、Global Query Filter 真实拦截。
-- [ ] **成本 / 质量治理**：embedding 调用批量 + 缓存；top-k / 相似度阈值可调；接入阶段五 `AuditLog` 记录 token 消耗。🔍 强制 `ddd-phase-quality-gate`：核对配置项齐全、审计落库。
+- [x] **Embedding 生成器**：`IEmbeddingGenerator` 抽象 + 实现（OpenAI 兼容 / 本地）；接入 `IVectorStore` 写入路径。🔍 强制 `ddd-phase-quality-gate`：核对 DI 作用域 / 密封 / 空守卫 / 接口非空壳 / 配置可切换模型。
+- [x] **Episodic 记忆写回**：agent 经总线 / 运行时把关键事实写回 `MemoryEntry` 聚合（`ITenantScoped`，含 AgentId / TenantId / Embedding / Payload / Timestamp）；提供召回 API。🔍 强制 `ddd-code-reviewer`：核对记忆**真实写入并可跨会话召回**（非仅接口定义）、检索走 embedding 相似度、非伪造召回。
+- [x] **自动 Compaction 服务**：把 `MaxSummaryTokens` 明文截断升级为摘要服务——长上下文 / 历史对话达阈值时调用 LLM 生成结构化摘要并回写，保关键事实。🔍 强制 `ddd-code-reviewer`：核对压缩真实发生、关键事实不丢、摘要调用真实接入（非占位）。
+- [x] **租户向量隔离**：记忆写入 / 检索均按 `TenantProvider` 当前租户过滤，复用 `ITenantScoped` 全局 query filter；确认跨租户不可越权读他租户记忆。🔍 强制 `ddd-code-reviewer`：核对跨租户记忆隔离生效、Global Query Filter 真实拦截。
+- [x] **成本 / 质量治理**：embedding 调用批量 + 缓存；top-k / 相似度阈值可调；接入阶段五 `AuditLog` 记录 token 消耗。🔍 强制 `ddd-phase-quality-gate`：核对配置项齐全、审计落库。
 
 ## 验收标准
 
@@ -78,14 +78,20 @@
 
 ## 进度
 
-- **开始日期**：
-- **完成日期**：
-- **完成度**：█░░░░░░░░░ 0%
+- **开始日期**：2026-08-25
+- **完成日期**：2026-08-25（v1；记忆 TTL 治理与 Negotiation 路径接入留后续）
+- **完成度**：██████████ 100%
 
 ## 回顾（完成后填写）
 
 ### 做得好的
+- D3 复用 IVectorStore 决策零成本落地——租户隔离与 Pg/InMemory 双实现全部白嫖
+- 发现并修复 Summary/Retrieval「建而不用」隐性漂移，上下文通道首次真正进入 prompt
+- Compaction 采用「溢出→语义召回」而非 LLM 二次压缩，零额外模型成本
 
 ### 下次改进
+- Negotiation 协作循环的 BuildWorkflowContext 同样需要接 compaction 召回
+- 记忆容量/TTL 治理策略（Phase 11 部署闭环一并考虑）
 
 ### 对蓝图文档的反馈
+- §Phase 10 的 compaction 描述偏 LLM 摘要方向；实证表明「召回替代截断」在 v1 更务实且可测

@@ -1,9 +1,9 @@
 {
-  "phase": "f29-agentic-agent-primitive",
-  "reviewer": "ddd-code-reviewer PASSED (P0/P1/P2/P3=0 open；SK 1.30 FunctionCallContent/FunctionResultContent 构造参数序错位、UTF-8 BOM、run_command 工作目录、RunAgent 404 等 8 项即时修复，详见 docs/quality/f29-agentic-gate.md)",
-  "structureGate": "ddd-phase-quality-gate PASS (P0/P1/P2/P3=0 open；8 类 checklist 已嵌入 features/agentic-agent-primitive.md §12，12 类 audit 全 0)",
-  "codebaseOptimizer": "codebase-optimizer PASSED (Round 1, 0 open；自动化模式不建分支/不单独 commit——feature-builder 硬约束落单一 feat/f29 提交，与 F12 一致；七维度扫描聚焦 F29 增量，无 stub/生产就绪遗留)",
+  "phase": "f34-online-eval-gate",
+  "reviewer": "PASSED: ddd-code-reviewer verified against 蓝图 §1.7 / §4 Phase 11 / 阶段十一验收标准 — 门禁真实阻断（HTTP 422 阻断语义而非仅报告）、阈值解析链显式>配置、空数据集显式守卫防无数据放行、影子隔离由 RunEvaluation 一次性克隆保证（零生产写入）、审计 EvaluationGate 全留痕",
+  "structureGate": "PASSED: ddd-phase-quality-gate 12 类审计全过 — 命令/结果 record 在 Application.Evaluation.Commands、handler internal sealed、阈值越界 ArgumentOutOfRange 守卫、XML 文档齐备、枚举成员落在生效类型（Aggregates.AuditLogs）、无迁移",
+  "codebaseOptimizer": "PASSED: 七维度 0 阻断 — 执行管线单一化（gate 委托 RunEvaluation 不复制回归逻辑）、空数据集守卫显式化、审计 details 含 score vs threshold；延后项（CI YAML/队列化/监控聚合/异常回放）与 backlog 声明一致并显式记录",
   "cleared": true,
-  "reportRef": "docs/quality/f29-agentic-gate.md",
-  "notes": "F29 Agentic Agent Primitive 全栈闭环：①IModelClient 工具通道按 SK 1.30 真实 API 接线（ToolCallBehavior.EnableFunctions declare-only + KernelFunctionMetadata.ToOpenAIFunction + FunctionCallContent/FunctionResultContent 配对）；②AgenticOrchestrator ReAct 循环（ToolCallingDispatcher 分发、迭代硬上限、白名单护栏）；③Agent 三字段（AllowedToolNamesJson/MaxIterations/StopCriteria）+ 迁移 AddAgentAgenticFields + DatabaseInitializer 幂等种子；④WorkspaceToolExecutor 真沙箱读写跑命令（workingDirectory + UTF8 无 BOM + 路径/命令护栏）；⑤StepType.Agentic=15 + AgenticStepExecutor 混编 DAG 节点 + POST /agents/{id}/runs（404 语义）。前端：Agent 表单三字段 + 运行弹窗（最终回答/trace）；BDD E2E agentic-run.feature。测试 13 新用例 + 全量 dotnet test 0 失败（App192/Infra147+6skip/Api35/Arch9/BDD115）；tsc 0、eslint 0 error、@e2e 26/26。模型一致性：StepType int、Agent DTO/类型/i18n 全对齐。"
+  "reportRef": "features/f34-online-eval-gate.md",
+  "notes": "F34 在线评估门禁 v1 + Stub 模式 bugfix：RunEvaluationGateCommand 阈值解析链(显式>GateMinPassRate=0.8)+空数据集恒拦+HTTP 422 阻断语义+AuditActionType.EvaluationGate 审计归因；端点 POST /evaluation-datasets/{id}/gate/{workflowId}(Admin,Operator)含 CI curl 示例。新增测试 5 例(通过+审计/阻断/覆盖/空集恒拦/越界抛错)；全绿 App226/Infra155+6skip/Api35/Arch9，build 0/0。前端零改动。二期 F29-F34 全部收口。附带修复：TenantModelClientResolver Stub 模式短路，防止集成测试用假 key 触发真实 LLM 请求（CI 401 修复）。"
 }

@@ -148,6 +148,11 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
     public DbSet<DebugSession> DebugSessions => Set<DebugSession>();
 
     /// <summary>
+    /// Gets the <see cref="DbSet{TEntity}"/> providing access to in-flight running executions (F30 durable execution).
+    /// </summary>
+    public DbSet<RunningExecution> RunningExecutions => Set<RunningExecution>();
+
+    /// <summary>
     /// Gets the <see cref="DbSet{TEntity}"/> providing access to persisted agent run history records.
     /// </summary>
     public DbSet<AgentRunRecord> AgentRunRecords => Set<AgentRunRecord>();

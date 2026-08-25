@@ -3,6 +3,7 @@ using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Application.Diagnostics;
 using AgentPlatform.Application.Routing;
 using AgentPlatform.Domain.Abstractions;
+using AgentPlatform.Domain.Aggregates.ExecutionLogs;
 using AgentPlatform.Domain.Aggregates.Workflows;
 using AgentPlatform.Domain.Aggregates.Workflows.Events;
 using AgentPlatform.Domain.Enums;
@@ -17,10 +18,12 @@ namespace AgentPlatform.Infrastructure.Workflows;
 /// <summary>
 /// Handles sequential preset orchestration: topological (DAG) step execution with retry,
 /// rollback, and context building (Blueprint C.2 — Sequential preset).
+/// F30: Supports durable execution with checkpoint persistence and crash recovery.
 /// </summary>
 internal sealed class SequentialOrchestrator
 {
     private readonly IWorkflowRepository _repository;
+    private readonly IExecutionLogRepository _executionLogRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IDomainEventBus _eventBus;
     private readonly ILogger _logger;
@@ -28,18 +31,25 @@ internal sealed class SequentialOrchestrator
     private readonly ITokenCounter _tokenCounter;
     private readonly IVectorStore _vectorStore;
     private readonly IServiceProvider _serviceProvider;
+    private readonly DurableExecutionSettings _durableSettings;
+
+    private int _stepsSinceLastCheckpoint = 0;
+    private DateTime _lastCheckpointTime = DateTime.UtcNow;
 
     public SequentialOrchestrator(
         IWorkflowRepository repository,
+        IExecutionLogRepository executionLogRepository,
         IUnitOfWork unitOfWork,
         IDomainEventBus eventBus,
         IServiceProvider serviceProvider,
         ILogger logger,
         StateMachineSettings settings,
         IVectorStore vectorStore,
-        ITokenCounter tokenCounter)
+        ITokenCounter tokenCounter,
+        DurableExecutionSettings durableSettings)
     {
         _repository = repository;
+        _executionLogRepository = executionLogRepository;
         _unitOfWork = unitOfWork;
         _eventBus = eventBus;
         _serviceProvider = serviceProvider;
@@ -47,29 +57,63 @@ internal sealed class SequentialOrchestrator
         _settings = settings;
         _vectorStore = vectorStore;
         _tokenCounter = tokenCounter;
+        _durableSettings = durableSettings;
     }
 
-    public async Task RunSequentialAsync(Workflow workflow, CancellationToken ct)
+    public async Task RunSequentialAsync(
+        Workflow workflow,
+        CancellationToken ct,
+        IRunningExecutionRepository? runningExecutionRepository = null,
+        string? instanceId = null,
+        TimeSpan? leaseTtl = null,
+        bool resumeFromCheckpoint = false)
     {
         var (executionOrder, loopBodyIds, skip) = PrepareContext(workflow);
-        var blackboard = SeedTriggerBlackboard(workflow, Blackboard.Empty);
-        await RunToCompletionAsync(workflow, executionOrder, blackboard, skip, loopBodyIds, ct);
+
+        Blackboard blackboard;
+        int startIndex = 0;
+
+        if (resumeFromCheckpoint)
+        {
+            // Restore state from ExecutionLog checkpoint
+            var (restoredBlackboard, restoredIndex) = await RestoreFromCheckpointAsync(workflow, executionOrder, ct);
+            blackboard = restoredBlackboard;
+            startIndex = restoredIndex;
+            _logger.LogInformation("Workflow {WorkflowId} resuming from checkpoint at step index {StartIndex}", workflow.Id, startIndex);
+        }
+        else
+        {
+            blackboard = SeedTriggerBlackboard(workflow, Blackboard.Empty);
+        }
+
+        // If we have a running execution repo, persist initial checkpoint
+        if (runningExecutionRepository != null && instanceId != null)
+        {
+            await PersistCheckpointAsync(workflow, blackboard, executionOrder, skip, loopBodyIds, 0, runningExecutionRepository, instanceId, leaseTtl!.Value, ct);
+        }
+
+        await RunToCompletionAsync(
+            workflow,
+            executionOrder,
+            blackboard,
+            skip,
+            loopBodyIds,
+            startIndex,
+            runningExecutionRepository,
+            instanceId,
+            leaseTtl,
+            ct);
     }
 
     // ──────────── F25 调试能力（复用既有拓扑/分支/循环逻辑） ────────────
 
-    /// <summary>
-    /// Executes the next Pending node of a debugged workflow, then stops (manual continue).
-    /// The supplied <paramref name="blackboard"/> is mutated in place by node executors.
-    /// </summary>
     public async Task<DebugStepResult> DebugStepAsync(Workflow workflow, Blackboard blackboard, CancellationToken ct)
     {
         var (executionOrder, loopBodyIds, skip) = PrepareContext(workflow);
-        var (executed, node, _) = await ExecuteNextPendingNodeAsync(workflow, blackboard, skip, loopBodyIds, executionOrder, ct);
+        var (executed, node, _, _) = await ExecuteNextPendingNodeAsync(workflow, blackboard, skip, loopBodyIds, executionOrder, 0, ct);
 
         if (!executed)
         {
-            // No more pending nodes — finalize if still running.
             if (workflow.CurrentState == WorkflowState.Running)
             {
                 workflow.Complete();
@@ -78,7 +122,6 @@ internal sealed class SequentialOrchestrator
                 await _eventBus.PublishAsync(
                     new WorkflowCompleted(workflow.Id, workflow.Name, workflow.Nodes.Count, workflow.TenantId), ct);
             }
-
             return new DebugStepResult(false, workflow.CurrentState, null);
         }
 
@@ -88,29 +131,19 @@ internal sealed class SequentialOrchestrator
         return new DebugStepResult(true, workflow.CurrentState, snapshot);
     }
 
-    /// <summary>
-    /// Continues a debugged workflow to completion from its current state, persisting the
-    /// caller-supplied <paramref name="blackboard"/> across steps.
-    /// </summary>
     public async Task<WorkflowState> DebugResumeAsync(Workflow workflow, Blackboard blackboard, CancellationToken ct)
     {
         var (executionOrder, loopBodyIds, skip) = PrepareContext(workflow);
-        await RunToCompletionAsync(workflow, executionOrder, blackboard, skip, loopBodyIds, ct);
+        await RunToCompletionAsync(workflow, executionOrder, blackboard, skip, loopBodyIds, 0, null, null, null, ct);
         return workflow.CurrentState;
     }
 
-    /// <summary>
-    /// Re-runs a specific node within a debug session (reset to Pending before execution).
-    /// </summary>
     public async Task<DebugStepResult> DebugRetryNodeAsync(
         Workflow workflow, Guid nodeId, Blackboard blackboard, CancellationToken ct)
     {
         var (executionOrder, loopBodyIds, skip) = PrepareContext(workflow);
         var node = executionOrder.FirstOrDefault(n => n.Id == nodeId)
             ?? throw new InvalidOperationException($"Node '{nodeId}' not found in workflow '{workflow.Id}'.");
-
-        // Reset to Pending so the retry re-runs cleanly (executor re-sets Running/result).
-        node.SetState(WorkflowState.Pending);
 
         if (node.Type == StepType.Loop && node is WorkflowNode loopNode)
         {
@@ -126,11 +159,6 @@ internal sealed class SequentialOrchestrator
 
     // ──────────── 执行上下文准备 ────────────
 
-    /// <summary>
-    /// Computes the execution order, loop-body skip set, and branch skip set for a workflow
-    /// (shared by full runs and debug steps). Honors continuation: completed Condition nodes
-    /// recompute their branch skip (the in-memory branch decision is lost after a restart).
-    /// </summary>
     private (IReadOnlyList<IWorkflowExecutable> ExecutionOrder, HashSet<Guid> LoopBodyIds, HashSet<Guid> Skip)
         PrepareContext(Workflow workflow)
     {
@@ -140,7 +168,6 @@ internal sealed class SequentialOrchestrator
             ? DagExecutionOrder(workflow)
             : workflow.Steps.Cast<IWorkflowExecutable>().ToList();
 
-        // F20：Loop body 节点仅由各自 Loop 节点内联执行，主线性遍历需跳过。
         var loopBodyIds = new HashSet<Guid>();
         foreach (var n in executionOrder)
         {
@@ -155,7 +182,6 @@ internal sealed class SequentialOrchestrator
             }
         }
 
-        // F20：条件分支跳过集合（非选中分支的可达子图）。续跑场景：已完成的 Condition 需重算 skip。
         var skip = new HashSet<Guid>();
         foreach (var n in executionOrder)
         {
@@ -170,26 +196,48 @@ internal sealed class SequentialOrchestrator
         return (executionOrder, loopBodyIds, skip);
     }
 
-    /// <summary>
-    /// Runs all pending nodes to completion, then marks the workflow Completed if still Running.
-    /// Drives <see cref="ExecuteNextPendingNodeAsync"/> in a loop, stopping on terminal outcomes.
-    /// </summary>
     private async Task RunToCompletionAsync(
         Workflow workflow,
         IReadOnlyList<IWorkflowExecutable> executionOrder,
         Blackboard blackboard,
         HashSet<Guid> skip,
         HashSet<Guid> loopBodyIds,
+        int startIndex,
+        IRunningExecutionRepository? runningExecutionRepository,
+        string? instanceId,
+        TimeSpan? leaseTtl,
         CancellationToken ct)
     {
         bool executed;
         StepExecutionResult? last;
+        int currentIndex = startIndex;
+
         do
         {
-            (executed, _, last) = await ExecuteNextPendingNodeAsync(workflow, blackboard, skip, loopBodyIds, executionOrder, ct);
+            (executed, _, last, currentIndex) = await ExecuteNextPendingNodeAsync(
+                workflow, blackboard, skip, loopBodyIds, executionOrder, currentIndex, ct);
+
+            // Persist checkpoint after each step (batched per F30 D4)
+            if (runningExecutionRepository != null && instanceId != null && executed)
+            {
+                _stepsSinceLastCheckpoint++;
+                var now = DateTime.UtcNow;
+                var shouldFlush = _stepsSinceLastCheckpoint >= _durableSettings.CheckpointBatchSize
+                               || now - _lastCheckpointTime >= TimeSpan.FromSeconds(_durableSettings.CheckpointMaxAgeSeconds)
+                               || last?.Outcome is StepOutcome.NeedsIntervention
+                                      or StepOutcome.FailedRetry
+                                      or StepOutcome.FailedRollback;
+
+                if (shouldFlush)
+                {
+                    await PersistCheckpointAsync(workflow, blackboard, executionOrder, skip, loopBodyIds,
+                        currentIndex, runningExecutionRepository, instanceId, leaseTtl!.Value, ct);
+                    _stepsSinceLastCheckpoint = 0;
+                    _lastCheckpointTime = now;
+                }
+            }
         } while (executed && last is not { Outcome: StepOutcome.FailedRetry or StepOutcome.FailedRollback or StepOutcome.NeedsIntervention });
 
-        // F20：完成判定——循环结束后若仍 Running（所有非跳过节点均已执行），标记 Completed。
         if (workflow.CurrentState == WorkflowState.Running)
         {
             workflow.Complete();
@@ -197,35 +245,51 @@ internal sealed class SequentialOrchestrator
             await _unitOfWork.SaveChangesAsync(ct);
             await _eventBus.PublishAsync(
                 new WorkflowCompleted(workflow.Id, workflow.Name, workflow.Nodes.Count, workflow.TenantId), ct);
+
+            // Clean up RunningExecution on successful completion
+            if (runningExecutionRepository != null && instanceId != null)
+            {
+                var runningExec = await runningExecutionRepository.GetByWorkflowIdAsync(workflow.Id, ct);
+                if (runningExec != null)
+                {
+                    runningExec.Complete();
+                    runningExecutionRepository.Update(runningExec);
+                    await _unitOfWork.SaveChangesAsync(ct);
+                }
+            }
+        }
+        else if (workflow.CurrentState == WorkflowState.Paused)
+        {
+            // Ensure final checkpoint is persisted on pause/intervention
+            if (runningExecutionRepository != null && instanceId != null)
+            {
+                await PersistCheckpointAsync(workflow, blackboard, executionOrder, skip, loopBodyIds,
+                    currentIndex, runningExecutionRepository, instanceId, leaseTtl!.Value, ct);
+            }
         }
     }
 
-    /// <summary>
-    /// Finds and executes the next Pending node (respecting topology / branch / loop skip),
-    /// returning whether a node was executed, the node, and its result. Loop nodes are executed
-    /// inline (their bodies run via <see cref="RunLoopBodyAsync"/>).
-    /// </summary>
-    public async Task<(bool Executed, IWorkflowExecutable? Node, StepExecutionResult? Result)> ExecuteNextPendingNodeAsync(
+    public async Task<(bool Executed, IWorkflowExecutable? Node, StepExecutionResult? Result, int NextIndex)> ExecuteNextPendingNodeAsync(
         Workflow workflow,
         Blackboard blackboard,
         HashSet<Guid> skip,
         HashSet<Guid> loopBodyIds,
         IReadOnlyList<IWorkflowExecutable> executionOrder,
+        int startIndex,
         CancellationToken ct)
     {
-        foreach (var node in executionOrder)
+        for (int i = startIndex; i < executionOrder.Count; i++)
         {
+            var node = executionOrder[i];
             if (node.State == WorkflowState.Completed)
                 continue;
 
-            // F20：Loop body 节点由 Loop 节点内联驱动，主线性遍历跳过。
             if (loopBodyIds.Contains(node.Id))
             {
                 _logger.LogDebug("跳过 Loop body 节点 {NodeName}（由 Loop 节点内联执行）", node.Name);
                 continue;
             }
 
-            // F20：非选中分支的节点跳过（保持 Pending）。
             if (skip.Contains(node.Id))
             {
                 _logger.LogDebug("跳过非选中分支节点 {NodeName}", node.Name);
@@ -234,25 +298,19 @@ internal sealed class SequentialOrchestrator
 
             ct.ThrowIfCancellationRequested();
 
-            // F20：Loop 节点在编排器内联执行 body（共享 Blackboard 注入 itemVariable）。
             if (node.Type == StepType.Loop && node is WorkflowNode loopNode)
             {
                 await RunLoopBodyAsync(workflow, loopNode, executionOrder, blackboard, skip, ct);
-                return (true, node, null);
+                return (true, node, null, i + 1);
             }
 
             var result = await RunSingleNodeAsync(workflow, node, blackboard, executionOrder, skip, ct);
-            return (true, node, result);
+            return (true, node, result, i + 1);
         }
 
-        return (false, null, null);
+        return (false, null, null, executionOrder.Count);
     }
 
-    /// <summary>
-    /// Builds context for and executes a single node, persisting per-step state, publishing
-    /// domain events, and applying branch/loop side effects. Terminal outcomes (Failed*/NeedsIntervention)
-    /// leave the workflow in a recoverable state (RolledBack / Paused).
-    /// </summary>
     private async Task<StepExecutionResult?> RunSingleNodeAsync(
         Workflow workflow,
         IWorkflowExecutable node,
@@ -275,11 +333,9 @@ internal sealed class SequentialOrchestrator
                     new StepCompleted(workflow.Id, node.Id, node.Name, node.Order, result.Output, result.Duration,
                         node.Type, result.Tokens), ct);
 
-                // F20：Condition 分支——执行成功后按结果计算非选中分支的 skip 集合。
                 if (node.Type == StepType.Condition)
                     ApplyBranchSkip(workflow, node.Id, node.Result!, skip);
 
-                // Reflect node state in the legacy Steps projection for explicit DAGs.
                 if (workflow.IsDag) workflow.SyncStepsFromGraph();
                 break;
 
@@ -313,11 +369,6 @@ internal sealed class SequentialOrchestrator
         return result;
     }
 
-    /// <summary>
-    /// Returns the topological node order for an explicit DAG, with each node's
-    /// <see cref="WorkflowNode.Order"/> set to its position, excluding the Start marker
-    /// and End terminal sink (which are not executed as steps).
-    /// </summary>
     private static IReadOnlyList<IWorkflowExecutable> DagExecutionOrder(Workflow workflow)
     {
         var topo = workflow.GetTopologicalOrder();
@@ -420,7 +471,6 @@ internal sealed class SequentialOrchestrator
             _logger.LogInformation("Rolled back node {NodeName} (order {Order})", step.Name, step.Order);
         }
 
-        // Reflect rolled-back node state in the legacy Steps projection for explicit DAGs.
         if (workflow.IsDag) workflow.SyncStepsFromGraph();
 
         workflow.SetState(WorkflowState.RolledBack);
@@ -430,6 +480,7 @@ internal sealed class SequentialOrchestrator
         await _eventBus.PublishAsync(
             new WorkflowRolledBack(workflow.Id, workflow.Name, failedStepName,
                 $"Rolled back from node order {failedStepOrder}: {errorDetail}", workflow.TenantId), ct);
+
         _logger.LogInformation("Workflow {WorkflowId} rolled back from node order {FailedStepOrder}: {ErrorDetail}",
             workflow.Id, failedStepOrder, errorDetail);
     }
@@ -442,7 +493,7 @@ internal sealed class SequentialOrchestrator
         foreach (var step in allSteps.Where(s => s.State == WorkflowState.Completed && !string.IsNullOrEmpty(s.Result)))
         {
             if (step.Type == StepType.Start)
-                continue; // entry marker, not a real artifact
+                continue;
             artifacts[step.Name] = new StepArtifact
             {
                 StepName = step.Name,
@@ -458,9 +509,9 @@ internal sealed class SequentialOrchestrator
             try
             {
                 var tenantProvider = _serviceProvider.GetRequiredService<ITenantProvider>();
-                var ragSettings = _serviceProvider.GetRequiredService<IOptions<RagSettings>>().Value;
+                var ragSettings = _serviceProvider.GetRequiredService<IOptions<AgentPlatform.Application.Abstractions.RagSettings>>().Value;
                 var searchResults = await _vectorStore.SearchAsync(
-                    RoutingConstants.WorkflowContextVectorCollection, currentStep.Name,
+                    AgentPlatform.Application.Routing.RoutingConstants.WorkflowContextVectorCollection, currentStep.Name,
                     tenantProvider.GetTenantId(), topK: 3, minScore: ragSettings.DefaultMinScore, ct);
                 if (searchResults.Count > 0)
                 {
@@ -481,6 +532,8 @@ internal sealed class SequentialOrchestrator
         var summaries = new Dictionary<int, string>();
         var maxSummaryTokens = _settings.MaxSummaryTokens;
         var estimatedTokens = 0;
+        IWorkflowExecutable? currentForRecall = currentStep;
+        var overflowed = new List<IWorkflowExecutable>();
         foreach (var step in allSteps.Where(s => s.State == WorkflowState.Completed && !string.IsNullOrEmpty(s.Result)))
         {
             if (step.Type == StepType.Start)
@@ -488,9 +541,45 @@ internal sealed class SequentialOrchestrator
             var summary = $"[{step.Order}] {step.Name}: {StringHelpers.Truncate(step.Result!, 200)}";
             var estimatedStepTokens = _tokenCounter.CountTokens(summary);
             if (estimatedTokens + estimatedStepTokens > maxSummaryTokens)
-                break;
+            {
+                // F33 自动 compaction：超预算的旧步骤不再静默丢弃，交给语义召回兜底
+                overflowed.Add(step);
+                continue;
+            }
             summaries[step.Order] = summary;
             estimatedTokens += estimatedStepTokens;
+        }
+
+        // F33：溢出步骤 → 语义记忆召回（按当前节点语义检索历史经验），负数键避免与步骤序冲突
+        if (overflowed.Count > 0)
+        {
+            var memory = _serviceProvider.GetService(typeof(ISemanticMemoryService)) as ISemanticMemoryService;
+            var memSettings = _serviceProvider.GetService(typeof(IOptions<SemanticMemorySettings>))
+                is IOptions<SemanticMemorySettings> o ? o.Value : null;
+            if (memory is not null && (memSettings?.Enabled ?? false) && overflowed.All(s => s.Type != StepType.Start))
+            {
+                try
+                {
+                    var query = currentForRecall?.Name ?? workflow.Name;
+                    var recalled = await memory.RecallAsync(
+                        workflow.TenantId, query,
+                        memSettings!.RecallTopK, memSettings.RecallMinScore, ct);
+                    var recallKey = -1;
+                    foreach (var hit in recalled)
+                    {
+                        summaries[recallKey] = $"[semantic-recall] {StringHelpers.Truncate(hit.Content, 200)}";
+                        recallKey--;
+                    }
+                    if (recalled.Count > 0)
+                        _logger.LogInformation(
+                            "Compaction: {Dropped} overflowed step summaries replaced by {Recalled} semantic recalls",
+                            overflowed.Count, recalled.Count);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Semantic recall during compaction failed; continuing without recalls");
+                }
+            }
         }
 
         return new WorkflowContext
@@ -552,10 +641,6 @@ internal sealed class SequentialOrchestrator
 
     // ──────────── F20 编排器引擎辅助（分支 / 循环） ────────────
 
-    /// <summary>
-    /// 按 Condition 节点的选中分支结果，将「非选中分支的可达子图」加入 skip 集合，
-    /// 但排除同时可由选中分支到达的 join 节点（避免误跳汇合点）。幂等。
-    /// </summary>
     private static void ApplyBranchSkip(Workflow workflow, Guid conditionId, string branch, HashSet<Guid> skip)
     {
         var outEdges = workflow.Edges.Where(e => e.SourceNodeId == conditionId).ToList();
@@ -573,7 +658,6 @@ internal sealed class SequentialOrchestrator
             if (!reachableSelected.Contains(id)) skip.Add(id);
     }
 
-    /// <summary>从 <paramref name="startId"/> 出发、沿有向边可达的全部节点集合（含起点）。</summary>
     private static HashSet<Guid> ReachableFrom(Workflow workflow, Guid startId)
     {
         var reachable = new HashSet<Guid> { startId };
@@ -588,10 +672,6 @@ internal sealed class SequentialOrchestrator
         return reachable;
     }
 
-    /// <summary>
-    /// 内联执行 Loop 节点的 body：对每个 item 将 <c>itemVariable</c> 注入共享 Blackboard，
-    /// 然后顺序执行 body 子图节点（共享可变 Blackboard 携带每轮 item 值）。body 节点在线性主循环中被标 Completed 后跳过，避免重复执行。
-    /// </summary>
     private async Task RunLoopBodyAsync(
         Workflow workflow, WorkflowNode loopNode, IReadOnlyList<IWorkflowExecutable> executionOrder,
         Blackboard blackboard, HashSet<Guid> skip, CancellationToken ct)
@@ -612,8 +692,7 @@ internal sealed class SequentialOrchestrator
                     n.Name == bodyName && n.Type is not (StepType.Start or StepType.End));
                 if (bodyNode is null || bodyNode == loopNode) continue;
                 if (skip.Contains(bodyNode.Id)) continue;
-                // F20：每个迭代都要重新执行 body（清除上一轮的 Completed 状态与结果），
-                // 使 body 真正按 item 逐项运行，而非仅在首个 item 跑一次。
+
                 bodyNode.Reset();
 
                 var bodyCtx = await BuildWorkflowContext(workflow, bodyNode, executionOrder, blackboard, ct);
@@ -642,16 +721,13 @@ internal sealed class SequentialOrchestrator
                         await _unitOfWork.SaveChangesAsync(ct);
                         return;
 
-                    default: // FailedRetry / FailedRollback
+                    default:
                         await _eventBus.PublishAsync(new StepFailed(
                             workflow.Id, bodyNode.Id, bodyNode.Name, bodyNode.Order,
                             result.ErrorMessage ?? "Loop body 失败", result.Duration,
                             bodyNode.Type, result.Tokens), ct);
                         await RollbackCompletedStepsAsync(workflow, bodyNode.Order, bodyNode.Name,
                             result.ErrorMessage ?? "Loop body 失败", ct);
-                        // 关键修复（F25 审查 P1）：失败分支必须把 Loop 节点本身置为 Completed，
-                        // 否则 RunToCompletionAsync 的 while 条件（last 为 null）恒真 → Loop 节点被反复重选 → 活锁。
-                        // 工作流整体态已由 RollbackCompletedStepsAsync 置为 RolledBack，不会被误判完成。
                         loopNode.SetResult($"loop: body 节点 {bodyNode.Name} 失败并回滚");
                         _repository.Update(workflow);
                         await _unitOfWork.SaveChangesAsync(ct);
@@ -669,7 +745,6 @@ internal sealed class SequentialOrchestrator
             loopNode.Type, null), ct);
     }
 
-    /// <summary>解析 Loop 节点配置（<c>itemsSource</c> / <c>itemVariable</c> / <c>bodyNodeNames</c>）。</summary>
     private static LoopNodeConfig ParseLoopConfig(string? configJson)
     {
         if (string.IsNullOrWhiteSpace(configJson))
@@ -695,10 +770,6 @@ internal sealed class SequentialOrchestrator
         }
     }
 
-    /// <summary>
-    /// 解析循环项集合：优先取 Blackboard / Artifact 中同名的 JSON 数组，否则将
-    /// <paramref name="itemsSource"/> 作为字面量 JSON 数组解析。返回每项序列化后的字符串。
-    /// </summary>
     private static IReadOnlyList<string> ResolveLoopItems(WorkflowContext ctx, string? itemsSource)
     {
         if (string.IsNullOrWhiteSpace(itemsSource)) return [];
@@ -722,10 +793,6 @@ internal sealed class SequentialOrchestrator
 
     private sealed record LoopNodeConfig(string? ItemsSource, string? ItemVariable, IReadOnlyList<string> BodyNodeNames);
 
-    /// <summary>
-    /// F21：将工作流共享 Context 中的 `trigger` 信封注入 Blackboard，供节点通过占位符消费触发载荷。
-    /// 仅当 Context 为合法 JSON 且含 `trigger` 对象时生效；否则原样返回 Blackboard（遗留工作流无影响）。
-    /// </summary>
     private static Blackboard SeedTriggerBlackboard(Workflow workflow, Blackboard blackboard)
     {
         if (string.IsNullOrWhiteSpace(workflow.Context)) return blackboard;
@@ -735,10 +802,8 @@ internal sealed class SequentialOrchestrator
             if (!doc.RootElement.TryGetProperty("trigger", out var trigger) || trigger.ValueKind != JsonValueKind.Object)
                 return blackboard;
 
-            // 整个 trigger 信封作为 `trigger` 键（完整 JSON）。
             blackboard = blackboard.Set("trigger", trigger.GetRawText());
 
-            // 平铺 trigger 的标量属性为 `trigger.<prop>`（如 trigger.type / trigger.firedAt）。
             foreach (var prop in trigger.EnumerateObject())
             {
                 var flat = FlattenScalar(prop.Value);
@@ -753,7 +818,6 @@ internal sealed class SequentialOrchestrator
         }
     }
 
-    /// <summary>将 JSON 标量（string/number/bool）或一层嵌套标量对象压为字符串；数组或深层结构返回 null。</summary>
     private static string? FlattenScalar(JsonElement el)
     {
         switch (el.ValueKind)
@@ -766,17 +830,172 @@ internal sealed class SequentialOrchestrator
                 return "true";
             case JsonValueKind.False:
                 return "false";
-            case JsonValueKind.Object:
-                // 平铺一层嵌套对象的标量属性（如 trigger.payload.text）。
-                var sb = new System.Text.StringBuilder();
-                foreach (var p in el.EnumerateObject())
-                {
-                    var v = FlattenScalar(p.Value);
-                    if (v is not null) sb.Append($"{p.Name}={v}; ");
-                }
-                return sb.Length == 0 ? null : sb.ToString(0, sb.Length - 2);
             default:
                 return null;
         }
+    }
+
+    // ──────────── F30 检查点持久化与恢复 ────────────
+
+    /// <summary>
+    /// Restores workflow execution state from the latest ExecutionLog checkpoint.
+    /// Returns the restored Blackboard and the execution order index to resume from.
+    /// </summary>
+    private async Task<(Blackboard Blackboard, int StartIndex)> RestoreFromCheckpointAsync(
+        Workflow workflow,
+        IReadOnlyList<IWorkflowExecutable> executionOrder,
+        CancellationToken ct)
+    {
+        // Get the latest ExecutionLog for this workflow
+        var executionLogs = await _executionLogRepository.GetByWorkflowIdAsync(workflow.Id, ct);
+        var latestLog = executionLogs.FirstOrDefault();
+        if (latestLog == null || string.IsNullOrEmpty(latestLog.CheckpointData))
+        {
+            _logger.LogWarning("No checkpoint data found for workflow {WorkflowId}, starting from beginning", workflow.Id);
+            return (SeedTriggerBlackboard(workflow, Blackboard.Empty), 0);
+        }
+
+        try
+        {
+            var checkpoint = JsonSerializer.Deserialize<ExecutionCheckpoint>(latestLog.CheckpointData!);
+            if (checkpoint == null)
+            {
+                _logger.LogWarning("Failed to deserialize checkpoint for workflow {WorkflowId}", workflow.Id);
+                return (SeedTriggerBlackboard(workflow, Blackboard.Empty), 0);
+            }
+
+            // Restore Blackboard
+            var blackboard = Blackboard.Empty;
+            if (checkpoint.Blackboard != null)
+            {
+                foreach (var kvp in checkpoint.Blackboard)
+                {
+                    blackboard = blackboard.Set(kvp.Key, kvp.Value);
+                }
+            }
+
+            // Restore node states (Completed nodes should stay Completed)
+            if (checkpoint.StepStates != null)
+            {
+                foreach (var stepState in checkpoint.StepStates)
+                {
+                    var node = executionOrder.FirstOrDefault(n => n.Id == stepState.NodeId);
+                    if (node != null && stepState.State == WorkflowState.Completed)
+                    {
+                        node.SetState(WorkflowState.Completed);
+                        node.SetResult(stepState.Result ?? "");
+                    }
+                }
+            }
+
+            int startIndex = checkpoint.ExecutionOrderIndex >= 0 ? checkpoint.ExecutionOrderIndex : 0;
+            _logger.LogInformation("Restored checkpoint for workflow {WorkflowId}: version {Version}, index {Index}",
+                workflow.Id, checkpoint.CheckpointVersion, startIndex);
+
+            return (blackboard, startIndex);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Failed to parse checkpoint JSON for workflow {WorkflowId}", workflow.Id);
+            return (SeedTriggerBlackboard(workflow, Blackboard.Empty), 0);
+        }
+    }
+
+    /// <summary>
+    /// Persists a checkpoint with current execution state to ExecutionLog and RunningExecution.
+    /// </summary>
+    private async Task PersistCheckpointAsync(
+        Workflow workflow,
+        Blackboard blackboard,
+        IReadOnlyList<IWorkflowExecutable> executionOrder,
+        HashSet<Guid> skip,
+        HashSet<Guid> loopBodyIds,
+        int currentIndex,
+        IRunningExecutionRepository runningExecutionRepository,
+        string instanceId,
+        TimeSpan leaseTtl,
+        CancellationToken ct)
+    {
+        // Build checkpoint data
+        var stepStates = executionOrder
+            .Where(n => n.State != WorkflowState.Pending)
+            .Select(n => new CheckpointStepState
+            {
+                NodeId = n.Id,
+                State = n.State,
+                Result = n.Result
+            })
+            .ToList();
+
+        var checkpoint = new ExecutionCheckpoint
+        {
+            SchemaVersion = 1,
+            CheckpointVersion = (await GetLatestCheckpointVersionAsync(workflow.Id, ct)) + 1,
+            Blackboard = blackboard.Entries.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
+            ExecutionOrderIndex = currentIndex,
+            LoopBodyIndices = loopBodyIds.ToDictionary(id => id, _ => 0),
+            SkipSet = skip.ToList(),
+            StepStates = stepStates,
+            TenantId = workflow.TenantId,
+            WorkflowId = workflow.Id,
+            CapturedAt = DateTime.UtcNow
+        };
+
+        var checkpointJson = JsonSerializer.Serialize(checkpoint);
+
+        // Update ExecutionLog
+        var executionLog = await GetLatestExecutionLogAsync(workflow.Id, ct);
+        if (executionLog != null)
+        {
+            executionLog.UpdateCheckpoint(checkpointJson);
+            _executionLogRepository.Update(executionLog);
+        }
+
+        // Update RunningExecution heartbeat
+        var runningExec = await runningExecutionRepository.GetByWorkflowIdAsync(workflow.Id, ct);
+        if (runningExec != null)
+        {
+            // Renew lease
+            runningExec.TryRenewLease(instanceId, leaseTtl);
+            runningExec.UpdateHeartbeat(checkpoint.CheckpointVersion, JsonSerializer.Serialize(blackboard.Entries.ToDictionary(kvp => kvp.Key, kvp => kvp.Value)));
+            runningExecutionRepository.Update(runningExec);
+        }
+
+        await _unitOfWork.SaveChangesAsync(ct);
+    }
+
+    private async Task<ExecutionLog?> GetLatestExecutionLogAsync(Guid workflowId, CancellationToken ct)
+    {
+        var logs = await _executionLogRepository.GetByWorkflowIdAsync(workflowId, ct);
+        return logs.FirstOrDefault();
+    }
+
+    private async Task<int> GetLatestCheckpointVersionAsync(Guid workflowId, CancellationToken ct)
+    {
+        var log = await GetLatestExecutionLogAsync(workflowId, ct);
+        return log?.CheckpointVersion ?? 0;
+    }
+
+    // ──────────── Checkpoint Data Structures ────────────
+
+    private sealed record ExecutionCheckpoint
+    {
+        public int SchemaVersion { get; init; } = 1;
+        public int CheckpointVersion { get; init; }
+        public Dictionary<string, string>? Blackboard { get; init; }
+        public int ExecutionOrderIndex { get; init; }
+        public Dictionary<Guid, int> LoopBodyIndices { get; init; } = new();
+        public List<Guid> SkipSet { get; init; } = new();
+        public List<CheckpointStepState> StepStates { get; init; } = new();
+        public Guid TenantId { get; init; }
+        public Guid WorkflowId { get; init; }
+        public DateTime CapturedAt { get; init; }
+    }
+
+    private sealed record CheckpointStepState
+    {
+        public Guid NodeId { get; init; }
+        public WorkflowState State { get; init; }
+        public string? Result { get; init; }
     }
 }
