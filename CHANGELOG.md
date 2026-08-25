@@ -1,5 +1,20 @@
 # 变更日志
 
+## v2.31 (2026-08-25)
+
+### F34 · 在线评估门禁完成（feature-builder 全栈闭环，🟢低风险，三道质量门全 PASS）——二期 F29–F34 全部收口
+
+F34 v1 将 F24 离线评估升级为**带阻断语义的部署门禁**：CI/发布流水线调用门禁端点，通过率未达阈值返回 HTTP 422（body 含完整报告），达成则 200——「真实阻断」而非仅报告。执行复用 RunEvaluation 一次性克隆路径，影子隔离零生产写入。
+
+**核心改动：**
+- **RunEvaluationGateCommand/Handler**：阈值解析链（请求显式 > `EvaluationSettings.GateMinPassRate`=0.8）；越界阈值抛 ArgumentOutOfRange；**空数据集显式守卫恒不通过**（防「无数据即放行」）
+- **端点**：`POST /api/v1/evaluation-datasets/{datasetId}/gate/{workflowId}`（Admin/Operator），remarks 含 CI curl 阻断用法示例
+- **审计归因**：新增 `AuditActionType.EvaluationGate`（Aggregates 生效枚举，字符串存储无迁移），details 记录 score vs threshold 与 PASS/BLOCK
+
+**测试**：新增 `RunEvaluationGateCommandHandlerTests` 5 例（超阈值通过+审计断言、低于阈值阻断、显式覆盖配置、空数据集零阈值仍拦、越界抛错）。全绿 App226 / Infra154+6skip / Api35 / Arch9；build 0/0。前端零改动。设计文档 `features/f34-online-eval-gate.md` §5 含二期收口说明。
+
+**延后项（独立排期）**：CI YAML 接入样例、队列化执行/水平扩展、监控告警聚合、异常回放诊断入口。
+
 ## v2.30 (2026-08-25)
 
 ### F33 · 语义记忆层完成（feature-builder 全栈闭环，🟡中风险，三道质量门全 PASS）

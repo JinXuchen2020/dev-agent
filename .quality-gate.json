@@ -1,9 +1,9 @@
 {
-  "phase": "f33-semantic-memory",
-  "reviewer": "PASSED: ddd-code-reviewer verified against 蓝图 §4 Phase 10 / 阶段十验收标准 — D3 复用 IVectorStore（租户隔离+双实现白嫖）、episodic 写回覆盖 completed/rolled_back 双结局、compaction 溢出→语义召回替代硬截断、prompt 渲染断言 [semantic-recall]/Retrieval 真实进入模型输入（修复建而不用漂移）",
-  "structureGate": "PASSED: ddd-phase-quality-gate 12 类审计全过 — ISemanticMemoryService 抽象在 Application/实现 internal sealed 在 Infrastructure、SCOPED 与 IVectorStore 工厂一致、事件 handler 注册双通知类型、XML 文档齐备（CS1573/CS1591 修复）、无迁移无新表",
-  "codebaseOptimizer": "PASSED: 七维度 0 阻断 — 内容寻址 docId 去重、写回异常 fail-safe 不伤主流程、null-safe 服务解析保全部既有测试零感知；已知残留显式记录（Negotiation 路径未接 compaction、记忆 TTL 治理留 Phase 11）",
+  "phase": "f34-online-eval-gate",
+  "reviewer": "PASSED: ddd-code-reviewer verified against 蓝图 §1.7 / §4 Phase 11 / 阶段十一验收标准 — 门禁真实阻断（HTTP 422 阻断语义而非仅报告）、阈值解析链显式>配置、空数据集显式守卫防无数据放行、影子隔离由 RunEvaluation 一次性克隆保证（零生产写入）、审计 EvaluationGate 全留痕",
+  "structureGate": "PASSED: ddd-phase-quality-gate 12 类审计全过 — 命令/结果 record 在 Application.Evaluation.Commands、handler internal sealed、阈值越界 ArgumentOutOfRange 守卫、XML 文档齐备、枚举成员落在生效类型（Aggregates.AuditLogs）、无迁移",
+  "codebaseOptimizer": "PASSED: 七维度 0 阻断 — 执行管线单一化（gate 委托 RunEvaluation 不复制回归逻辑）、空数据集守卫显式化、审计 details 含 score vs threshold；延后项（CI YAML/队列化/监控聚合/异常回放）与 backlog 声明一致并显式记录",
   "cleared": true,
-  "reportRef": "features/f33-semantic-memory.md",
-  "notes": "F33 语义记忆层：ISemanticMemoryService 复用 IVectorStore(集合 semantic-memory,内容寻址 docId 去重)+SemanticMemoryWriteBackHandler(completed/rolled_back 双事件 episodic 写回)+BuildWorkflowContext 溢出步骤语义召回注入(负数键 [semantic-recall])+AgentCallStepExecutor 新增 History summary/Relevant knowledge 区块打通 Summary/Retrieval 到 prompt。新增测试 7 例；全绿 App221/Infra154+6skip/Api35/Arch9，build 0/0。前端零改动。配置 SemanticMemory{Enabled,RecallTopK=3,RecallMinScore=0.6}。"
+  "reportRef": "features/f34-online-eval-gate.md",
+  "notes": "F34 在线评估门禁 v1：RunEvaluationGateCommand 阈值解析链(显式>GateMinPassRate=0.8)+空数据集恒拦+HTTP 422 阻断语义+AuditActionType.EvaluationGate 审计归因；端点 POST /evaluation-datasets/{id}/gate/{workflowId}(Admin,Operator)含 CI curl 示例。新增测试 5 例(通过+审计/阻断/覆盖/空集恒拦/越界抛错)；全绿 App226/Infra154+6skip/Api35/Arch9，build 0/0。前端零改动。二期 F29-F34 全部收口。"
 }

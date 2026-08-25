@@ -405,7 +405,12 @@
   - **③** 自动 compaction（超限上下文压缩，替代明文 MaxSummaryTokens 截断；并为 F29 长程 agent 提供上下文压缩）。
 - 优先级：P1。
 
-### F34 · 在线评估门禁 + 部署闭环  [P2]  open  ⛔blocked(1期)  🟢低风险（复用 F24 数据集）
+### F34 · 在线评估门禁 + 部署闭环  [P2]  done  🟢低风险（复用 F24 数据集）
+- 设计依据：`phases/phase-11-online-eval-gate.md` + `docs/agent-harness-blueprint.md` §Phase 11；设计文档 `features/f34-online-eval-gate.md`（v1 仅验收①，§3 设计+§5 完成记录）
+- 验收子项：
+  - **①** 在线 eval 门禁 → ✅ `RunEvaluationGateCommand`：阈值解析链（请求显式 > `EvaluationSettings.GateMinPassRate`=0.8）；执行委托 RunEvaluation（一次性克隆=影子隔离零生产写入）；Passed=false 端点返回 **HTTP 422 阻断语义**；空数据集显式守卫恒不通过；审计新增 `AuditActionType.EvaluationGate`
+  - **延后项** → CI YAML 接入样例、队列化执行/水平扩展、监控告警聚合、异常回放诊断——均独立排期（与 backlog 延后声明一致）
+- **完成记录（2026-08-25）**：feature-builder 全栈闭环（分支 `feat/f34-online-eval-gate`，基于 f33）。端点 `POST /api/v1/evaluation-datasets/{id}/gate/{workflowId}`（Admin/Operator）。新增测试 5 例（超阈值通过+审计/低于阈值阻断/显式覆盖配置/空数据集恒拦/越界抛错）；全绿 App226/Infra154+6skip/Api35/Arch9，build 0/0，前端零改动。三道质量门 PASS。**二期 F29–F34 全部收口。**
 - 设计依据：`phases/phase-11-online-eval-gate.md` + `docs/agent-harness-blueprint.md` §Phase 11
 - 目标：将 F24 评估数据集接入生产前 / 影子门禁；队列化水平扩展。
 - 验收子项（v1）：

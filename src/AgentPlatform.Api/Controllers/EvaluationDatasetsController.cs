@@ -2,6 +2,7 @@ using AgentPlatform.Application.Evaluation;
 using AgentPlatform.Application.Evaluation.Commands.CreateEvaluationDataset;
 using AgentPlatform.Application.Evaluation.Commands.DeleteEvaluationDataset;
 using AgentPlatform.Application.Evaluation.Commands.RunEvaluation;
+using AgentPlatform.Application.Evaluation.Commands.RunEvaluationGate;
 using AgentPlatform.Application.Evaluation.Commands.UpdateEvaluationDataset;
 using AgentPlatform.Application.Evaluation.Queries.GetEvaluationDataset;
 using AgentPlatform.Application.Evaluation.Queries.ListEvaluationDatasets;
@@ -94,6 +95,27 @@ public sealed class EvaluationDatasetsController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// F34 在线评估门禁：对目标工作流跑数据集回归并按通过率阈值判定。
+    /// 通过 → 200；未通过（或空数据集）→ 422，body.passed=false——CI/发布流水线据此阻断。
+    /// 影子语义：评估在一次性克隆工作流上执行，零生产状态写入。
+    /// </summary>
+    /// <remarks>curl 示例（CI 阻断用法）：
+    /// <code>
+    /// curl -s -o /dev/null -w "%{http_code}" -X POST \
+    ///   .../evaluation-datasets/{datasetId}/gate/{workflowId} \
+    ///   -H "Content-Type: application/json" -d "{\"minPassRate\":0.9}"
+    /// </code></remarks>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpPost("{id:guid}/gate/{workflowId:guid}")]
+    public async Task<IActionResult> RunGate(
+        Guid id, Guid workflowId, [FromBody] RunEvaluationGateRequest? request, CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new RunEvaluationGateCommand(id, workflowId, request?.MinPassRate), ct);
+        return result.Passed ? Ok(result) : UnprocessableEntity(result);
+    }
+
     private static CreateEvaluationCaseDto Map(CreateEvaluationCaseRequest r) =>
         new(r.Input, r.ExpectedOutput, r.MatchMode);
 }
@@ -115,6 +137,9 @@ public sealed record UpdateEvaluationDatasetRequest(
     string Name,
     string? Description,
     List<CreateEvaluationCaseRequest> Cases);
+
+/// <summary>F34 门禁请求体：minPassRate 缺省时使用 EvaluationSettings.GateMinPassRate。</summary>
+public sealed record RunEvaluationGateRequest(double? MinPassRate = null);
 
 /// <summary>API request body for running an evaluation against a workflow.</summary>
 public sealed record RunEvaluationRequest(Guid WorkflowId);
