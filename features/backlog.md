@@ -418,6 +418,109 @@
 - 延后项（依赖 F30/F32 分布式落点）：队列化部署 / 水平扩展 → 独立排期。
 - 优先级：P2。
 
+## 延后项（独立排期，从已 done 史诗中拆出）
+
+> 以下条目均来自 F26/F30/F31/F32/F34 设计文档中显式标注的「延后项」——v1 边界明确排除、依赖未就绪或破坏性过大，需独立 feature 闭环。
+
+### F35 · 多工作空间隔离（Workspace）  [P2]  open  🔴高风险（全聚合加 WorkspaceId + query filter + TenantProvider 体系扩展）
+- 来源：F26 企业增强 · S1「Workspace v1 不做，独立排期」
+- 设计依据：`features/enterprise-enhancements.md` §6 S1
+- 目标：创建/切换 workspace；实体按 workspace 隔离；切换后查询仅见当前 workspace 数据。本质是「第二租户维度」——同一租户内再分一层工作空间。
+- 核心改造：
+  - Domain：所有 `ITenantScoped` 聚合新增 `WorkspaceId`(Guid) 列 + EF 迁移（全仓）；`IWorkspaceRepository` + `Workspace` 聚合（Name/Description/IsDefault）。
+  - Application：`ITenantProvider` 扩展 `GetWorkspaceId()`（缺省走 DefaultWorkspace）；`IUnitOfWork` 提交前注入 WorkspaceId；所有 Query Handler 加 `WHERE workspace_id = @wid`。
+  - Api：`WorkspacesController`（CRUD + 切换 `POST /{id}/switch` 返回新 JWT claim）；Middleware 从 JWT/Header 解析 WorkspaceId 注入 ITenantProvider。
+  - 前端：`WorkspaceSwitcher`（顶栏下拉切换 + 新建）；切换后全站数据刷新。
+- 验收子项：
+  - 工作流/Agent/对话/知识库按 workspace 隔离：A 建的工作流在 B 不可见。
+  - 默认 workspace 自动创建（注册时）；切换后 API 请求带正确 workspace 上下文。
+  - 非 Admin 用户只能操作自己所在 workspace（RBAC workspace 级）。
+  - EF 迁移覆盖全仓 ITenantScoped 实体；无遗漏。
+  - build 0/0 + 全量测试 0 失败 + 前端 tsc 0 + vitest 通过。
+- 风险：🔴 破坏性极大——全聚合加列 + query filter 修改 + TenantProvider 体系重构 + 前端全局切换。建议独立分支 feature-builder 全栈闭环。
+
+### F36 · Agent 上下文隔离（Blackboard 分区 + 独立对话历史）  [P2]  open  🟡中风险（Blackboard 语义重构 + per-agent 对话状态）
+- 来源：F31 Agent 运行时实体化 · D4「Blackboard 按 agent 分区 / 每 agent 独立对话历史延后」；F32 消息总线 · 明确不做
+- 设计依据：`features/f31-agent-runtime.md` §明确不做 + `features/f32-agent-message-bus.md` §明确不做
+- 目标：每个 agent 拥有独立的上下文视图——Blackboard 按 agent 分区（agent 只读写自己的分区），对话历史按 agent 隔离（同一工作流内不同 agent 的 Conversation 不互相污染）。
+- 核心改造：
+  - Blackboard 分区：`Blackboard` 值对象从 `Dictionary<string,object>` 改为 `Dictionary<Guid, Dictionary<string,object>>`（key = agentId）；`WorkflowContext.Blackboard` 粒度对齐。
+  - 对话隔离：Conversation 新增 `AgentId`(nullable) 列 + EF 迁移；AgentCallStepExecutor 创建/复用 Conversation 时绑定 AgentId。
+  - 编排器：`RunWorkflowBodyAsync` 为每个 agent 调用构造独立 `WorkflowContext`（含分区 Blackboard 视图）。
+  - 前端：Conversation 列表支持按 agent 筛选（可选）。
+- 验收子项：
+  - Agent A 写入 Blackboard 的数据对 Agent B 不可见（分区隔离）。
+  - 同一工作流内 Agent A 和 B 的对话历史独立（Conversation.AgentId 生效）。
+  - 无 AgentId 的 Conversation（F31 前遗留）回退到全局视图（向后兼容）。
+  - build 0/0 + 全量测试 0 失败 + 前端 tsc 0 + vitest 通过。
+- 风险：🟡 Blackboard 值对象变更影响 WorkflowContext 全链路；Conversation 加列为最小迁移。依赖 F31/F32 已合入。
+
+### F37 · 队列化执行与水平扩展  [P1]  open  🔴高风险（分布式消息中间件 + 租约机制重构 + 多 worker 协调）
+- 来源：F30 执行持久化 · 延后项；F34 评估门禁 · 延后项
+- 设计依据：`features/f30-durable-execution.md` + `features/f34-online-eval-gate.md` §延后项
+- 目标：将当前进程内 BackgroundService 轮询升级为基于消息队列的分布式任务分发——多 worker 实例可水平消费执行任务，无状态执行引擎横向扩展。复用 F30 租约机制（RunningExecution）防多 worker 重复驱动。
+- 核心改造：
+  - Infrastructure：`IExecutionQueue` 抽象 + Redis Stream / RabbitMQ 实现（进程内 Channel 替代方案回退保留）；`DistributedLeaseProvider`（Redis `SET NX EX` 替代内存 `SemaphoreSlim`）。
+  - Application：`EnqueueWorkflowRunCommand` 替代直接 `IMediator.Send(RunWorkflowNode)`；Worker `BackgroundService` 从队列消费 + `TryAcquireLease` 竞争执行。
+  - Api：`DurableExecutionSettings` 新增 `QueueBackend = "InMemory" | "RedisStream" | "RabbitMQ"`；按配置注入。
+  - 前端：无改动（对执行发起方透明）。
+- 验收子项：
+  - 双 worker 同时运行同一工作流，仅一个实际执行（租约互斥）。
+  - Worker 崩溃后 30s 租约过期，另一 worker 接管（恢复语义）。
+  - Redis 不可用时降级到进程内 Channel（fail-safe）。
+  - 评估门禁端点在队列模式下仍正常工作（异步执行 → 同步等待结果）。
+  - build 0/0 + 全量测试 0 失败（SkippableFact 覆盖 Redis 不可用场景）。
+- 风险：🔴 分布式一致性（租约竞态、消息去重、幂等）+ 运维复杂度（Redis/RabbitMQ 部署）。建议分两阶段：① Redis Stream 最小闭环 ② RabbitMQ 企业级（独立排期）。
+
+### F38 · CI YAML 接入评估门禁样例  [P2]  open  🟢低风险（文档 + 模板，不触后端代码）
+- 来源：F34 评估门禁 · 延后项
+- 设计依据：`features/f34-online-eval-gate.md` §延后项
+- 目标：提供可直接复制使用的 CI/CD 流水线模板，将评估门禁端点接入 GitHub Actions / GitLab CI，实现「模型/prompt 变更前自动回归，未达阈值阻断合并」。
+- 核心改造：
+  - `ci/eval-gate-github.yml`：GitHub Actions workflow — 触发 PR + 手动 dispatch → 启动 API → 运行 eval gate → 422 则 `exit 1` 阻断。
+  - `ci/eval-gate-gitlab.yml`：GitLab CI template — `rules: merge_request` 触发，同样逻辑。
+  - `docs/ci-eval-gate-guide.md`：接入指南（环境变量配置 / 阈值覆盖 / 失败通知 Slack / 故障排查）。
+  - 不触后端代码，纯文档 + CI 配置。
+- 验收子项：
+  - GitHub Actions YAML 语法校验通过（`actionlint` 或 `act` 本地跑）。
+  - GitLab CI YAML 语法校验通过（`gitlab-ci-lint` 或 `grep` 关键字）。
+  - 接口示例 `curl` 可在本地 QuickStart 模式下跑通（200/422 路径各覆盖）。
+  - 指南文档完整：环境变量 / 阈值 / 失败处理 / 故障排查。
+- 风险：🟢 纯增量，不触后端。但需与 F34 端点保持接口一致（API schema 变更须同步更新模板）。
+
+### F39 · 监控告警聚合  [P2]  open  🟡中风险（OpenTelemetry 指标 + 告警规则 + Dashboard 配置）
+- 来源：F34 评估门禁 · 延后项
+- 设计依据：`features/f34-online-eval-gate.md` §延后项
+- 目标：将当前裸 OpenTelemetry `/metrics` 端点升级为可用的可观测性栈——Prometheus 抓取配置 + Grafana Dashboard 模板 + 告警规则（执行失败率、门禁阻断率、队列积压、模型调用延迟），实现「平台运行状态一目了然 + 异常自动通知」。
+- 核心改造：
+  - `deploy/prometheus.yml`：Prometheus 配置（scrape interval / relabel / 告警规则引用）。
+  - `deploy/alert-rules.yml`：告警规则（execution_failure_rate > 10% / eval_gate_block_rate > 5% / queue_depth > 100 / model_latency_p99 > 30s）。
+  - `deploy/grafana/dashboards/agent-platform.json`：Grafana Dashboard JSON（执行量趋势 / 成功率 / 门禁通过率 / 延迟分布 / 队列深度）。
+  - `docs/observability-guide.md`：部署指南（Docker Compose 一键起 Prometheus+Grafana / 告警对接 Slack/PagerDuty / 自定义 Dashboard）。
+  - 不触后端代码（OpenTelemetry SDK 已在 F5/F20 引入），纯运维配置。
+- 验收子项：
+  - Prometheus 配置语法校验通过（`promtool check config` 或等价校验）。
+  - Grafana Dashboard JSON 可导入且面板无报错。
+  - 告警规则阈值合理（参考实际测试数据：App 226 测试 / Infra 154 通过率）。
+  - 指南文档完整：一键部署 / 告警对接 / 自定义。
+- 风险：🟡 Grafana Dashboard JSON 维护成本（版本升级可能断面板）；缓解：文档注明版本要求。
+
+### F40 · 异常回放诊断入口  [P2]  open  🟡中风险（执行日志回放引擎 + 前端诊断视图）
+- 来源：F34 评估门禁 · 延后项
+- 设计依据：`features/f34-online-eval-gate.md` §延后项
+- 目标：从执行日志重建失败工作流的异常路径——定位失败节点、回放输入输出、展示上下文快照（Blackboard/变量/模型响应），辅助快速定位根因。复用 F24 Trace + F25 调试器能力。
+- 核心改造：
+  - Application：`ReplayExecutionCommand`（接收 ExecutionLogId）—— 从 `ExecutionLog.Entries` 重建执行路径，标记失败节点，返回 `ReplayReport`（路径序列 + 每节点 IO/耗时/错误信息 + Blackboard 快照）。
+  - Api：`POST /api/v1/execution-logs/{id}/replay`（`[Authorize]`，只读）。
+  - 前端：`ExecutionLogDetailPage` 新增「回放诊断」Tab（时序图展示失败路径 + 节点展开查看输入输出 + Blackboard 变量表）。
+- 验收子项：
+  - 传入失败执行日志 ID，返回完整回放报告（失败节点高亮 + 前后上下文）。
+  - 传入成功执行日志 ID，返回完整路径无失败标记。
+  - 传入不存在 ID → 404。
+  - 前端回放视图清晰展示失败链路，可折叠/展开每节点详情。
+  - build 0/0 + 全量测试 0 失败 + 前端 tsc 0 + vitest 通过。
+- 风险：🟡 回放依赖 ExecutionLog Entries 数据完整性（F20 Trace 节点级数据采集）；历史日志可能缺少 TokensIn/TokensOut/NodeType 列（F24 前迁移的数据）——需降级兼容。
+
 ## 已完成归档（done）
 
 > 已交付、留作追溯；不再进入排期。新完成项请从上方史诗移入此处。
