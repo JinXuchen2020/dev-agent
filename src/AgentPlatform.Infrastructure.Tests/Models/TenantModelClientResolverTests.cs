@@ -31,6 +31,7 @@ public class TenantModelClientResolverTests
         return new TenantModelClientResolver(
             resolver,
             encryption,
+            configuration ?? Substitute.For<IConfiguration>(),
             Substitute.For<ILogger<TenantModelClientResolver>>(),
             Substitute.For<ILogger<ModelTelemetryDecorator>>());
     }
@@ -103,23 +104,49 @@ public class TenantModelClientResolverTests
     }
 
     [Fact]
-    public async Task ResolveAsync_AlwaysConsultsCredentials_IgnoringProviderConfig()
+    public async Task ResolveAsync_StubMode_BypassesCredentials()
     {
-        // 契约更新（F13 多 BYO 落地时移除 F28 的 Stub 短路，见 TenantModelClientResolver 文件头注释）：
-        // 解析器不再受全局 ModelClient:Provider 影响，始终读取租户真实凭据；
-        // 集成环境的确定性由「无启用凭据 → 空列表 → 平台回退」保证。
+        // F28 Stub 模式恢复：ModelClient:Provider=Stub 时短路返回空列表，
+        // 不解密/不调用租户凭据，防止集成测试用假 key 发起真实 HTTP 请求（401）。
+        var resolver = Substitute.For<ITenantCredentialResolver>();
+        var fakeCred = new TenantCredentialSetting(
+            Guid.NewGuid(), TenantId, CredentialCategory.Model,
+            "Fake", "OpenAI", "encrypted", "sk-****", null, null, isEnabled: true);
+        resolver
+            .ResolveAsync(TenantId, CredentialCategory.Model, Arg.Any<CancellationToken>())
+            .Returns(new List<TenantCredentialSetting> { fakeCred }); // 有凭据但不应被访问
+        var encryption = Substitute.For<IApiKeyEncryptionService>();
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string> { ["ModelClient:Provider"] = "Stub" })
+            .Build();
+        var sut = Create(resolver, encryption, config);
+
+        var result = await sut.ResolveAsync(TenantId);
+
+        Assert.Empty(result);
+        await resolver.DidNotReceive().ResolveAsync(
+            Arg.Any<Guid>(), Arg.Any<CredentialCategory>(), Arg.Any<CancellationToken>());
+        encryption.DidNotReceive().DecryptKey(Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task ResolveAsync_RealMode_ConsultsCredentials()
+    {
+        // 非 Stub 模式：正常解析租户凭据（F13 多 BYO 语义）。
         var resolver = Substitute.For<ITenantCredentialResolver>();
         resolver
             .ResolveAsync(TenantId, CredentialCategory.Model, Arg.Any<CancellationToken>())
             .Returns(new List<TenantCredentialSetting>());
         var encryption = Substitute.For<IApiKeyEncryptionService>();
-        var sut = Create(resolver, encryption);
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string> { ["ModelClient:Provider"] = "OpenAI" })
+            .Build();
+        var sut = Create(resolver, encryption, config);
 
         var result = await sut.ResolveAsync(TenantId);
 
         Assert.Empty(result);
         await resolver.Received(1).ResolveAsync(
             Arg.Any<Guid>(), Arg.Any<CredentialCategory>(), Arg.Any<CancellationToken>());
-        encryption.DidNotReceive().DecryptKey(Arg.Any<string>()); // 无凭据则绝不解密
     }
 }
