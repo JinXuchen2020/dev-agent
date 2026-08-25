@@ -106,14 +106,22 @@ public sealed class NegotiationCollaborationTests
         // 时间窗重叠实证：两个 RouteAsync 同时在场才置 overlap。
         // 用 Task.Run 包裹模拟真实网络延迟——否则 NSubstitute 返回已完成 Task，
         // 提案会在首个 await 前同步跑完，WhenAll 蜕化为串行（测不出并行）。
+        // 会合握手替代 Thread.Sleep 时间窗：先到者等待搭档（上限 10s），后到者到场即置位。
+        // 墙钟窗口在 CI 高负载下会被线程池注入延迟击穿（偶发假阴性）；握手只对"真串行"判负。
         var current = 0;
         var overlapSeen = false;
+        using var partnerArrived = new ManualResetEventSlim(false);
         _router.RouteAsync(Arg.Any<RoutingRequest>(), Arg.Any<CancellationToken>())
             .Returns(ci => Task.Run(() =>
             {
                 Interlocked.Increment(ref current);
-                if (Volatile.Read(ref current) >= 2) overlapSeen = true;
-                Thread.Sleep(150); // 拉开窗口，串行执行不可能重叠
+                if (Volatile.Read(ref current) >= 2)
+                {
+                    overlapSeen = true;
+                    partnerArrived.Set(); // 我是后到者：唤醒先到者
+                }
+                else
+                    partnerArrived.Wait(TimeSpan.FromSeconds(10)); // 我是先到者：等搭档入场（真串行实现将超时判负）
                 Interlocked.Decrement(ref current);
                 return new ModelResponse($"proposal-{Guid.NewGuid():N}", null, "deepseek-chat", "stop");
             }));
