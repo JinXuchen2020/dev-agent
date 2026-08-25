@@ -1,9 +1,9 @@
 {
-  "phase": "f32-agent-message-bus",
-  "reviewer": "PASSED: ddd-code-reviewer verified against 蓝图 §3 层2 / §4 Phase 9 / 阶段九验收标准 — 双 agent 时间窗重叠实证真并行（非串行伪装）、handoff 上下文随 payload 传递、预算/停滞/指纹三防线熔断、CorrelationId trace 回放；无绑定 agent 诚实降级串行",
-  "structureGate": "PASSED: ddd-phase-quality-gate 12 类审计全过 — AgentMessageLog 聚合 ITenantScoped+HasQueryFilter、Id ValueGeneratedNever、迁移含 IDE0161 pragma、总线 SCOPED 隔离、仓储 internal sealed、空守卫齐备",
-  "codebaseOptimizer": "PASSED: 七维度 0 阻断 — 线程安全契约显式化（并行段纯 I/O，EF 单线程）；附带修复 nvarchar(max) 跨提供商 DDL 缺陷（SQLite EnsureCreated/MigrateAsync 均受影响）并回改 F30 两迁移",
+  "phase": "f33-semantic-memory",
+  "reviewer": "PASSED: ddd-code-reviewer verified against 蓝图 §4 Phase 10 / 阶段十验收标准 — D3 复用 IVectorStore（租户隔离+双实现白嫖）、episodic 写回覆盖 completed/rolled_back 双结局、compaction 溢出→语义召回替代硬截断、prompt 渲染断言 [semantic-recall]/Retrieval 真实进入模型输入（修复建而不用漂移）",
+  "structureGate": "PASSED: ddd-phase-quality-gate 12 类审计全过 — ISemanticMemoryService 抽象在 Application/实现 internal sealed 在 Infrastructure、SCOPED 与 IVectorStore 工厂一致、事件 handler 注册双通知类型、XML 文档齐备（CS1573/CS1591 修复）、无迁移无新表",
+  "codebaseOptimizer": "PASSED: 七维度 0 阻断 — 内容寻址 docId 去重、写回异常 fail-safe 不伤主流程、null-safe 服务解析保全部既有测试零感知；已知残留显式记录（Negotiation 路径未接 compaction、记忆 TTL 治理留 Phase 11）",
   "cleared": true,
-  "reportRef": "features/f32-agent-message-bus.md",
-  "notes": "F32 Agent 消息总线 + 多 Agent 协作：IAgentMessageBus(Channel<T> 有界背压,SCOPED)+AgentMessageLog 写穿持久化(迁移 AddAgentMessageLog)+TryMarkConsumed 幂等门+RepublishUnconsumed 重投；NegotiationOrchestrator 双模式——绑定 agent 时 Task.WhenAll 并行提案+critic 收敛+拒绝自动 Critique/Handoff 定向移交，否则诚实降级既有串行；预算64/停滞120s/指纹≥3 三防线熔断 Paused+告警。新增测试 7 例；全绿 App217/Infra151+6skip/Api35/Arch9，build 0/0。前端零改动。"
+  "reportRef": "features/f33-semantic-memory.md",
+  "notes": "F33 语义记忆层：ISemanticMemoryService 复用 IVectorStore(集合 semantic-memory,内容寻址 docId 去重)+SemanticMemoryWriteBackHandler(completed/rolled_back 双事件 episodic 写回)+BuildWorkflowContext 溢出步骤语义召回注入(负数键 [semantic-recall])+AgentCallStepExecutor 新增 History summary/Relevant knowledge 区块打通 Summary/Retrieval 到 prompt。新增测试 7 例；全绿 App221/Infra154+6skip/Api35/Arch9，build 0/0。前端零改动。配置 SemanticMemory{Enabled,RecallTopK=3,RecallMinScore=0.6}。"
 }

@@ -532,6 +532,8 @@ internal sealed class SequentialOrchestrator
         var summaries = new Dictionary<int, string>();
         var maxSummaryTokens = _settings.MaxSummaryTokens;
         var estimatedTokens = 0;
+        IWorkflowExecutable? currentForRecall = currentStep;
+        var overflowed = new List<IWorkflowExecutable>();
         foreach (var step in allSteps.Where(s => s.State == WorkflowState.Completed && !string.IsNullOrEmpty(s.Result)))
         {
             if (step.Type == StepType.Start)
@@ -539,9 +541,45 @@ internal sealed class SequentialOrchestrator
             var summary = $"[{step.Order}] {step.Name}: {StringHelpers.Truncate(step.Result!, 200)}";
             var estimatedStepTokens = _tokenCounter.CountTokens(summary);
             if (estimatedTokens + estimatedStepTokens > maxSummaryTokens)
-                break;
+            {
+                // F33 自动 compaction：超预算的旧步骤不再静默丢弃，交给语义召回兜底
+                overflowed.Add(step);
+                continue;
+            }
             summaries[step.Order] = summary;
             estimatedTokens += estimatedStepTokens;
+        }
+
+        // F33：溢出步骤 → 语义记忆召回（按当前节点语义检索历史经验），负数键避免与步骤序冲突
+        if (overflowed.Count > 0)
+        {
+            var memory = _serviceProvider.GetService(typeof(ISemanticMemoryService)) as ISemanticMemoryService;
+            var memSettings = _serviceProvider.GetService(typeof(IOptions<SemanticMemorySettings>))
+                is IOptions<SemanticMemorySettings> o ? o.Value : null;
+            if (memory is not null && (memSettings?.Enabled ?? false) && overflowed.All(s => s.Type != StepType.Start))
+            {
+                try
+                {
+                    var query = currentForRecall?.Name ?? workflow.Name;
+                    var recalled = await memory.RecallAsync(
+                        workflow.TenantId, query,
+                        memSettings!.RecallTopK, memSettings.RecallMinScore, ct);
+                    var recallKey = -1;
+                    foreach (var hit in recalled)
+                    {
+                        summaries[recallKey] = $"[semantic-recall] {StringHelpers.Truncate(hit.Content, 200)}";
+                        recallKey--;
+                    }
+                    if (recalled.Count > 0)
+                        _logger.LogInformation(
+                            "Compaction: {Dropped} overflowed step summaries replaced by {Recalled} semantic recalls",
+                            overflowed.Count, recalled.Count);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Semantic recall during compaction failed; continuing without recalls");
+                }
+            }
         }
 
         return new WorkflowContext

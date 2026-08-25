@@ -387,7 +387,15 @@
   - **③** handoff / 幂等 / 活锁防治 → ✅ critic 拒绝自动 Critique+Handoff（反馈上下文随 payload）；TryMarkConsumed 条件更新幂等 + 未消费重投；预算/停滞/指纹三防线熔断 Paused+告警
 - **完成记录（2026-08-25）**：feature-builder 全栈闭环（分支 `feat/f32-agent-message-bus`，基于 f31）。附带修复：`nvarchar(max)` 列类型在 SQLite EnsureCreated/MigrateAsync 的 DDL 语法错误（Api 31 例连锁失败根因）——统一改 `text` 并回改 F30 两迁移。新增测试 7 例（总线 4 + 协作 3）；全绿 App217/Infra151+6skip/Api35/Arch9，build 0/0，前端零改动。三道质量门 PASS。
 
-### F33 · 语义记忆层  [P1]  open  ⛔blocked(1期)  🟡中风险（依赖既有 IVectorStore）
+### F33 · 语义记忆层  [P1]  done  🟡中风险（依赖既有 IVectorStore）
+- 设计依据：`phases/phase-10-semantic-memory.md` + `docs/agent-harness-blueprint.md` §Phase 10；设计文档 `features/f33-semantic-memory.md`（§4 决策 D3/D2'/D4'/D5'，§6 完成记录）
+- 目标：从「文件注入式记忆」升级为语义记忆引擎；`IEmbeddingGenerator` 生成 embedding；episodic 写回；自动 compaction；复用 `IVectorStore`（Pg/InMemory）；租户向量隔离。
+- 验收子项：
+  - **D3** 向量后端决策 → ✅ 复用 IVectorStore（Pg/InMemory 双实现+租户隔离+工厂齐备），零新增存储组件
+  - **①** Embedding 生成管线 → ✅ ISemanticMemoryService + SemanticMemoryService（集合 semantic-memory、内容寻址 docId 去重）
+  - **②** Episodic 记忆写回 → ✅ WorkflowCompleted/RolledBack 双事件 handler（成功经验与失败教训均沉淀，Enabled 开关+异常不伤主流程）
+  - **③** 自动 compaction → ✅ 溢出步骤硬截断改为语义召回注入（负数键 [semantic-recall]）；并修复 Summary/Retrieval「建而不用」漂移——AgentCall prompt 新增 History summary / Relevant knowledge 区块
+- **完成记录（2026-08-25）**：feature-builder 全栈闭环（分支 `feat/f33-semantic-memory`，基于 f32）。新增测试 7 例（服务3/handler3/prompt渲染1）；全绿 App221/Infra154+6skip/Api35/Arch9，build 0/0，前端零改动。三道质量门 PASS。残留：Compaction 仅接 Sequential 路径；记忆无 TTL 治理（Phase 11）。
 - 设计依据：`phases/phase-10-semantic-memory.md` + `docs/agent-harness-blueprint.md` §Phase 10
 - 目标：从「文件注入式记忆」升级为语义记忆引擎；`IEmbeddingGenerator` 生成 embedding；episodic 写回；自动 compaction；复用 `IVectorStore`（Pg/InMemory）；租户向量隔离。
 - 验收子项：

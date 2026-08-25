@@ -1,5 +1,19 @@
 # 变更日志
 
+## v2.30 (2026-08-25)
+
+### F33 · 语义记忆层完成（feature-builder 全栈闭环，🟡中风险，三道质量门全 PASS）
+
+F33 把平台从「文件注入式记忆」升级为语义记忆引擎：跨运行经验沉淀 + 语义召回注入，并打通 Summary/Retrieval 到 LLM prompt 的「最后一公里」（修复上下文通道建而不用的隐性漂移）。
+
+**核心改动：**
+- **① Embedding 管线**：`ISemanticMemoryService` 复用 IVectorStore（租户隔离、Pg/InMemory 双实现），集合 `semantic-memory`；内容寻址 docId 同内容去重
+- **② Episodic 写回**：WorkflowCompleted / WorkflowRolledBack 双事件 handler——成功经验与失败教训（含 errorDetail）均沉淀；Enabled 开关；异常仅告警不影响主流程
+- **③ 自动 Compaction**：BuildWorkflowContext 溢出步骤由硬截断丢弃改为按当前节点语义召回 Top-K 经验（负数键 `[semantic-recall]` 注入 Summary）；服务缺席优雅退回现状
+- **Prompt 打通**：AgentCallStepExecutor 新增 History summary / Relevant knowledge 区块——Summary（含召回）与 Retrieval.Chunks 首次真正进入模型输入
+
+**测试**：新增 7 例（服务写穿/确定性 id/召回透传 3 · 写回 handler completed/rolled_back/disabled 3 · prompt 渲染 1）。全绿 App221 / Infra154+6skip / Api35 / Arch9；build 0/0。前端零改动。设计文档 `features/f33-semantic-memory.md` §6。
+
 ## v2.29 (2026-08-25)
 
 ### F32 · Agent 消息总线 + 多 Agent 协作完成（feature-builder 全栈闭环，🟡中风险，三道质量门全 PASS）

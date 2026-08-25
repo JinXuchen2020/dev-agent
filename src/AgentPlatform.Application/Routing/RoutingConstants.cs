@@ -14,6 +14,8 @@ public static class RoutingConstants
     /// 工作流步骤间上下文复用的向量集合名（内部复用，不对外暴露为知识库检索）。
     /// </summary>
     public const string WorkflowContextVectorCollection = "workflow-context";
+/// <summary>F33 语义记忆（episodic 经验沉淀）专用集合。</summary>
+public const string SemanticMemoryCollection = "semantic-memory";
 
     /// <summary>
     /// The divisor used to convert per-million-token pricing to a per-token cost.

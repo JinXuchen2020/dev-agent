@@ -147,4 +147,42 @@ public sealed class AgentCallStepExecutorTests
         Assert.Contains("\"step\":\"Architect\"", result.Artifact);
         Assert.Contains("\"agent\":", result.Artifact);
     }
+
+    [Fact]
+    public async Task Prompt_Renders_SemanticRecall_And_Retrieval_Sections()
+    {
+        // F33：Summary（含 [semantic-recall] 召回条目）与 Retrieval 片段必须真正进入 prompt
+        string? capturedPrompt = null;
+        var agent = CreateAgent();
+        _agentRepository.GetByIdAsync(agent.Id, Arg.Any<CancellationToken>()).Returns(agent);
+        _modelRouter.RouteAsync(Arg.Do<RoutingRequest>(r => capturedPrompt = r.Messages[1].Content),
+                Arg.Any<CancellationToken>())
+            .Returns(new ModelResponse("ok", null, "deepseek-chat", "stop"));
+
+        var ctx = CreateContext();
+        var summaries = new Dictionary<int, string>
+        {
+            [0] = "[0] step-0: 早期产出",
+            [-1] = "[semantic-recall] 历史相似运行的经验教训"
+        };
+        ctx = ctx with
+        {
+            Summary = new StepHistory { Summaries = summaries, MaxTokens = 8000, EstimatedTokenCount = 50 },
+            Retrieval = new RetrievalContext
+            {
+                Chunks = new List<string> { "知识库召回片段内容" },
+                Sources = new List<string> { "doc-1" }
+            }
+        };
+
+        var sut = CreateSut();
+        await sut.ExecuteAsync(CreateNode(agent.Id), ctx, CancellationToken.None);
+
+        Assert.NotNull(capturedPrompt);
+        Assert.Contains("History summary:", capturedPrompt);
+        Assert.Contains("[semantic-recall]", capturedPrompt);
+        Assert.Contains("历史相似运行的经验教训", capturedPrompt);
+        Assert.Contains("Relevant knowledge:", capturedPrompt);
+        Assert.Contains("知识库召回片段内容", capturedPrompt);
+    }
 }

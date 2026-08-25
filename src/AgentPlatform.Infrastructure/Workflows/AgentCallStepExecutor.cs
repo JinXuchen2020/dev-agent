@@ -131,6 +131,22 @@ internal sealed class AgentCallStepExecutor : IStepExecutor
             userParts.Add("Shared blackboard:\n" + string.Join("\n", boardLines));
         }
 
+        if (ctx.Summary.Summaries.Count > 0)        {
+            // F33：压缩历史（含 [semantic-recall] 召回条目）真正进入 prompt
+            var summaryLines = ctx.Summary.Summaries
+                .OrderBy(kv => kv.Key)
+                .Select(kv => kv.Value);
+            userParts.Add("History summary:\n" + string.Join("\n", summaryLines));
+        }
+
+        if (ctx.Retrieval.HasContent)
+        {
+            // F33：RAG/语义召回片段注入
+            var retrievalLines = ctx.Retrieval.Chunks
+                .Select((chunk, i) => $"- ({i + 1}) {Truncate(chunk, 300)}");
+            userParts.Add("Relevant knowledge:\n" + string.Join("\n", retrievalLines));
+        }
+
         userParts.Add("Provide your output for this step.");
 
         return

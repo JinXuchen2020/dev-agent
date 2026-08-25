@@ -128,6 +128,11 @@ public static class DependencyInjection
         services.AddScoped<IAgentMessageLogRepository, AgentMessageLogRepository>();
         services.AddScoped<AgentPlatform.Application.Abstractions.IAgentMessageBus,
             AgentPlatform.Infrastructure.Messaging.InProcessAgentMessageBus>();
+        // ── F33 语义记忆：episodic 写回与语义召回（复用 IVectorStore 租户隔离）──
+        services.Configure<AgentPlatform.Application.Abstractions.SemanticMemorySettings>(
+            configuration.GetSection("SemanticMemory"));
+        services.AddScoped<AgentPlatform.Application.Abstractions.ISemanticMemoryService,
+            AgentPlatform.Infrastructure.Memory.SemanticMemoryService>();
         services.AddSingleton<IYamlConfigurationParser, YamlConfigurationParserService>();
         // 单例工具注册表：启动时把平台内置 workspace 工具（Codex 式自主编码能力）注册进去，
         // 供 AgenticOrchestrator 按 agent 的 AllowedToolNames 白名单动态选用（F29）。
@@ -430,6 +435,11 @@ public static class DependencyInjection
         services.AddScoped<INotificationHandler<DomainEventNotification<StepFailed>>, StepFailedEventHandler>();
         services.AddScoped<INotificationHandler<DomainEventNotification<WorkflowCompleted>>, WorkflowCompletedEventHandler>();
         services.AddScoped<INotificationHandler<DomainEventNotification<WorkflowRolledBack>>, WorkflowRolledBackEventHandler>();
+        // ── F33 语义记忆 episodic 写回（成功经验 + 失败教训）──
+        services.AddScoped<INotificationHandler<DomainEventNotification<WorkflowCompleted>>,
+            AgentPlatform.Application.EventHandlers.SemanticMemoryWriteBackHandler>();
+        services.AddScoped<INotificationHandler<DomainEventNotification<WorkflowRolledBack>>,
+            AgentPlatform.Application.EventHandlers.SemanticMemoryWriteBackHandler>();
 
         // AutoGenAgentOrchestrator + AutoGenSettings removed (Phase 3 cleanup): the [Obsolete]
         // orchestrator and its dead config block are gone; OrchestrationPrimitive is the only engine.
