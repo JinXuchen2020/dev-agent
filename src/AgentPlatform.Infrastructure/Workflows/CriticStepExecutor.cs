@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Application.Routing.Services;
 using AgentPlatform.Domain.Abstractions;
 using AgentPlatform.Domain.Aggregates.Workflows;
 using AgentPlatform.Domain.Enums;
@@ -11,16 +12,18 @@ namespace AgentPlatform.Infrastructure.Workflows;
 
 /// <summary>
 /// Executes a critic/review node within the negotiation preset (Blueprint C.6).
-/// Reviews the previous node's artifact via IModelClient and returns a structured
+/// Reviews the previous node's artifact via <see cref="IModelRouter"/> and returns a structured
 /// diff with either approval or rework instructions.
 ///
 /// This enables range-specific rework (targeted fixes) instead of full pipeline restart.
-/// Uses IModelClient for real review — fallback to "always approve" only if model is unavailable.
+/// F31 ②: model calls route through the router (tenant BYO first, platform fallback) instead of
+/// the hardcoded platform-only client, so「我的凭据」works for critic nodes too.
+/// Uses real review — fallback to "always approve" only if AllowCriticOverride=true and model is unavailable.
 /// </summary>
 internal sealed class CriticStepExecutor : IStepExecutor
 {
     private readonly ILogger<CriticStepExecutor> _logger;
-    private readonly IModelClient _modelClient;
+    private readonly IModelRouter _modelRouter;
     private readonly StateMachineSettings _settings;
 
     /// <summary>Legacy glob fallback — matches critic step names.</summary>
@@ -31,11 +34,11 @@ internal sealed class CriticStepExecutor : IStepExecutor
 
     public CriticStepExecutor(
         ILogger<CriticStepExecutor> logger,
-        IModelClient modelClient,
+        IModelRouter modelRouter,
         IOptions<StateMachineSettings> settings)
     {
         _logger = logger;
-        _modelClient = modelClient;
+        _modelRouter = modelRouter;
         _settings = settings.Value;
     }
 
@@ -80,8 +83,11 @@ internal sealed class CriticStepExecutor : IStepExecutor
 
             try
             {
-                var modelId = _settings.DefaultModelId;
-                var response = await _modelClient.ChatAsync(modelId, messages, ct: ct);
+                // F31 ②: route via ModelRouter (tenant BYO → platform fallback) instead of the
+                // hardcoded DefaultModelId platform-only client. No PreferredModel — critic has
+                // no agent binding, so the tenant/platform default ordering applies.
+                var request = new RoutingRequest(ctx.TenantId, messages);
+                var response = await _modelRouter.RouteAsync(request, ct);
                 reviewResult = ParseReviewResult(response.Content, lastArtifact.StepName, _settings.AllowCriticOverride);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)

@@ -103,25 +103,23 @@ public class TenantModelClientResolverTests
     }
 
     [Fact]
-    public async Task ResolveAsync_ReturnsEmpty_WhenProviderIsStub_WithoutResolvingCredentials()
+    public async Task ResolveAsync_AlwaysConsultsCredentials_IgnoringProviderConfig()
     {
-        // F28 集成环境契约：Stub 模式下必须短路，绝不调用凭据解析 / 解密，
-        // 避免任何种子或演示数据触发真实 LLM 网络请求导致超时。
+        // 契约更新（F13 多 BYO 落地时移除 F28 的 Stub 短路，见 TenantModelClientResolver 文件头注释）：
+        // 解析器不再受全局 ModelClient:Provider 影响，始终读取租户真实凭据；
+        // 集成环境的确定性由「无启用凭据 → 空列表 → 平台回退」保证。
         var resolver = Substitute.For<ITenantCredentialResolver>();
+        resolver
+            .ResolveAsync(TenantId, CredentialCategory.Model, Arg.Any<CancellationToken>())
+            .Returns(new List<TenantCredentialSetting>());
         var encryption = Substitute.For<IApiKeyEncryptionService>();
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string>
-            {
-                ["ModelClient:Provider"] = "Stub",
-            })
-            .Build();
         var sut = Create(resolver, encryption);
 
         var result = await sut.ResolveAsync(TenantId);
 
         Assert.Empty(result);
-        await resolver.DidNotReceive().ResolveAsync(
+        await resolver.Received(1).ResolveAsync(
             Arg.Any<Guid>(), Arg.Any<CredentialCategory>(), Arg.Any<CancellationToken>());
-        encryption.DidNotReceive().DecryptKey(Arg.Any<string>());
+        encryption.DidNotReceive().DecryptKey(Arg.Any<string>()); // 无凭据则绝不解密
     }
 }

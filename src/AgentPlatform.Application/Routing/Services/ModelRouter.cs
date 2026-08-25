@@ -80,6 +80,11 @@ public sealed class ModelRouter : IModelRouter
             ? byoCandidates.Concat(platformCandidates).ToList()
             : platformCandidates;
 
+        // F31: fail with an actionable message instead of the generic AllModelsFailedException —
+        // an empty candidate list means nothing is configured anywhere, not that models failed.
+        if (candidates.Count == 0)
+            throw new ModelNotConfiguredException(tenantId);
+
         if (byoCandidates.Count == 0)
             _logger.LogInformation("Routing for tenant {TenantId} via platform models", tenantId);
         else
@@ -182,6 +187,10 @@ public sealed class ModelRouter : IModelRouter
         var candidates = byoCandidates.Count > 0
             ? byoCandidates.Concat(platformCandidates).ToList()
             : platformCandidates;
+
+        // F31: mirror of the RouteAsync guard — empty candidates means nothing configured anywhere.
+        if (candidates.Count == 0)
+            throw new ModelNotConfiguredException(tenantId);
 
         if (byoCandidates.Count == 0)
             _logger.LogInformation("Streaming for tenant {TenantId} via platform models", tenantId);

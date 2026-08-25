@@ -5,40 +5,40 @@
 
 ## 学习目标
 
-- [ ] **配置实体 vs 运行时实体**：理解 Agent 作为"一等运行时公民"需要的独立上下文窗口与生命周期
-- [ ] **Semantic Kernel 模型路由接线**：`ModelRouter` + `TenantModelClientResolver.CreateForTenant` 从"已存在未接"到"agent 级真实生效"
-- [ ] **Blackboard 分区 / 独立对话历史**：agent 上下文隔离粒度（决策 D4）
-- [ ] **多租户模型 BYO 隔离**：租户自带模型 Key 在执行时按租户解析，不污染他租户
-- [ ] **EF 迁移铁律**：新字段 / 新聚合的迁移写法（`#pragma warning disable IDE0161` + `ValueGeneratedNever()`）
+- [x] **配置实体 vs 运行时实体**：理解 Agent 作为"一等运行时公民"需要的独立上下文窗口与生命周期
+- [x] **Semantic Kernel 模型路由接线**：`ModelRouter` + `TenantModelClientResolver.CreateForTenant` 从"已存在未接"到"agent 级真实生效"
+- [ ] **Blackboard 分区 / 独立对话历史**：agent 上下文隔离粒度（决策 D4）——v1 延后，独立排期
+- [x] **多租户模型 BYO 隔离**：租户自带模型 Key 在执行时按租户解析，不污染他租户
+- [x] **EF 迁移铁律**：新字段 / 新聚合的迁移写法（`#pragma warning disable IDE0161` + `ValueGeneratedNever()`）
 
 ## 前置依赖
 
-- [ ] 阶段七执行持久化已完成并提交（非强制阻塞，但 agent 上下文落库建议复用 durable 检查点机制）
-- [ ] 已确认 `Agent` 聚合根（`Domain/Aggregates/Agents/Agent.cs`，`ITenantScoped`）与 `AgentRoleDefinition` 的当前字段清单，**补种子前先锁定字段 schema**
-- [ ] 已锁定蓝图决策 **D4**（Blackboard 按 agent 分区 + 每 agent 独立 message 历史，二者结合）
+- [x] 阶段七执行持久化已完成并提交（非强制阻塞，但 agent 上下文落库建议复用 durable 检查点机制）
+- [x] 已确认 `Agent` 聚合根字段清单——核实 SystemPrompt/ModelEndpoint 已存在且映射完备（F31 零迁移）
+- [x] 已锁定蓝图决策 **D4**（Blackboard 按 agent 分区 + 每 agent 独立 message 历史，二者结合）→ v1 延后执行
 
 ## 任务清单
 
 ### 现状核实（动手前必做，防历史漂移）
 
-- [ ] 重核实 `AgentCallStepExecutor`（`Infrastructure/Workflows/AgentCallStepExecutor.cs:50`）——确认其**硬编码 prompt 与 `_settings.DefaultModelId`**，未加载节点所绑 agent 的 `SystemPrompt` / `ModelEndpoint`（蓝图 §1.2 标记的高优先缺陷）。
-- [ ] 重核实节点绑定链路：`Workflow.AssignAgentToNode` / `AgentAssignments`（`Workflow.cs:137,292`）+ `WorkflowNode.AgentId`——确认"配了 agent 但执行时忽略"。
-- [ ] 重核实 `ModelRouter` + `TenantModelClientResolver.CreateForTenant`（§1.6）——确认路由 / 回退 / 租户 BYO **已存在**，仅缺 agent 级接线。
+- [x] 重核实 `AgentCallStepExecutor`——确认硬编码 prompt 与 `_settings.DefaultModelId`（F31 设计文档 §1 三处漂移证据）
+- [x] 重核实节点绑定链路：`WorkflowNode.AssignedAgentId` 经 `IWorkflowExecutable` 暴露，但 executor 从未消费
+- [x] 重核实 `ModelRouter` + `TenantModelClientResolver.CreateForTenant`——已存在且完整，仅缺 executor 接线
 
 ### 实现任务
 
-- [ ] **Agent 种子补全（前置必修）**：`Agent` / `AgentRoleDefinition` 增 `SystemPrompt` / `ModelEndpoint` 字段 + 迁移（含 `#pragma warning disable IDE0161`、`ValueGeneratedNever()`）；种子脚本补齐存量 agent 配置，避免修复 executor 后行为退化（蓝图 §6）。🔍 强制 `ddd-phase-quality-gate`：核对 EF 映射 / 密封 / 空守卫 / 迁移铁律。
-- [ ] **修复 AgentCallStepExecutor**：从 `WorkflowNode.AgentId` 解析 agent，加载其 `SystemPrompt` + 经 `ModelRouter` / `TenantModelClientResolver` 解析 `ModelEndpoint`，替换硬编码 `_settings.DefaultModelId`（蓝图 §4 Phase 8）。🔍 强制 `ddd-code-reviewer`：核对 agent 配置**真实生效**（非仅注册）、system prompt 真正进入对话、模型调用走 router 而非恒默认模型。
-- [ ] **Agent 上下文窗口**：Blackboard 按 agent 分区（决策 D4）；引入每 agent 独立对话历史，避免多 agent 节点互相污染上下文。🔍 强制 `ddd-code-reviewer`：核对不同 agent 节点上下文隔离、同心数据不串台。
-- [ ] **租户模型 BYO 隔离**：`TenantModelClientResolver.CreateForTenant` 在执行时按当前租户解析 Key / Endpoint，复用 `TenantProvider`（不得绕过）；确认模型调用计费与租户绑定。🔍 强制 `ddd-code-reviewer`：核对跨租户模型 Key 不泄漏、`ITenantScoped` 隔离生效。
+- [x] **Agent 种子补全（前置必修）**：核实字段已齐备，零代码零迁移（转为文档声明）
+- [x] **修复 AgentCallStepExecutor**：按 AssignedAgentId 加载 agent → SystemPrompt 进消息 → `IModelRouter.RouteAsync(PreferredModel: ModelEndpoint.ModelName)`；缺失 fail-loud
+- [ ] **Agent 上下文窗口**：Blackboard 按 agent 分区（决策 D4）→ v1 延后项，独立排期
+- [x] **租户模型 BYO 隔离**：经 `ITenantModelClientResolver` 链路解析（F13 已有隔离单测覆盖）；executor 侧 fail-loud 防跨租户静默回退
 
 ## 验收标准
 
-1. 同一工作流内不同 agent 节点表现出**不同**行为与 prompt（配置真实生效）。
-2. `ModelRouter` agent 级路由 / fallback 生效——某模型不可用时按候选回退而非恒失败。
-3. 租户自带模型 Key 在执行时按租户解析，跨租户不可越权使用他租户 Key。
-4. 多 agent 节点上下文隔离：一个 agent 的历史 / Blackboard 不被另一 agent 读取或污染。
-5. 存量工作流（未显式配 agent 或沿用默认）行为向后兼容，不退化。
+1. 同一工作流内不同 agent 节点表现出**不同**行为与 prompt（配置真实生效）。✅ AgentCallStepExecutorTests 锁定
+2. `ModelRouter` agent 级路由 / fallback 生效——某模型不可用时按候选回退而非恒失败。✅ PreferredModel 排序 + 既有回退循环；空候选可操作报错
+3. 租户自带模型 Key 在执行时按租户解析，跨租户不可越权使用他租户 Key。✅ 复用 F13 链路 + EF 过滤器 fail-loud
+4. 多 agent 节点上下文隔离：一个 agent 的历史 / Blackboard 不被另一 agent 读取或污染。⏸ v1 延后（D4）
+5. 存量工作流（未显式配 agent 或沿用默认）行为向后兼容，不退化。✅ UnboundNode_KeepsLegacyPrompt_RoutesWithoutPreference
 
 ▶ **设计评审关（动手前强制）**：进入本 Phase 前须已过 `blueprint-architecture-review`（见 phase-1 §0-1）。AgentCallStepExecutor 修复 / Agent 运行时上下文 / 模型路由属"叙事性能力"且为蓝图已知漂移（配而不生效），合入前强制 `ddd-code-reviewer`。
 
@@ -78,14 +78,21 @@
 
 ## 进度
 
-- **开始日期**：
-- **完成日期**：
-- **完成度**：█░░░░░░░░░ 0%
+- **开始日期**：2026-08-25
+- **完成日期**：2026-08-25（v1；D4 上下文隔离延后独立排期）
+- **完成度**：█████████░ 90%（v1 范围 100%）
 
 ## 回顾（完成后填写）
 
 ### 做得好的
+- 现状核实先行：发现字段已齐备，避免了一次不必要的迁移
+- 复用 ModelRouter 全套机制而非在 executor 手搓 resolver——BYO/回退/成本/韧性四合一套餐零重复
+- 实现过程中三个附带 bug 被"新测试 + 旧集成测试"双重网络捕获并当场修复（租约重获回归、自比恒 true、WSL bash 桩）
 
 ### 下次改进
+- Api.Tests 的触发器集成测试此前在 f30 分支就已转红却未被察觉——全量测试应在每个 feature 收口时必跑而非抽查
+- Windows 开发机环境差异（商店 python 别名 / WSL bash 桩）值得写进 docs/learning 排障手册
 
 ### 对蓝图文档的反馈
+- §1.2「配而不生效」的判断与代码事实完全吻合，行号级定位准确
+- D4（上下文隔离）作为 v1 延后项是正确切分——executor prompt 实体化与多 agent 隔离是两个独立风险面

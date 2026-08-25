@@ -366,15 +366,16 @@
   - **④** WorkflowScheduler 升级为 durable 驱动器（轮询触发器 → 驱动持久化执行）。
 - 优先级：P0（与 F31 组成最小闭环，消除「无 durable 执行」最大差距；并为 F29 长程 agent 提供检查点支撑）。
 
-### F31 · Agent 运行时实体化 + 模型接通  [P0]  open  ⛔blocked(1期)  🔴高风险（agent 配置当前不生效）
-- 设计依据：`phases/phase-8-agent-runtime.md` + `docs/agent-harness-blueprint.md` §Phase 8
+### F31 · Agent 运行时实体化 + 模型接通  [P0]  done  🔴高风险（agent 配置当前不生效）
+- 设计依据：`phases/phase-8-agent-runtime.md` + `docs/agent-harness-blueprint.md` §Phase 8；设计文档 `features/f31-agent-runtime.md`（已建，§6 决策 D1–D4 锁定，§8 完成记录）
 - 目标：修复 `AgentCallStepExecutor.cs:50` 硬编码（当前忽略 agent 的 `SystemPrompt`/`ModelEndpoint`，直接硬编码 prompt + `DefaultModelId`）；接通既有 `ModelRouter` + `TenantModelClientResolver`；补 Agent 种子字段。
 - 验收子项（v1）：
-  - **①** executor 接管 agent 配置（SystemPrompt / ModelEndpoint 真正生效）。
-  - **②** ModelRouter + TenantModelClientResolver 接通到 agent 级（候选回退 / 租户 BYO）。
-  - **③** Agent 种子字段补全（支持运行时实体化）。
+  - **①** executor 接管 agent 配置（SystemPrompt / ModelEndpoint 真正生效）。→ ✅ 按 AssignedAgentId 加载聚合、SystemPrompt 进消息、PreferredModel 走 agent 模型名；5 例单测锁定
+  - **②** ModelRouter + TenantModelClientResolver 接通到 agent 级（候选回退 / 租户 BYO）。→ ✅ AgentCall+Critic 双通道改经 RouteAsync；空候选新增 ModelNotConfiguredException 可操作报错
+  - **③** Agent 种子字段补全（支持运行时实体化）。→ ✅ 核实字段已齐备（SystemPrompt+ModelEndpoint VO 已映射），零迁移
 - 延后项（依赖 D4 决策）：Agent 上下文隔离 / 运行时实体深化 → 独立排期，不阻塞 v1。
 - 优先级：P0（与 F30 组成最小闭环）。本 feature 的 agent 配置实体化是 **F29（Agentic Agent Primitive）** 控制循环消费的底座；F29 的 ① 模型工具调用通道在 F31 之上扩展，二者共同构成「可自主 agent」。
+- **完成记录（2026-08-25）**：feature-builder 全栈闭环（分支 `feat/f31-agent-runtime`，基于 f30）。附带修复三项：① F30 回归——陈旧 RunningExecution 租约阻断重跑/恢复（TryAcquireLease 移除 Running-only 门禁，触发器集成 2 例转绿实证）；② 领域 bug——TryAcquireLease 属性自比恒 true 致多实例租约守卫失效（改参数 vs 持有者比较 + Rehydrate 工厂）；③ 生产缺陷——ResolveBashPath 兜底命中 System32 WSL 桩致无 Git Bash 的 Windows 全部 run_command 必败（排除系统目录桩 + echo 实测探针）。全绿：App 214 / Infra 147+6skip / Api 35 / Arch 9，build 0/0。三道质量门 PASS。
 
 ### F32 · Agent 消息总线 + 多 Agent 协作  [P1]  open  ⛔blocked(1期)  🟡中风险（依赖 F31 agent 实体化）
 - 设计依据：`phases/phase-9-agent-message-bus.md` + `docs/agent-harness-blueprint.md` §Phase 9

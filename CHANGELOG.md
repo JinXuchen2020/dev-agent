@@ -1,5 +1,23 @@
 # 变更日志
 
+## v2.28 (2026-08-25)
+
+### F31 · Agent 运行时实体化 + 模型接通完成（feature-builder 全栈闭环，🔴高风险，三道质量门全 PASS）
+
+F31 消除蓝图标记的最高优先缺陷「配而不生效」：给节点绑定的智能体在执行时真实生效——SystemPrompt 驱动 prompt、模型经 ModelRouter 按「租户 BYO 优先 → 平台回退 → 候选降级」解析。**用户从此只需在「我的凭据」加一条 BYO 凭据，工作流节点即可真实调用 LLM**（此前该路径对 BYO 完全无效）。
+
+**核心改动：**
+- **AgentCallStepExecutor 实体化**：按 `AssignedAgentId` 加载聚合（租户过滤器防跨租户）；绑定 agent → 真实 SystemPrompt + `PreferredModel=agent.ModelEndpoint.ModelName`；未绑定 → 向后兼容通用模板；agent 缺失 → fail-loud 明确报错
+- **CriticStepExecutor 接通 Router**：不再硬编码 DefaultModelId 直连平台客户端；AllowCriticOverride fail-loud/open 语义保持
+- **ModelRouter 空候选守卫**：新增 `ModelNotConfiguredException`（指明「我的凭据 / 平台 Key」两条配置路径），替代笼统 AllModelsFailedException
+
+**附带修复三项（实现过程中实证暴露）：**
+1. **F30 回归**：陈旧 RunningExecution 租约阻断重跑/恢复——`TryAcquireLease` 移除「仅 Running 可租」门禁；WorkflowTriggersIntegrationTests 2 例转绿实证
+2. **多实例租约守卫失效 bug**：TryAcquireLease 属性自比恒 true → 任意实例可抢活跃租约；改为参数 vs 持有者正确比较 + 新增 `Rehydrate` 工厂
+3. **生产缺陷**：`ResolveBashPath` 兜底命中 System32 WSL 桩——无 Git Bash 的 Windows 上所有 run_command 必败且报乱码；排除系统目录桩 + echo 实测探针
+
+**测试**：新增 19 例（AgentCall 5 / Critic 4 / RouterNotConfigured 2 / RunningExecution 8）。全绿 App 214 / Infra 147+6skip / Api 35 / Arch 9；build 0/0。前端零改动。质量报告见 `features/f31-agent-runtime.md` §8。
+
 ## v2.27 (2026-08-24)
 
 ### F30 · 执行持久化完成（feature-builder 全栈闭环，🔴高风险，三道质量门全 PASS）

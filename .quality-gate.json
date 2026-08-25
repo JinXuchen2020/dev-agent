@@ -1,10 +1,9 @@
 {
-  "phase": "f30-durable-execution",
-  "reviewer": "PASSED: ddd-code-reviewer verified against 蓝图 §3/§4 Phase 7 / 阶段七验收标准 — OrchestrationPrimitive/SequentialOrchestrator/WorkflowScheduler crash recovery 闭环，23 单测全覆盖",
-  "structureGate": "PASSED: ddd-phase-quality-gate 12 类审计全过（DI/层/EF/并发/空守卫/硬编码/死代码/API/蓝图漂移/文档/Swagger），P0=0 P1=0 P2=0 P3=0",
-  "codebaseOptimizer": "PASSED: 七维度分析（架构/质量/正确性/测试/性能/安全/工程化/桩代码替换进度/生产就绪度）0 阻断，配置化硬编码消除、批处理优化已落地",
+  "phase": "f31-agent-runtime",
+  "reviewer": "PASSED: ddd-code-reviewer verified against 蓝图 §1.2 / §4 Phase 8 / 阶段八验收标准 — SystemPrompt/PreferredModel 真实生效（5 例锁定）、fail-loud 防静默回退、Critic 同链路接通；行为级断言覆盖 prompt 内容与 RoutingRequest 字段",
+  "structureGate": "PASSED: ddd-phase-quality-gate 12 类审计全过 — DI 增量注册零新增（复用 scoped IAgentRepository/IModelRouter）、DDD 分层合规（Domain 行为/Infrastructure 编排/Application 异常）、无迁移、空守卫齐备、internal sealed 合规、无死代码",
+  "codebaseOptimizer": "PASSED: 七维度 0 阻断 — 附带修复三缺陷（F30 租约重获回归 / TryAcquireLease 自比失效 / WSL bash 桩生产缺陷）即修复即验证；新增 Rehydrate 工厂为合法持久化重水化路径而非测试后门",
   "cleared": true,
-  "reportRef": "docs/quality/f30-durable-execution-gate.md",
-  "notes": "F30 执行持久化完成：ExecutionLog 检查点 (CheckpointData/Version) + RunningExecution 聚合/仓储/迁移 + OrchestrationPrimitive/SequentialOrchestrator 耐久化 + WorkflowScheduler 租约/心跳/过期扫描 + DurableExecutionSettings 配置化 + 检查点批处理(5步/30s) + 23 单测全绿 + tsc/vite build 通过",
-  "followUpFix": "提交后修正：① F30 两迁移 (AddDurableExecutionCheckpoint/AddRunningExecution) 与对应 EF 配置中列类型 nvarchar(max) 改 TEXT（SQLite 无 nvarchar 亲和性，须用 TEXT，迁移尚未在共享库应用前就地订正）；② DI 补 services.AddScoped<OrchestrationPrimitive>() 以支持直接解析具体类型。纯配置/类型字符串修正，无新逻辑，门结论不变。"
+  "reportRef": "features/f31-agent-runtime.md",
+  "notes": "F31 Agent 运行时实体化：AgentCallStepExecutor 按 AssignedAgentId 加载聚合、SystemPrompt 驱动 prompt、PreferredModel 走 agent 模型名；AgentCall+Critic 模型调用统一经 ModelRouter（租户 BYO→平台回退→候选降级）；空候选 ModelNotConfiguredException 可操作报错；agent 缺失 fail-loud。附带修复：F30 陈旧租约阻断重跑回归、TryAcquireLease 自比恒 true 多实例守卫失效、ResolveBashPath 命中 System32 WSL 桩。新增 19 例，全绿 App214/Infra147+6skip/Api35/Arch9，build 0/0。前端零改动。用户路径：我的凭据加 BYO 凭据 + 节点绑 agent → 真实 LLM 调用。"
 }

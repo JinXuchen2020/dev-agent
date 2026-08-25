@@ -77,7 +77,47 @@ public sealed class RunningExecution : IAggregateRoot, ITenantScoped
     }
 
     /// <summary>
-    /// Attempts to acquire the lease for this instance. Returns true if acquired (either unleased or lease expired).
+    /// Rehydrates a running execution from persisted state (store-loaded shape: explicit
+    /// timestamps and holder). Lets callers — repositories under test, migration tools —
+    /// reconstruct exact persisted semantics, including an already-expired lease for
+    /// crash-recovery takeover scenarios.
+    /// </summary>
+    public static RunningExecution Rehydrate(
+        Guid workflowId,
+        Guid tenantId,
+        WorkflowState workflowState,
+        string instanceId,
+        DateTime heartbeatAt,
+        DateTime leaseExpiresAt,
+        int checkpointVersion = 0,
+        string? blackboardSnapshot = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(instanceId);
+        if (checkpointVersion < 0)
+            throw new ArgumentOutOfRangeException(nameof(checkpointVersion));
+
+        return new RunningExecution
+        {
+            Id = workflowId,
+            WorkflowId = workflowId,
+            TenantId = tenantId,
+            WorkflowState = workflowState,
+            HeartbeatAt = heartbeatAt,
+            LeaseExpiresAt = leaseExpiresAt,
+            InstanceId = instanceId,
+            CheckpointVersion = checkpointVersion,
+            BlackboardSnapshot = blackboardSnapshot
+        };
+    }
+
+    /// <summary>
+    /// Attempts to acquire the lease for this instance.
+    /// Acquisition succeeds when the lease is free (never held or expired) or already held by
+    /// the same instance — regardless of <see cref="WorkflowState"/>, because re-running a
+    /// Completed/RolledBack workflow and resuming a Paused one are legitimate transitions that
+    /// must re-acquire from those terminal/paused states (F31 regression fix: the previous
+    /// Running-only gate made every re-run/resume fail with "lease held by another instance").
+    /// Returns false only when another live instance holds an unexpired lease.
     /// </summary>
     public bool TryAcquireLease(string instanceId, TimeSpan leaseTtl)
     {
@@ -86,18 +126,21 @@ public sealed class RunningExecution : IAggregateRoot, ITenantScoped
             throw new ArgumentOutOfRangeException(nameof(leaseTtl), "Lease TTL must be positive.");
 
         var now = DateTime.UtcNow;
-        if (WorkflowState != WorkflowState.Running)
-            return false; // Only Running executions can be leased
 
-        if (string.IsNullOrEmpty(InstanceId) || now >= LeaseExpiresAt || string.Equals(InstanceId, this.InstanceId, StringComparison.Ordinal))
+        // F31 fix: compare the incoming instanceId AGAINST the stored holder. The previous
+        // self-comparison (property vs property) was always true, letting any instance steal
+        // a live lease and silently defeating multi-instance idempotency.
+        if (string.IsNullOrEmpty(this.InstanceId)
+            || now >= LeaseExpiresAt
+            || string.Equals(this.InstanceId, instanceId, StringComparison.Ordinal))
         {
-            InstanceId = instanceId;
+            this.InstanceId = instanceId;
             LeaseExpiresAt = now.Add(leaseTtl);
             HeartbeatAt = now;
             return true;
         }
 
-        return false; // Lease held by another active instance
+        return false; // Lease actively held by another instance
     }
 
     /// <summary>

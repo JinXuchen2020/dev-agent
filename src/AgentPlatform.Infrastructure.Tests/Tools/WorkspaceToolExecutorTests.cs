@@ -1,4 +1,4 @@
-using AgentPlatform.Application.Abstractions;
+﻿using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Domain.Aggregates.ToolDefinitions;
 using AgentPlatform.Domain.Enums;
 using AgentPlatform.Infrastructure.Sandbox;
@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using Xunit;
+using Xunit.Sdk;
 
 namespace AgentPlatform.Infrastructure.Tests.Tools;
 
@@ -96,18 +97,88 @@ public class WorkspaceToolExecutorTests
         Assert.Contains("guardrail", result.ErrorMessage);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Run_Command_Executes_In_WorkspaceRoot()
     {
+        // 验证目标：run_command 在工作区根目录执行（而非进程默认 CWD）。
+        // 沙箱在 Windows 优先 Git Bash（agent 命令为 bash 语法），故用 bash 原生 `pwd`
+        // 并在无可用 bash 的机器上跳过（Linux/CI ubuntu 天然满足）。
+        Skip.IfNot(DetectWorkingBash(), "本机无可用的真实 bash（缺 Git Bash 且 System32 bash 为 WSL 桩），跳过该用例。");
+
         using var executor = CreateExecutor();
-        // 先写一个打印工作目录的脚本，再以 run_command 执行 → 验证命令确实跑在工作区根目录。
-        await executor.ExecuteAsync(
-            Tool("write_file", "write"),
-            "{\"path\":\"cwd.py\",\"text\":\"import os\\nprint(os.path.basename(os.getcwd()))\"}");
         var result = await executor.ExecuteAsync(
             Tool("run_command", "run"),
-            "{\"command\":\"python cwd.py\"}");
+            "{\"command\":\"pwd\"}");
         Assert.True(result.Success, result.Output + result.ErrorMessage);
         Assert.Contains("ap_workspace_", result.Output);
+    }
+
+    /// <summary>
+    /// 与生产 ProcessCodeSandbox.ResolveBashPath 同判据的可用性探测：
+    /// where bash.exe 的候选须排除 System32/SysWOW64/WindowsApps（WSL 桩），
+    /// 且通过 <c>bash -c echo</c> 实测。Git Bash 标准安装路径优先。
+    /// </summary>
+    private static bool DetectWorkingBash()
+    {
+        var candidates = new[]
+        {
+            @"C:\Program Files\Git\bin\bash.exe",
+            @"C:\Program Files\Git\usr\bin\bash.exe",
+            @"C:\Program Files (x86)\Git\bin\bash.exe",
+            @"C:\Program Files (x86)\Git\usr\bin\bash.exe",
+        };
+        foreach (var path in candidates)
+            if (System.IO.File.Exists(path) && ProbeBashEcho(path))
+                return true;
+
+        try
+        {
+            using var proc = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("where.exe", "bash.exe")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            });
+            if (proc is null) return false;
+            var stdout = proc.StandardOutput.ReadToEnd();
+            proc.WaitForExit(3000);
+            foreach (var raw in stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var path = raw.Trim('"');
+                if (path.Length == 0 || !System.IO.File.Exists(path)) continue;
+                if (path.Contains("\\System32\\", StringComparison.OrdinalIgnoreCase)
+                    || path.Contains("\\SysWOW64\\", StringComparison.OrdinalIgnoreCase)
+                    || path.Contains("WindowsApps", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (ProbeBashEcho(path)) return true;
+            }
+        }
+        catch
+        {
+            // where.exe 不可用
+        }
+        return false;
+    }
+
+    private static bool ProbeBashEcho(string bashPath)
+    {
+        try
+        {
+            using var probe = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(bashPath, "-c \"echo ok\"")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            });
+            if (probe is null) return false;
+            var output = probe.StandardOutput.ReadToEnd();
+            probe.WaitForExit(3000);
+            return probe.ExitCode == 0 && output.Trim() == "ok";
+        }
+        catch
+        {
+            return false;
+        }
     }
 }
