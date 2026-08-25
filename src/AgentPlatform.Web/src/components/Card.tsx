@@ -12,6 +12,7 @@ interface CardProps {
 /** 通用白底卡片，标题行可带右侧链接/操作 */
 const Card: React.FC<CardProps> = ({ title, extra, children, style, bodyStyle }) => (
   <div
+    className="entity-card"
     style={{
       background: colors.surface,
       borderRadius: radius.card,
