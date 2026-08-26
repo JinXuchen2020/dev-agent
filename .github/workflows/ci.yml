@@ -8,6 +8,8 @@ on:
 
 env:
   DOTNET_VERSION: 9.0.x
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
 
 jobs:
   build-and-test:
@@ -99,6 +101,8 @@ jobs:
         run: node scripts/integration.mjs --e2e --skip-bdd
         env:
           CI: 'true'
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
 
   quality-gate:
     runs-on: ubuntu-latest

@@ -16,17 +16,17 @@ internal sealed class SendMessageCommandHandler : IRequestHandler<SendMessageCom
     private readonly IConversationRepository _conversationRepository;
     private readonly IModelRouter _router;
     private readonly IVectorStore _vectorStore;
-    private readonly ModelDefaults _defaults;
     private readonly ITenantProvider _tenant;
     private readonly IAuditLogRepository _auditLogRepository;
     private readonly RagSettings _ragSettings;
     private readonly ILogger<SendMessageCommandHandler> _logger;
 
+    private const string DefaultSystemPrompt = "You are a helpful AI assistant.";
+
     public SendMessageCommandHandler(
         IConversationRepository conversationRepository,
         IModelRouter router,
         IVectorStore vectorStore,
-        IOptions<ModelDefaults> defaultsOptions,
         ITenantProvider tenant,
         IAuditLogRepository auditLogRepository,
         IOptions<RagSettings> ragOptions,
@@ -35,7 +35,6 @@ internal sealed class SendMessageCommandHandler : IRequestHandler<SendMessageCom
         _conversationRepository = conversationRepository;
         _router = router;
         _vectorStore = vectorStore;
-        _defaults = defaultsOptions.Value;
         _tenant = tenant;
         _auditLogRepository = auditLogRepository;
         _ragSettings = ragOptions.Value;
@@ -54,7 +53,7 @@ internal sealed class SendMessageCommandHandler : IRequestHandler<SendMessageCom
 
         var messages = new List<ChatMessage>
         {
-            new(MessageRole.System, _defaults.SystemPrompt),
+            new(MessageRole.System, DefaultSystemPrompt),
             new(MessageRole.User, request.Content)
         };
 

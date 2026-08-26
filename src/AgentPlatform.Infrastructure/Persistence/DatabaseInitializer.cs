@@ -40,7 +40,7 @@ internal sealed class DatabaseInitializer : IDatabaseInitializer
     private const string IntegrationApiKeyPlaintext = "integration-fixture-key-0001";
     private const string IntegrationWorkflowName = "Integration Fixture Workflow";
 
-    public DatabaseInitializer(
+public DatabaseInitializer(
         AppDbContext context,
         IServiceProvider serviceProvider,
         ILogger<DatabaseInitializer> logger,
@@ -112,11 +112,11 @@ internal sealed class DatabaseInitializer : IDatabaseInitializer
         }
     }
 
-    private async Task SeedDataAsync(CancellationToken ct = default)
-    {
-        try
+private async Task SeedDataAsync(CancellationToken ct = default)
         {
-            _logger.LogInformation("Seeding initial data...");
+            try
+            {
+                _logger.LogInformation("Seeding initial data...");
 
             // Seed a default admin user for email + password login.
             // Idempotent: only seeds when the Users table is empty.
@@ -377,15 +377,14 @@ internal sealed class DatabaseInitializer : IDatabaseInitializer
             if (await _context.Agents.IgnoreQueryFilters()
                     .FirstOrDefaultAsync(a => a.Id == demoAgentId, ct) is null)
             {
-                var modelDefaults = _serviceProvider.GetRequiredService<IOptions<ModelDefaults>>().Value;
                 var demoAgent = new Agent(
                     demoAgentId,
                     "Autonomous Coding Agent (F29 demo)",
                     AgentType.Development,
                     new ModelEndpoint(
-                        modelDefaults.ModelProvider,
-                        modelDefaults.ModelName,
-                        modelDefaults.ModelApiUrl),
+                        "openai",
+                        "gpt-4o-mini",
+                        "https://api.openai.com/v1"),
                     "You are an autonomous coding agent. Use the workspace tools to read, write, edit, list files, " +
                     "run commands and inspect git diffs inside your isolated workspace to accomplish the user's goal. " +
                     "When the goal is fully accomplished, reply with the final answer and stop calling tools.",

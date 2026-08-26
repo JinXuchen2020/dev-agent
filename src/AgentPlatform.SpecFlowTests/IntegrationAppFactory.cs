@@ -61,13 +61,13 @@ public class IntegrationAppFactory : WebApplicationFactory<Program>, IAsyncLifet
         // （features/bdd-integration-design.md §11 风险 2）。
         ["Security:RateLimitingEnabled"] = "false",
 
-        // 内存缓存避免 Redis 依赖；Stub 模型避免真实 LLM 调用
+        // 内存缓存避免 Redis 依赖
         ["Cache:Provider"] = "Memory",
-        ["ModelClient:Provider"] = "Stub",
-        ["ModelClient:StubResponse"] = "Integration test stub response.",
 
-        // 非空 Key，避免 embedding 服务注册抛错
-        ["OpenAI:Key"] = "test-openai-key-not-empty",
+        // 从环境变量读取真实 LLM Key（CI 必须预置）；DeepSeek/vLLM 均兼容 OpenAI 协议，统一走 OpenAI 配置
+        ["OpenAI:Key"] = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? "",
+        ["OpenAI:Model"] = Environment.GetEnvironmentVariable("OPENAI_MODEL") ?? "gpt-4o-mini",
+        ["OpenAI:BaseUrl"] = Environment.GetEnvironmentVariable("OPENAI_BASE_URL") ?? "",
     };
 
     /// <summary>已配置好基础地址的 HttpClient（真实管线）。</summary>
@@ -128,6 +128,13 @@ public class IntegrationAppFactory : WebApplicationFactory<Program>, IAsyncLifet
     /// <inheritdoc />
     public async Task InitializeAsync()
     {
+        // 验证真实 LLM Key（Integration 环境强制真实调用；DeepSeek/vLLM 均兼容 OpenAI 协议）
+        var openAiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+        if (string.IsNullOrEmpty(openAiKey))
+            throw new InvalidOperationException(
+                "Integration tests require OPENAI_API_KEY environment variable. " +
+                "DeepSeek/vLLM 兼容 OpenAI 协议，通过 OPENAI_BASE_URL 指向对应端点即可。");
+
         if (File.Exists(DbPath))
             File.Delete(DbPath);
 

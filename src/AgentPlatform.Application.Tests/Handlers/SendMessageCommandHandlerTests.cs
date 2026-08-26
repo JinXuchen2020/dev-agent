@@ -19,10 +19,6 @@ public class SendMessageCommandHandlerTests
     private readonly IConversationRepository _conversationRepository = Substitute.For<IConversationRepository>();
     private readonly IModelRouter _router = Substitute.For<IModelRouter>();
     private readonly IVectorStore _vectorStore = Substitute.For<IVectorStore>();
-    private readonly IOptions<ModelDefaults> _defaults = Options.Create(new ModelDefaults
-    {
-        SystemPrompt = "You are a test assistant."
-    });
     private readonly ITenantProvider _tenant = Substitute.For<ITenantProvider>();
     private readonly IAuditLogRepository _auditLogRepository = Substitute.For<IAuditLogRepository>();
     private readonly IOptions<RagSettings> _ragOptions = Options.Create(new RagSettings());
@@ -34,7 +30,7 @@ public class SendMessageCommandHandlerTests
     {
         _tenant.GetTenantId().Returns(_tenantId);
         _handler = new SendMessageCommandHandler(
-            _conversationRepository, _router, _vectorStore, _defaults, _tenant,
+            _conversationRepository, _router, _vectorStore, _tenant,
             _auditLogRepository, _ragOptions, _logger);
     }
 

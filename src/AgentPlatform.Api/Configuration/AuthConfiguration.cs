@@ -88,7 +88,6 @@ internal static class AuthConfiguration
 
         // Strongly-typed options configuration
         services.Configure<TenantSettings>(configuration.GetSection("Tenant"));
-        services.Configure<ModelDefaults>(configuration.GetSection("ModelDefaults"));
         services.Configure<RouterSettings>(configuration.GetSection("Router"));
         services.Configure<PricingSettings>(configuration.GetSection("Pricing"));
         services.Configure<SecuritySettings>(configuration.GetSection("Security"));

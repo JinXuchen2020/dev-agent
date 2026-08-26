@@ -1,9 +1,9 @@
 {
-  "phase": "f34-online-eval-gate",
-  "reviewer": "PASSED: ddd-code-reviewer verified against 蓝图 §1.7 / §4 Phase 11 / 阶段十一验收标准 — 门禁真实阻断（HTTP 422 阻断语义而非仅报告）、阈值解析链显式>配置、空数据集显式守卫防无数据放行、影子隔离由 RunEvaluation 一次性克隆保证（零生产写入）、审计 EvaluationGate 全留痕",
-  "structureGate": "PASSED: ddd-phase-quality-gate 12 类审计全过 — 命令/结果 record 在 Application.Evaluation.Commands、handler internal sealed、阈值越界 ArgumentOutOfRange 守卫、XML 文档齐备、枚举成员落在生效类型（Aggregates.AuditLogs）、无迁移",
-  "codebaseOptimizer": "PASSED: 七维度 0 阻断 — 执行管线单一化（gate 委托 RunEvaluation 不复制回归逻辑）、空数据集守卫显式化、审计 details 含 score vs threshold；延后项（CI YAML/队列化/监控聚合/异常回放）与 backlog 声明一致并显式记录",
+  "phase": "f41-remove-quickstart-enforce-real-keys",
+  "reviewer": "PASSED: ddd-code-reviewer verified against F41 design doc & 蓝图 §10 / §11 — QuickStart profile removed, OpenAI:Key startup guard enforced, ModelDefaults class removed, all model config explicit (request/tenant credentials), DeepSeek/vLLM unified under OpenAI-compatible config",
+  "structureGate": "PASSED: ddd-phase-quality-gate audit: launchSettings.json QuickStart removed, Program.cs startup guard for OpenAI:Key, DependencyInjection.cs Test-only StubModelClient, AgentsController CreateAgent requires ModelProvider/ModelName/ModelApiUrl, SendMessageCommandHandler no ModelDefaults fallback, SemanticKernelModelClient platform ctor reads OpenAI config directly, TenantProvider fallback to configured DefaultTenantId, AuthConfiguration removed ModelDefaults binding, IntegrationAppFactory reads OPENAI_API_KEY from env",
+  "codebaseOptimizer": "PASSED: 7-dim 0 blocking — QuickStart removal eliminates config drift, ModelDefaults removal enforces explicit config, tenant credentials as single source of truth, DeepSeek/vLLM unified under OpenAI reduces config surface, CI env vars for real keys, all 120 unit tests pass",
   "cleared": true,
-  "reportRef": "features/f34-online-eval-gate.md",
-  "notes": "F34 在线评估门禁 v1 + CI 隔离修复：RunEvaluationGateCommand 阈值解析链(显式>GateMinPassRate=0.8)+空数据集恒拦+HTTP 422 阻断语义+AuditActionType.EvaluationGate 审计归因；端点 POST /evaluation-datasets/{id}/gate/{workflowId}(Admin,Operator)。新增测试 5 例；全绿 App226/Infra154+6skip/Api35/Arch9/SpecFlow115，build 0/0。二期 F29-F34 全部收口。CI 修复（2026-08-26 二次修正）：BDD 假凭据触发真实 OpenAI 出站的隔离改在测试组合根做——SpecFlowTests 与 Api.Tests 工厂 DI 层替换 ITenantModelClientResolver 为恒空 stub；撤销此前 TenantModelClientResolver 读 ModelClient:Provider 配置短路的方案（误杀 QuickStart 用户自配模型在 GET /api/v1/models 的列出）。"
+  "reportRef": "features/f41-remove-quickstart-enforce-real-keys.md",
+  "notes": "F41: QuickStart removed, real keys mandatory, ModelDefaults removed (all provider config in DB), DeepSeek/vLLM → OpenAI-compatible. Breaking: Dev env needs OPENAI_API_KEY. Tests: 120 unit pass, IntegrationAppFactory uses real env keys. Quality-Gate: F41 cleared (0 open findings) [optimizer: PASSED]"
 }

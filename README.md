@@ -2,13 +2,21 @@
 
 企业级、强类型、可维护的自研 Agent 编排平台，基于 .NET 9 + DDD + Clean Architecture。
 
-## 快速开始（跳过 Docker）
+## 快速开始
 
 ```bash
 cd src/AgentPlatform.Api
 
-# QuickStart 模式：SQLite + Stub 模型，无需外部依赖
-dotnet run --launch-profile QuickStart
+# 设置至少一个 LLM Provider 的 API Key（环境变量优先，也可用 user-secrets）
+export OPENAI_API_KEY="sk-your-key-here"        # OpenAI / 兼容 OpenAI 协议
+# export DEEPSEEK_API_KEY="sk-your-key-here"   # DeepSeek
+# export VLLM_BASE_URL="http://localhost:8000/v1"  # 自建 vLLM
+
+# 可选：指定模型名（默认 gpt-4o-mini）
+export OPENAI_MODEL="gpt-4o-mini"
+
+# 启动（Development 环境，SQLite + 真实模型）
+dotnet run
 
 # 浏览器打开 API 文档
 open http://localhost:5000/scalar/v1
@@ -18,8 +26,10 @@ CONV_ID=$(curl -s -X POST http://localhost:5000/api/v1/conversations \
   -H "Content-Type: application/json" | jq -r '.id')
 curl -X POST "http://localhost:5000/api/v1/conversations/$CONV_ID/messages" \
   -H "Content-Type: application/json" \
-  -d '{"content":"Hello","model": "stub"}'
+  -d '{"content":"Hello"}'
 ```
+
+> **注意**：不再提供 QuickStart（Stub 模型）模式。Development / Production / Staging 等运行环境**强制要求**至少配置一个真实 LLM Provider（OpenAI / DeepSeek / VLLM）。仅单元测试环境 (`Test`) 允许使用 StubModelClient。
 
 ## 项目结构
 
@@ -44,9 +54,30 @@ dotnet test src/AgentPlatform.sln
 
 ## 配置真实 API Key
 
+**推荐：环境变量**（优先级最高，适合 CI/CD 与容器部署）
 ```bash
-dotnet user-secrets set "OpenAI:Key" "sk-your-key-here"
+export OPENAI_API_KEY="sk-your-key-here"
+export OPENAI_MODEL="gpt-4o-mini"        # 可选，默认 gpt-4o-mini
+export OPENAI_BASE_URL="https://api.openai.com/v1"  # 可选，默认官方
 ```
+
+**备选：.NET User Secrets**（本地开发，不提交代码）
+```bash
+cd src/AgentPlatform.Api
+dotnet user-secrets set "OpenAI:Key" "sk-your-key-here"
+dotnet user-secrets set "OpenAI:Model" "gpt-4o-mini"
+```
+
+**配置优先级**：环境变量 > `appsettings.Development.json` > User Secrets > `appsettings.json`
+
+支持的 Provider：
+| Provider | 环境变量 | 配置键 | 说明 |
+|----------|----------|--------|------|
+| OpenAI / 兼容 | `OPENAI_API_KEY` | `OpenAI:Key` | 必填 |
+| | `OPENAI_MODEL` | `OpenAI:Model` | 可选，默认 `gpt-4o-mini` |
+| | `OPENAI_BASE_URL` | `OpenAI:BaseUrl` | 可选，默认官方 |
+| DeepSeek | `DEEPSEEK_API_KEY` | `DeepSeek:Key` | 可选 |
+| vLLM | `VLLM_BASE_URL` | `VLLM:Url` | 可选，指向 `/v1` 端点 |
 
 详见 [AGENT_PLATFORM_BLUEPRINT.md](./AGENT_PLATFORM_BLUEPRINT.md) §10.2。
 

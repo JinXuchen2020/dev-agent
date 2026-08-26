@@ -10,16 +10,6 @@
       "dotnetRunMessages": true,
       "applicationUrl": "http://localhost:5000"
     },
-    "QuickStart": {
-      "commandName": "Project",
-      "launchBrowser": true,
-      "launchUrl": "swagger",
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "QuickStart"
-      },
-      "dotnetRunMessages": true,
-      "applicationUrl": "http://localhost:5000"
-    },
     "IIS Express": {
       "commandName": "IISExpress",
       "launchBrowser": true,

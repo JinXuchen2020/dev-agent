@@ -692,6 +692,7 @@ export const enUS: Resources = {
         runNotFound: 'Binding or workflow not found / not triggerable',
         runStarted: 'Triggered workflow "{{name}}", current state: {{state}}',
         runFailed: 'Failed to trigger',
+        loadWorkflowsFailed: 'Failed to load workflows',
       },
     },
     conversations: {

@@ -156,7 +156,7 @@ const EvaluationDatasetsPage: React.FC = () => {
     setRunTarget(ds);
     setSelectedWorkflow(undefined);
     setRunning(false);
-    getWorkflows({ take: 200 })
+    getWorkflows({ take: 100 })
       .then((r) =>
         setWorkflowOptions(
           (r.items as Workflow[]).map((w) => ({ label: w.name, value: w.id })),

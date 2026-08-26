@@ -682,6 +682,7 @@ export const zhCN = {
         runNotFound: '未找到绑定或工作流不可触发',
         runStarted: '已触发工作流「{{name}}」，当前状态：{{state}}',
         runFailed: '触发失败',
+        loadWorkflowsFailed: '加载工作流列表失败',
       },
     },
     conversations: {

@@ -36,8 +36,7 @@ internal sealed class TenantProvider : ITenantProvider
     /// <returns>
     /// Tenant ID from the ambient <see cref="ITenantContext.OverrideTenantId"/> if set
     /// (background jobs, anonymous webhooks); otherwise from the JWT "tenant_id" claim;
-    /// otherwise from the "X-Tenant-Id" header; otherwise the configured
-    /// <see cref="TenantSettings.DefaultTenantId"/>.
+    /// otherwise from the "X-Tenant-Id" header; otherwise the configured default tenant.
     /// </returns>
     public Guid GetTenantId()
     {
@@ -64,7 +63,7 @@ internal sealed class TenantProvider : ITenantProvider
             }
         }
 
-        // Priority 3: Configured default tenant (backward compatibility)
+        // Priority 3: Configured default tenant
         _logger.LogWarning(
             "No tenant identifier found in request context; falling back to default tenant {DefaultTenantId}.",
             _settings.DefaultTenantId);

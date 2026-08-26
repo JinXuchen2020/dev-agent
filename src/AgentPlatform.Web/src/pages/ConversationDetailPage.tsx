@@ -160,9 +160,12 @@ const { id = '' } = useParams<{ id: string }>();
   const openBindDrawer = () => {
     setBindDrawerOpen(true);
     loadBindings(id);
-    getWorkflows({ skip: 0, take: 200 })
+    getWorkflows({ skip: 0, take: 100 })
       .then((d) => setAllWorkflows(d.items))
-      .catch(() => setAllWorkflows([]));
+      .catch((e) => {
+        message.error(t('pages.conversationDetail.triggers.loadWorkflowsFailed') + '：' + getErrorMessage(e));
+        setAllWorkflows([]);
+      });
   };
 
   const handleBind = async (workflowId: string) => {

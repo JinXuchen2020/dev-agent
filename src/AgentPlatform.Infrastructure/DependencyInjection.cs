@@ -80,16 +80,14 @@ public static class DependencyInjection
         });
 
         var modelProvider = configuration.GetSection("ModelClient:Provider").Value;
-        // 是否配置了真实 LLM 端点：OpenAI / DeepSeek / VLLM 任一有值即视为已接入（平台级）。
+        // 是否配置了真实 LLM 端点：OpenAI Key 或 BaseUrl（DeepSeek/vLLM 均兼容 OpenAI 协议，统一走 OpenAI 配置）。
         var llmConfigured = !string.IsNullOrEmpty(configuration["OpenAI:Key"])
-            || !string.IsNullOrEmpty(configuration["DeepSeek:Key"])
-            || !string.IsNullOrEmpty(configuration["VLLM:Url"]);
+            || !string.IsNullOrEmpty(configuration["OpenAI:BaseUrl"]);
 
-        // Stub 仅用于测试环境隔离（Test / Integration），避免 BDD / 契约测试触发真实网络调用。
-        // 运行环境（Development / QuickStart / Production / Staging 等）一律注册真实模型客户端：
-        // 未配置 provider 时不再静默回退 Stub，而是由 SemanticKernelModelClient 在调用时抛出
-        // 明确错误（由 ModelRouter 透传给上层，前端收到真实报错而非模拟回复）。
-        var isTestEnv = environment.IsEnvironment("Test") || environment.IsEnvironment("Integration");
+        // 仅 Test 环境显式配置 Provider=Stub 时注册 StubModelClient。
+        // Integration / Development / Production / Staging 均走真实 SemanticKernelModelClient；
+        // 启动时已在 Program.cs 强制校验至少一个真实 Key（Test 环境豁免）。
+        var isTestEnv = environment.IsEnvironment("Test");
         if (string.Equals(modelProvider, "Stub", StringComparison.Ordinal) && isTestEnv)
         {
             var stubResponse = configuration.GetSection("ModelClient:StubResponse").Value

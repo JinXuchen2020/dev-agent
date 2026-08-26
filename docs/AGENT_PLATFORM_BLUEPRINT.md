@@ -8,9 +8,9 @@
 
 > **修改日志**：
 > - **v1.5** (2026-07-13)：移除 Swagger/Scalar 环境限制（所有环境默认启用）；launchUrl 从 `openapi/v1.json` 改为 `swagger`；anchored-summary/phase-docs/CHANGELOG 同步更新
-> - **v1.4** (2026-07-10)：Phase 1 全部代码优化完成：UnitOfWorkBehavior 事件顺序修复、ConversationsController → MediatR、CostController 接口化、Db 凭据安全化、Scalar 环境限制、UpdatedAt 修复、空守卫补全、using 清理。蓝图同步更新：QuickStart URL/cURL 修正、Phase 1 清单勾选、目录树补充了 Conversations/ 和 SpecFlowTests、缺失的 Abstractions 补全、Workflow 项目标记 Phase 2 骨架、删除了 Aspirational Serilog 配置代以 ILogger 现状描述、补充 OpenAI:Key/环境变量文档。
+> - **v1.4** (2026-07-10)：Phase 1 全部代码优化完成：UnitOfWorkBehavior 事件顺序修复、ConversationsController → MediatR、CostController 接口化、Db 凭据安全化、Scalar 环境限制、UpdatedAt 修复、空守卫补全、using 清理。蓝图同步更新：启动命令/环境变量文档修正、Phase 1 清单勾选、目录树补充了 Conversations/ 和 SpecFlowTests、缺失的 Abstractions 补全、Workflow 项目标记 Phase 2 骨架、删除了 Aspirational Serilog 配置代以 ILogger 现状描述、补充 OpenAI:Key/环境变量文档。
 > - **v1.3** (2026-07-09)：补充 DDD 铁律三条约束（DI 注册 / 实现层位置 / 接口定义位置）
-> - **v1.2** (2026-07-09)：锁定 SK 版本为 1.30.0；明确 MediatR v12+ DI 指南；修正 QuickStart 启动命令；添加测试项目位置约定和 EF Core 聚合根映射说明
+> - **v1.2** (2026-07-09)：锁定 SK 版本为 1.30.0；明确 MediatR v12+ DI 指南；修正启动命令；添加测试项目位置约定和 EF Core 聚合根映射说明
 > - **v1.1** (2026-07-01)：新增 Section 八监控运维、附录 H 部署DevOps、附录 I API规范、附录 J 运行时日志管理；附录拆分为独立文件；C.8 角色可扩展性；G.8 前端架构详述；P0 性能目标
 > - **v1.0** (基线)：完整蓝图初版——DDD 目录脚手架、阶段一~四任务清单、6 个附录
 
@@ -555,7 +555,7 @@ public class CorrelationIdMiddleware
 <a name="九安全与鉴权"></a>
 ## 九、安全与鉴权
 
-> **实现阶段**：阶段五（安全加固）落地认证 / 多租户 / RBAC / 审计；F2 进一步将 JWT 改为 Cookie 承载并接入 PBKDF2 真实密码校验。QuickStart 模式不强制鉴权（FallbackPolicy 放行），但登录与密码校验逻辑已实现。
+> **实现阶段**：阶段五（安全加固）落地认证 / 多租户 / RBAC / 审计；F2 进一步将 JWT 改为 Cookie 承载并接入 PBKDF2 真实密码校验。Development 模式鉴权正常生效（Cookie JWT + PBKDF2 密码校验），不再有无鉴权模式。
 >
 > **铁律**：平台会执行代码沙箱、调用外部模型，安全是第一优先级，不是"以后再补"。
 
@@ -650,7 +650,7 @@ AuditLog
 > 4. **向量库** — SQLite 内存模式（代替 PGVector）
 > 5. **工作流引擎** — StubWorkflowEngine 空实现
 > 6. **代码沙箱** — 禁用（代替 Docker）
-> 7. **用户认证** — QuickStart 不强制鉴权（FallbackPolicy 放行），但登录 / 密码校验逻辑已实现
+> 7. **用户认证** — Development 模式下鉴权正常生效（Cookie JWT + PBKDF2 密码校验）
 > 8. **Tool 执行器** — NativeToolExecutor 已真实化（真实 HTTP）/ SkillPackageExecutor 占位
 > 9. **向量嵌入** — 空返回（不调用真实 Embedding API）
 > 10. **通知/告警** — 空实现（不发送任何通知）
@@ -659,65 +659,70 @@ AuditLog
 # 1. 克隆项目，进入源码目录
 cd src/AgentPlatform.Api
 
-# 2. 用 SQLite + Stub 模型配置运行（代替 PostgreSQL + 真实模型）
-dotnet run --launch-profile QuickStart
+# 2. 设置至少一个 LLM Provider 的 API Key（环境变量优先）
+export OPENAI_API_KEY="sk-your-key-here"        # OpenAI / 兼容 OpenAI 协议
+# export DEEPSEEK_API_KEY="sk-your-key-here"   # DeepSeek
+# export VLLM_BASE_URL="http://localhost:8000/v1"  # 自建 vLLM
 
-# 3. 浏览器打开
+# 可选：指定模型名（默认 gpt-4o-mini）
+export OPENAI_MODEL="gpt-4o-mini"
+
+# 3. 启动（Development 环境，SQLite + 真实模型）
+dotnet run
+
+# 4. 浏览器打开
 open http://localhost:5000/scalar/v1
 
-# 4. 创建会话（返回会话 ID）
+# 5. 创建会话（返回会话 ID）
 CONV_ID=$(curl -s -X POST http://localhost:5000/api/v1/conversations \
   -H "Content-Type: application/json" | jq -r '.id')
 
-# 5. 发送消息（返回模拟数据）
+# 6. 发送消息
 curl -X POST "http://localhost:5000/api/v1/conversations/$CONV_ID/messages" \
   -H "Content-Type: application/json" \
-  -d '{"content":"Hello","model": "stub"}'
+  -d '{"content":"Hello"}'
 ```
 
-**QuickStart 配置要点**（`appsettings.QuickStart.json`）：
+> **不再提供 QuickStart（Stub 模型）模式**。Development / Production / Staging 等运行环境**强制要求**至少配置一个真实 LLM Provider（OpenAI / DeepSeek / VLLM）。仅单元测试环境 (`Test`) 允许使用 StubModelClient。
 
-```json
-{
-  "ConnectionStrings": {
-    "PostgreSQL": "Data Source=agent_platform_quickstart.db"  // SQLite
-  },
-  "ModelClient": {
-    "Provider": "Stub",        // 不调用真实模型
-    "StubResponse": "这是模拟回复，平台已正常运行。"
-  },
-  "Cache": {
-    "Provider": "Memory",     // 内存缓存，不启动 Redis
-    "Connection": null
-  }
-}
-```
+### 10.2 配置真实 API Key
 
-> 配置在 `src/AgentPlatform.Api/appsettings.QuickStart.json`（Git 已包含），`dotnet run --launch-profile QuickStart` 或设置 `ASPNETCORE_ENVIRONMENT=QuickStart` 自动加载。无需 Docker、无需真实 API Key、不消耗 token。
-
-### 10.2 配置真实 API Key（非 QuickStart 模式）
-
-运行真实模型（QuickStart 以外模式）需设置 OpenAI API Key：
-
+**推荐：环境变量**（优先级最高，适合 CI/CD 与容器部署）
 ```bash
-# 方式一：.NET User Secrets（推荐，避免密钥落入 Git）
-dotnet user-secrets set "OpenAI:Key" "sk-your-key-here"
-
-# 方式二：环境变量
-set ASPNETCORE_ENVIRONMENT=Development
-set OpenAI__Key=sk-your-key-here
-
-# 方式三：直接编辑 appsettings.Development.json
+export OPENAI_API_KEY="sk-your-key-here"
+export OPENAI_MODEL="gpt-4o-mini"        # 可选，默认 gpt-4o-mini
+export OPENAI_BASE_URL="https://api.openai.com/v1"  # 可选，默认官方
 ```
+
+**备选：.NET User Secrets**（本地开发，不提交代码）
+```bash
+cd src/AgentPlatform.Api
+dotnet user-secrets set "OpenAI:Key" "sk-your-key-here"
+dotnet user-secrets set "OpenAI:Model" "gpt-4o-mini"
+```
+
+**配置优先级**：环境变量 > `appsettings.Development.json` > User Secrets > `appsettings.json`
+
+支持的 Provider：
+| Provider | 环境变量 | 配置键 | 说明 |
+|----------|----------|--------|------|
+| OpenAI / 兼容 | `OPENAI_API_KEY` | `OpenAI:Key` | 必填 |
+| | `OPENAI_MODEL` | `OpenAI:Model` | 可选，默认 `gpt-4o-mini` |
+| | `OPENAI_BASE_URL` | `OpenAI:BaseUrl` | 可选，默认官方 |
+| DeepSeek | `DEEPSEEK_API_KEY` | `DeepSeek:Key` | 可选 |
+| vLLM | `VLLM_BASE_URL` | `VLLM:Url` | 可选，指向 `/v1` 端点 |
 
 ### 10.3 环境变量参考
 
 | 环境变量 | 用途 | 默认值 |
 | :--- | :--- | :--- |
-| `ASPNETCORE_ENVIRONMENT` | 运行时环境（Development/QuickStart/Production） | Production |
+| `ASPNETCORE_ENVIRONMENT` | 运行时环境（Development/Production/Staging） | Production |
 | `ConnectionStrings__PostgreSQL` | PostgreSQL 连接字符串（`Data Source=...` 开头为 SQLite） | 必填（Development/Production） |
-| `OpenAI__Key` | OpenAI API Key | 空字符串（使用 Stub 时可忽略） |
-| `ModelClient__Provider` | 模型客户端类型（`Stub` / `OpenAI`） | `OpenAI` |
+| `OPENAI_API_KEY` | OpenAI API Key | 必填（除非配置 DeepSeek/VLLM） |
+| `OPENAI_MODEL` | OpenAI 模型名 | `gpt-4o-mini` |
+| `OPENAI_BASE_URL` | OpenAI API 基础 URL | `https://api.openai.com/v1` |
+| `DEEPSEEK_API_KEY` | DeepSeek API Key | 可选 |
+| `VLLM_BASE_URL` | vLLM 服务地址（含 `/v1`） | 可选 |
 | `Cache__Provider` | 缓存类型（`Memory` / `Redis`） | `Memory` |
 
 ---

@@ -14,7 +14,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Options;
 using System.Text.Json;
 
 namespace AgentPlatform.Api.Controllers;
@@ -32,7 +31,6 @@ public sealed class AgentsController : ControllerBase
     private readonly IMediator _mediator;
     private readonly ITenantProvider _tenant;
     private readonly AgenticOrchestrator _orchestrator;
-    private readonly ModelDefaults _defaults;
     private readonly IHostEnvironment _environment;
     private readonly IAgentRunRecorder _runRecorder;
 
@@ -44,31 +42,24 @@ public sealed class AgentsController : ControllerBase
     /// <summary>
     /// Initializes a new instance of the <see cref="AgentsController"/> class.
     /// </summary>
-    /// <param name="mediator">The MediatR mediator used to dispatch commands and queries.</param>
-    /// <param name="tenant">The tenant provider used to resolve the current tenant identifier.</param>
-    /// <param name="orchestrator">The agentic orchestrator used to drive streaming runs.</param>
-    /// <param name="defaultsOptions">The model default settings options used to fill missing request values.</param>
-    /// <param name="environment">The host environment, used to resolve the content root for serving run artifacts.</param>
-    /// <param name="runRecorder">The run history recorder, persists each run for the in-platform history list.</param>
     public AgentsController(
         IMediator mediator,
         ITenantProvider tenant,
         AgenticOrchestrator orchestrator,
-        IOptions<ModelDefaults> defaultsOptions,
         IHostEnvironment environment,
         IAgentRunRecorder runRecorder)
     {
         _mediator = mediator;
         _tenant = tenant;
         _orchestrator = orchestrator;
-        _defaults = defaultsOptions.Value;
         _environment = environment;
         _runRecorder = runRecorder;
     }
 
     /// <summary>
-    /// Creates a new agent using the provided request payload, applying configured model defaults
-    /// for any optional fields that are not supplied.
+    /// Creates a new agent using the provided request payload.
+    /// All model configuration (ModelProvider, ModelName, ModelApiUrl) must be explicitly provided
+    /// via the request or configured in tenant credentials — no platform-level fallback exists.
     /// </summary>
     /// <param name="request">The request payload describing the agent to create.</param>
     /// <param name="ct">A token to observe for cancellation of the request.</param>
@@ -79,13 +70,20 @@ public sealed class AgentsController : ControllerBase
         [FromBody] CreateAgentRequest request,
         CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(request.ModelProvider))
+            return BadRequest("ModelProvider is required");
+        if (string.IsNullOrWhiteSpace(request.ModelName))
+            return BadRequest("ModelName is required");
+        if (string.IsNullOrWhiteSpace(request.ModelApiUrl))
+            return BadRequest("ModelApiUrl is required");
+
         var command = new CreateAgentCommand(
             request.Name,
             request.RoleCode ?? "development",
-            request.ModelProvider ?? _defaults.ModelProvider,
-            request.ModelName ?? _defaults.ModelName,
-            request.ModelApiUrl ?? _defaults.ModelApiUrl,
-            request.SystemPrompt ?? _defaults.SystemPrompt,
+            request.ModelProvider,
+            request.ModelName,
+            request.ModelApiUrl,
+            request.SystemPrompt ?? "You are a helpful AI assistant.",
             _tenant.GetTenantId(),
             AllowedToolNames: request.AllowedToolNames,
             MaxIterations: request.MaxIterations,

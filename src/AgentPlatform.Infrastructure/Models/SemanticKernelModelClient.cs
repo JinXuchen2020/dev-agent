@@ -8,7 +8,6 @@ using AgentPlatform.Domain.Enums;
 using AgentPlatform.Domain.ValueObjects;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
@@ -17,6 +16,8 @@ namespace AgentPlatform.Infrastructure.Models;
 
 /// <summary>
 /// Semantic Kernel-based implementation of <see cref="IModelClient"/> that routes chat completion requests to registered OpenAI-compatible endpoints.
+/// Platform-level instance uses IConfiguration (OpenAI:Key, OpenAI:BaseUrl, OpenAI:Model).
+/// Tenant-level instances use CreateForTenant with explicit credentials from DB.
 /// </summary>
 internal sealed class SemanticKernelModelClient : IModelClient
 {
@@ -30,48 +31,26 @@ internal sealed class SemanticKernelModelClient : IModelClient
     private readonly ILogger<SemanticKernelModelClient> _logger;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="SemanticKernelModelClient"/> class, registering chat completion services from configuration.
+    /// Initializes a new instance of the <see cref="SemanticKernelModelClient"/> class, registering chat completion services from platform-level configuration.
     /// </summary>
-    /// <param name="configuration">The application configuration containing OpenAI and vLLM connection settings.</param>
-    /// <param name="modelDefaults">The configured default model settings.</param>
+    /// <param name="configuration">The application configuration containing OpenAI connection settings (OpenAI:Key, OpenAI:BaseUrl, OpenAI:Model).</param>
     /// <param name="logger">The logger used to capture model invocation diagnostics.</param>
     public SemanticKernelModelClient(
         IConfiguration configuration,
-        IOptions<ModelDefaults> modelDefaults,
         ILogger<SemanticKernelModelClient> logger)
     {
         _logger = logger;
         _services = new Dictionary<string, IChatCompletionService>();
 
         var openAiKey = configuration["OpenAI:Key"];
+        var openAiBaseUrl = configuration["OpenAI:BaseUrl"];
+        var openAiModel = configuration["OpenAI:Model"] ?? "gpt-4o-mini";
+
         if (!string.IsNullOrEmpty(openAiKey))
         {
-            var modelName = modelDefaults.Value.ModelName;
-            var service = BuildService(modelName, null, openAiKey);
-            _services[modelName] = service;
-            _services[$"openai:{modelName}"] = service;
-        }
-
-        var deepSeekKey = configuration["DeepSeek:Key"];
-        if (!string.IsNullOrEmpty(deepSeekKey))
-        {
-            var modelName = modelDefaults.Value.ModelName;
-            var apiUrl = modelDefaults.Value.ModelApiUrl;
-            if (!string.IsNullOrEmpty(apiUrl))
-            {
-                var service = BuildService(modelName, apiUrl, deepSeekKey);
-                _services[modelName] = service;
-                _services[$"deepseek:{modelName}"] = service;
-            }
-        }
-
-        var vllmUrl = configuration["VLLM:Url"];
-        if (!string.IsNullOrEmpty(vllmUrl))
-        {
-            var vllmModel = configuration["VLLM:Model"] ?? modelDefaults.Value.ModelName ?? "local-llm";
-            var service = BuildService(vllmModel, vllmUrl, "not-needed");
-            _services[vllmModel] = service;
-            _services[$"vllm:{vllmModel}"] = service;
+            var service = BuildService(openAiModel, openAiBaseUrl, openAiKey);
+            _services[openAiModel] = service;
+            _services[$"openai:{openAiModel}"] = service;
         }
     }
 

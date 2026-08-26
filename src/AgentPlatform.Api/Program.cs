@@ -57,9 +57,8 @@ if (string.IsNullOrEmpty(jwtKey) || jwtKey == "dev-secret-key-min-32-chars-long!
 
 var app = builder.Build();
 
-// ── Database initialization (development / QuickStart / Integration) ─
-if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("QuickStart")
-    || app.Environment.IsEnvironment("Integration"))
+// ── Database initialization (Development / Integration) ─
+if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Integration"))
 {
     using var scope = app.Services.CreateScope();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
@@ -69,23 +68,29 @@ if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("QuickStart
     logger.LogInformation("Database initialization completed.");
 }
 
-// ── Model client mode diagnostic ──────────────────────────────
-// 运行环境不再静默回退 Stub：未配置任何模型 provider 时，调用将直接报错。
+// ── Model client startup validation (fail-fast for non-Test environments) ─────
+// Test 环境使用 StubModelClient，其他环境强制要求配置 OpenAI Key（含 DeepSeek/vLLM 均走 OpenAI 兼容协议）。
 {
     var modelModeLogger = app.Services.GetRequiredService<ILogger<Program>>();
-    var llmConfiguredNow = !string.IsNullOrEmpty(app.Configuration["OpenAI:Key"])
-        || !string.IsNullOrEmpty(app.Configuration["DeepSeek:Key"])
-        || !string.IsNullOrEmpty(app.Configuration["VLLM:Url"]);
+    var openAiKeyConfigured = !string.IsNullOrEmpty(app.Configuration["OpenAI:Key"]);
 
-    if (app.Environment.IsEnvironment("Test") || app.Environment.IsEnvironment("Integration"))
+    if (app.Environment.IsEnvironment("Test"))
+    {
         modelModeLogger.LogInformation("模型客户端：测试环境使用 StubModelClient（仅测试隔离，不影响运行环境）。");
-    else if (llmConfiguredNow)
-        modelModeLogger.LogInformation("模型客户端已接入真实 LLM 端点（平台级配置）。");
+    }
+    else if (openAiKeyConfigured)
+    {
+        modelModeLogger.LogInformation("模型客户端已接入真实 LLM 端点（平台级配置，OpenAI 兼容协议）。");
+    }
     else
-        modelModeLogger.LogWarning(
-            "未配置任何平台级模型 provider（OpenAI:Key / DeepSeek:Key / VLLM:Url 全为空）。" +
-            "调用模型时若当前租户未在「我的凭据」中添加模型，将直接报错。" +
-            "请配置真实 LLM 端点，或在「我的凭据」中添加 BYO 模型凭据。");
+    {
+        var msg = "No OpenAI API Key configured. Set OpenAI:Key (env OPENAI_API_KEY) " +
+                  "for OpenAI/DeepSeek/vLLM (all OpenAI-compatible). " +
+                  "Optional: OpenAI:BaseUrl (env OPENAI_BASE_URL) to override endpoint. " +
+                  "Test environment is exempt and uses StubModelClient.";
+        modelModeLogger.LogCritical(msg);
+        throw new InvalidOperationException(msg);
+    }
 }
 
 // ── OpenAPI / Swagger / Scalar pipeline ───────────────────────────
@@ -95,6 +100,10 @@ app.UseSwagger();
 app.UseSwaggerUI();
 
 // ── Middleware pipeline ───────────────────────────────────────────
+if (app.Environment.IsDevelopment())
+{
+    app.UseDeveloperExceptionPage();
+}
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseMiddleware<CorrelationIdMiddleware>();
@@ -105,7 +114,7 @@ app.UseAuthorization();
 if (app.Configuration.GetValue<bool>("Security:RateLimitingEnabled", true))
     app.UseRateLimiter();
 
-if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("QuickStart"))
+if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 
 app.UseCors();

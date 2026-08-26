@@ -17,7 +17,7 @@ namespace AgentPlatform.Api.Tests;
 
 /// <summary>
 /// 测试专用 ITenantModelClientResolver：恒返回空列表 → 回退平台 stub 模型。
-/// 隔离在测试组合根做（生产解析器不读 Provider 配置，QuickStart 须允许 BYO 真实生效）。
+/// 隔离在测试组合根做（生产解析器不读 Provider 配置；仅 Test 环境允许 Stub）。
 /// </summary>
 public sealed class StubTenantModelClientResolver : ITenantModelClientResolver
 {
