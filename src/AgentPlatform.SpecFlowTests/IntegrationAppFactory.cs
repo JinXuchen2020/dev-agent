@@ -92,7 +92,7 @@ public class IntegrationAppFactory : WebApplicationFactory<Program>, IAsyncLifet
 
             services.AddDbContext<AppDbContext>(options => options.UseSqlite($"Data Source={DbPath};Pooling=false"));
 
-            // 默认：用可控执行器替换全部真实 IStepExecutor（仅隔离外部 LLM 步骤行为，真实引擎 + 真实 DB 不变）。
+            // 默认：用可控执行器替换全部真实 IStepExecutor（仅隔离外部 LLM 步骤行为，真实引擎 + 真 DB 不变）。
             // F12 通过 StripStepExecutors=false 保留真实执行器（见 RealStepsIntegrationAppFactory）。
             if (StripStepExecutors)
             {
@@ -104,6 +104,15 @@ public class IntegrationAppFactory : WebApplicationFactory<Program>, IAsyncLifet
                 services.AddSingleton<ConfigurableStepExecutor>();
                 services.AddSingleton<IStepExecutor>(sp => sp.GetRequiredService<ConfigurableStepExecutor>());
             }
+
+            // 租户 BYO 模型解析在 DI 层替换为恒空实现：BDD 写入的假凭据（sk-bdd-test-*）不得触发
+            // 真实 OpenAI 出站。隔离放在测试组合根而非生产解析器读配置——QuickStart 同为
+            // Provider=Stub，但必须允许用户自配模型真实生效（2026-08-26 CI 401 修复）。
+            var resolverDescriptor = services.SingleOrDefault(
+                d => d.ServiceType == typeof(ITenantModelClientResolver));
+            if (resolverDescriptor is not null)
+                services.Remove(resolverDescriptor);
+            services.AddScoped<ITenantModelClientResolver, StubTenantModelClientResolver>();
 
             // 禁用后台托管服务（执行日志清理 / ApiKey 过期 / 工作流调度定时任务）：
             // 它们会周期性写同一文件 SQLite，与 BDD 场景并发写引发 database is locked → 21s 忙等 → 偶发 500。

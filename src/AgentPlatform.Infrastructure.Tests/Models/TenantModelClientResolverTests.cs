@@ -25,13 +25,11 @@ public class TenantModelClientResolverTests
 
     private static TenantModelClientResolver Create(
         ITenantCredentialResolver resolver,
-        IApiKeyEncryptionService encryption,
-        IConfiguration configuration = null)
+        IApiKeyEncryptionService encryption)
     {
         return new TenantModelClientResolver(
             resolver,
             encryption,
-            configuration ?? Substitute.For<IConfiguration>(),
             Substitute.For<ILogger<TenantModelClientResolver>>(),
             Substitute.For<ILogger<ModelTelemetryDecorator>>());
     }
@@ -104,49 +102,22 @@ public class TenantModelClientResolverTests
     }
 
     [Fact]
-    public async Task ResolveAsync_StubMode_BypassesCredentials()
+    public async Task ResolveAsync_AlwaysConsultsCredentials_IgnoringProviderConfig()
     {
-        // F28 Stub 模式恢复：ModelClient:Provider=Stub 时短路返回空列表，
-        // 不解密/不调用租户凭据，防止集成测试用假 key 发起真实 HTTP 请求（401）。
-        var resolver = Substitute.For<ITenantCredentialResolver>();
-        var fakeCred = new TenantCredentialSetting(
-            Guid.NewGuid(), TenantId, CredentialCategory.Model,
-            "Fake", "OpenAI", "encrypted", "sk-****", null, null, isEnabled: true);
-        resolver
-            .ResolveAsync(TenantId, CredentialCategory.Model, Arg.Any<CancellationToken>())
-            .Returns(new List<TenantCredentialSetting> { fakeCred }); // 有凭据但不应被访问
-        var encryption = Substitute.For<IApiKeyEncryptionService>();
-        var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string> { ["ModelClient:Provider"] = "Stub" })
-            .Build();
-        var sut = Create(resolver, encryption, config);
-
-        var result = await sut.ResolveAsync(TenantId);
-
-        Assert.Empty(result);
-        await resolver.DidNotReceive().ResolveAsync(
-            Arg.Any<Guid>(), Arg.Any<CredentialCategory>(), Arg.Any<CancellationToken>());
-        encryption.DidNotReceive().DecryptKey(Arg.Any<string>());
-    }
-
-    [Fact]
-    public async Task ResolveAsync_RealMode_ConsultsCredentials()
-    {
-        // 非 Stub 模式：正常解析租户凭据（F13 多 BYO 语义）。
+        // 契约：解析器不感知 ModelClient:Provider（QuickStart Stub 亦允许 BYO 真实出站）；
+        // 测试隔离由测试工厂在 DI 层替换 ITenantModelClientResolver 实现，而非本类读配置。
         var resolver = Substitute.For<ITenantCredentialResolver>();
         resolver
             .ResolveAsync(TenantId, CredentialCategory.Model, Arg.Any<CancellationToken>())
             .Returns(new List<TenantCredentialSetting>());
         var encryption = Substitute.For<IApiKeyEncryptionService>();
-        var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string> { ["ModelClient:Provider"] = "OpenAI" })
-            .Build();
-        var sut = Create(resolver, encryption, config);
+        var sut = Create(resolver, encryption);
 
         var result = await sut.ResolveAsync(TenantId);
 
         Assert.Empty(result);
         await resolver.Received(1).ResolveAsync(
             Arg.Any<Guid>(), Arg.Any<CredentialCategory>(), Arg.Any<CancellationToken>());
+        encryption.DidNotReceive().DecryptKey(Arg.Any<string>()); // 无凭据则绝不解密
     }
 }

@@ -1,6 +1,8 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Application.Routing.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
@@ -12,6 +14,17 @@ using AgentPlatform.Infrastructure.Persistence;
 using Xunit;
 
 namespace AgentPlatform.Api.Tests;
+
+/// <summary>
+/// 测试专用 ITenantModelClientResolver：恒返回空列表 → 回退平台 stub 模型。
+/// 隔离在测试组合根做（生产解析器不读 Provider 配置，QuickStart 须允许 BYO 真实生效）。
+/// </summary>
+public sealed class StubTenantModelClientResolver : ITenantModelClientResolver
+{
+    /// <inheritdoc />
+    public Task<IReadOnlyList<TenantModelResolution>> ResolveAsync(Guid tenantId, CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<TenantModelResolution>>(Array.Empty<TenantModelResolution>());
+}
 
 /// <summary>
 /// Custom <see cref="WebApplicationFactory{TEntryPoint}"/> for API contract tests.
@@ -96,6 +109,13 @@ public sealed class ApiContractTestFactory : WebApplicationFactory<Program>, IAs
 
             services.AddDbContext<AppDbContext>(options =>
                 options.UseSqlite(_sqliteConnection));
+
+            // 租户 BYO 模型解析替换为恒空 stub（组合根隔离，防假凭据触发真实出站）。
+            var resolverDescriptor = services.SingleOrDefault(
+                d => d.ServiceType == typeof(ITenantModelClientResolver));
+            if (resolverDescriptor is not null)
+                services.Remove(resolverDescriptor);
+            services.AddScoped<ITenantModelClientResolver, StubTenantModelClientResolver>();
 
             // Create the database schema using a temporary scope so the
             // schema is ready before the first test request.
