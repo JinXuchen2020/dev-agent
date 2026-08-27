@@ -33,6 +33,7 @@ public sealed class AgentsController : ControllerBase
     private readonly AgenticOrchestrator _orchestrator;
     private readonly IHostEnvironment _environment;
     private readonly IAgentRunRecorder _runRecorder;
+    private readonly IPlatformModelProvider _platformModels;
 
     private static readonly JsonSerializerOptions SseOptions = new(JsonSerializerOptions.Web)
     {
@@ -47,19 +48,24 @@ public sealed class AgentsController : ControllerBase
         ITenantProvider tenant,
         AgenticOrchestrator orchestrator,
         IHostEnvironment environment,
-        IAgentRunRecorder runRecorder)
+        IAgentRunRecorder runRecorder,
+        IPlatformModelProvider platformModels)
     {
         _mediator = mediator;
         _tenant = tenant;
         _orchestrator = orchestrator;
         _environment = environment;
         _runRecorder = runRecorder;
+        _platformModels = platformModels;
     }
 
     /// <summary>
     /// Creates a new agent using the provided request payload.
-    /// All model configuration (ModelProvider, ModelName, ModelApiUrl) must be explicitly provided
-    /// via the request or configured in tenant credentials — no platform-level fallback exists.
+    /// Model configuration (ModelProvider, ModelName, ModelApiUrl) is optional at creation time:
+    /// when omitted, the agent is created with the platform's default model pinned as its endpoint
+    /// (highest-priority enabled entry in the DB-backed <c>PlatformModels</c> catalog), so it is
+    /// immediately routable. Runtime routing still prefers the tenant's BYO credentials when present
+    /// — consistent with "all provider config lives in the DB".
     /// </summary>
     /// <param name="request">The request payload describing the agent to create.</param>
     /// <param name="ct">A token to observe for cancellation of the request.</param>
@@ -70,19 +76,20 @@ public sealed class AgentsController : ControllerBase
         [FromBody] CreateAgentRequest request,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(request.ModelProvider))
-            return BadRequest("ModelProvider is required");
-        if (string.IsNullOrWhiteSpace(request.ModelName))
-            return BadRequest("ModelName is required");
-        if (string.IsNullOrWhiteSpace(request.ModelApiUrl))
-            return BadRequest("ModelApiUrl is required");
+        // Model configuration is optional. When omitted, fall back to the platform's default
+        // model (highest-priority enabled entry in the DB-backed PlatformModels catalog) so the
+        // agent is created with a concrete, routable endpoint.
+        var platformDefault = _platformModels.GetCandidates().FirstOrDefault();
+        var provider = request.ModelProvider ?? platformDefault?.Provider ?? string.Empty;
+        var modelName = request.ModelName ?? platformDefault?.ModelId ?? string.Empty;
+        var apiUrl = request.ModelApiUrl ?? string.Empty;
 
         var command = new CreateAgentCommand(
             request.Name,
             request.RoleCode ?? "development",
-            request.ModelProvider,
-            request.ModelName,
-            request.ModelApiUrl,
+            provider,
+            modelName,
+            apiUrl,
             request.SystemPrompt ?? "You are a helpful AI assistant.",
             _tenant.GetTenantId(),
             AllowedToolNames: request.AllowedToolNames,

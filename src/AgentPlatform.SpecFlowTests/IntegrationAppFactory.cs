@@ -64,7 +64,9 @@ public class IntegrationAppFactory : WebApplicationFactory<Program>, IAsyncLifet
         // 内存缓存避免 Redis 依赖
         ["Cache:Provider"] = "Memory",
 
-        // 从环境变量读取真实 LLM Key（CI 必须预置）；DeepSeek/vLLM 均兼容 OpenAI 协议，统一走 OpenAI 配置
+        // 从环境变量读取真实 LLM Key（CI 必须预置）；DeepSeek/vLLM 均兼容 OpenAI 协议，统一走 OpenAI 配置。
+        // 平台默认模型由 DatabaseInitializer 在启动时从 OpenAI:* 环境变量种子化进 PlatformModels 表，
+        // 不再依赖 Router:Candidates 配置（已移除）。
         ["OpenAI:Key"] = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? "",
         ["OpenAI:Model"] = Environment.GetEnvironmentVariable("OPENAI_MODEL") ?? "gpt-4o-mini",
         ["OpenAI:BaseUrl"] = Environment.GetEnvironmentVariable("OPENAI_BASE_URL") ?? "",

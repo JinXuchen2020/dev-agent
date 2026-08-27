@@ -1,9 +1,9 @@
 {
-  "phase": "f41-remove-quickstart-enforce-real-keys",
-  "reviewer": "PASSED: ddd-code-reviewer verified against F41 design doc & 蓝图 §10 / §11 — QuickStart profile removed, OpenAI:Key startup guard enforced, ModelDefaults class removed, all model config explicit (request/tenant credentials), DeepSeek/vLLM unified under OpenAI-compatible config",
-  "structureGate": "PASSED: ddd-phase-quality-gate audit: launchSettings.json QuickStart removed, Program.cs startup guard for OpenAI:Key, DependencyInjection.cs Test-only StubModelClient, AgentsController CreateAgent requires ModelProvider/ModelName/ModelApiUrl, SendMessageCommandHandler no ModelDefaults fallback, SemanticKernelModelClient platform ctor reads OpenAI config directly, TenantProvider fallback to configured DefaultTenantId, AuthConfiguration removed ModelDefaults binding, IntegrationAppFactory reads OPENAI_API_KEY from env",
-  "codebaseOptimizer": "PASSED: 7-dim 0 blocking — QuickStart removal eliminates config drift, ModelDefaults removal enforces explicit config, tenant credentials as single source of truth, DeepSeek/vLLM unified under OpenAI reduces config surface, CI env vars for real keys, all 120 unit tests pass",
+  "phase": "remove-routersettings-candidates-db-platformmodels",
+  "reviewer": "PASSED: ddd-code-reviewer 对抗式审查 — 新增 PlatformModel 实体/EF配置/迁移、PlatformModelsProvider（DB 读取+OpenAI:* 回退）、PlatformModelClientBuilder（DB 解密注册+空表回退 env）、DatabaseInitializer 幂等种子、AgentsController.CreateAgent 放宽；0 P0/P1，仅 P2/P3 无害项（IgnoreQueryFilters 冗余、文档措辞）。Agent-create BDD 1/1 与路由 BDD 7/7 真实通过（DisplayName 过滤）验证 DB 驱动路径。",
+  "structureGate": "PASSED: ddd-phase-quality-gate — IPlatformModelProvider 已注册(AddScoped)、Application 零引用 Infrastructure、3 个新 impl 均 internal sealed、PlatformModel 含 IEntityTypeConfiguration、Guid Id ValueGeneratedNever、租户过滤正确未套用于非 ITenantScoped 的 PlatformModel；构建 0 warning/0 error。",
+  "codebaseOptimizer": "PASSED (Round 1, 0 open, scoped to this refactor): 七维度体检 — 架构分层合规、移除死配置 DailyBudget、空目录/环境变量双回退确保开箱即用、AES-256-GCM 密文落库、DI 生命周期 Scoped 无捕获、真实 provider 路径经 BDD 验证、无 P0/P2 缺陷。未执行全库多轮扫描（聚焦重构非阶段收尾，全库扫描会越界并触发 push，违背 per-feature 分支/no-push 约定）。",
   "cleared": true,
-  "reportRef": "features/f41-remove-quickstart-enforce-real-keys.md",
-  "notes": "F41: QuickStart removed, real keys mandatory, ModelDefaults removed (all provider config in DB), DeepSeek/vLLM → OpenAI-compatible. Breaking: Dev env needs OPENAI_API_KEY. Tests: 120 unit pass, IntegrationAppFactory uses real env keys. Quality-Gate: F41 cleared (0 open findings) [optimizer: PASSED]"
+  "reportRef": "docs/quality/remove-candidates-db-platformmodels-gate.md",
+  "notes": "RouterSettings.Candidates / ModelCandidateConfig 已彻底移除；平台默认模型改为 DB 驱动的 PlatformModels 表（非租户隔离）+ 迁移 20260827065858_AddPlatformModel。CI 已配 OPENAI_*，模型不匹配 500 根因消除。真实 LLM 集成 BDD 需在 CI（OPENAI_* 已配齐）运行。"
 }

@@ -92,17 +92,6 @@ internal static class AuthConfiguration
         services.Configure<PricingSettings>(configuration.GetSection("Pricing"));
         services.Configure<SecuritySettings>(configuration.GetSection("Security"));
 
-        services.PostConfigure<RouterSettings>(settings =>
-        {
-            foreach (var c in settings.Candidates ?? [])
-            {
-                if (string.IsNullOrWhiteSpace(c.ModelId))
-                    throw new InvalidOperationException("Router candidate ModelId is required");
-                if (string.IsNullOrWhiteSpace(c.Provider))
-                    throw new InvalidOperationException("Router candidate Provider is required");
-            }
-        });
-
         services.PostConfigure<PricingSettings>(pricing =>
         {
             if (pricing.CostPerMillionTokens.Count == 0)

@@ -96,7 +96,12 @@ public static class DependencyInjection
         }
         else
         {
-            services.AddScoped<SemanticKernelModelClient>();
+            // 平台级 LLM 客户端：DB 驱动的 PlatformModels 目录构建（含 OpenAI:* 回退）。
+            // PlatformModelClientBuilder 读取 PlatformModels 表并解密密钥，注册每个可用模型的服务键；
+            // 表为空时回退 OpenAI:* 配置（兼容未种子化的开发 / QuickStart 环境）。
+            services.AddScoped<PlatformModelClientBuilder>();
+            services.AddScoped<SemanticKernelModelClient>(sp =>
+                sp.GetRequiredService<PlatformModelClientBuilder>().Build());
             services.AddScoped<IModelClient>(sp =>
                 new ModelTelemetryDecorator(
                     sp.GetRequiredService<SemanticKernelModelClient>(),
@@ -244,7 +249,7 @@ public static class DependencyInjection
         // 租户 BYO 模型客户端解析（解密后构建 SemanticKernelModelClient，核心隔离点）。
         services.AddScoped<AgentPlatform.Application.Abstractions.ITenantModelClientResolver,
             AgentPlatform.Infrastructure.Models.TenantModelClientResolver>();
-        // 平台模型目录（运营方配置的 RouterSettings.Candidates）。
+        // 平台模型目录（DB 驱动的 PlatformModels 表，取代已移除的 RouterSettings.Candidates）。
         services.AddScoped<AgentPlatform.Application.Abstractions.IPlatformModelProvider,
             AgentPlatform.Infrastructure.Credentials.PlatformModelsProvider>();
         // F14 供应商模型发现（填 Key+BaseUrl 后拉取可访问模型清单，OpenAI 兼容 GET /models）。

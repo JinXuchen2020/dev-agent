@@ -13,8 +13,8 @@ public sealed class ModelNotConfiguredException : Exception
     /// </summary>
     /// <param name="tenantId">The tenant whose request could not be served.</param>
     public ModelNotConfiguredException(Guid tenantId)
-        : base($"未配置任何可用模型：租户 {tenantId} 无启用的 BYO 模型凭据，平台模型目录也未配置可用 Key。" +
-               "请在「我的凭据」添加模型凭据，或为平台配置 LLM Key（Router:Candidates 对应的 Provider）。")
+        : base($"未配置任何可用模型：租户 {tenantId} 无启用的 BYO 模型凭据，平台模型目录（PlatformModels 表）也未配置可用 Key。" +
+               "请在「我的凭据」添加模型凭据，或在管理后台为平台配置 LLM Key。")
     {
         TenantId = tenantId;
     }

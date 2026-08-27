@@ -1,20 +1,11 @@
 namespace AgentPlatform.Application.Abstractions;
 
 /// <summary>
-/// Contains configuration for the model router, including candidate models, daily budget, and resilience policies.
+/// Contains configuration for the model router, including per-tenant daily budget and resilience policies.
+/// Platform candidate models are sourced from the DB-backed <c>PlatformModels</c> catalog (not configuration).
 /// </summary>
 public sealed class RouterSettings
 {
-    /// <summary>
-    /// Gets or sets the list of model candidates available for routing.
-    /// </summary>
-    public List<ModelCandidateConfig> Candidates { get; set; } = [];
-
-    /// <summary>
-    /// Gets or sets the maximum amount that may be spent per day across all model calls (global / legacy cap).
-    /// </summary>
-    public decimal DailyBudget { get; set; } = 50.0m;
-
     /// <summary>
     /// Gets or sets the maximum amount a single tenant may spend per day on platform-provided models.
     /// BYO-key (tenant-owned) models are not subject to this budget (cost is borne by the tenant).
@@ -59,25 +50,4 @@ public sealed class RouterSettings
     /// 若担心半开流挂死，可配置一个正数（如 300）作为单次调用的兜底上限。
     /// </summary>
     public double TimeoutSeconds { get; set; } = 0;
-}
-
-/// <summary>
-/// Represents the configuration for a single model candidate used by the router.
-/// </summary>
-public sealed class ModelCandidateConfig
-{
-    /// <summary>
-    /// Gets or sets the unique identifier of the model (e.g., "gpt-4o").
-    /// </summary>
-    public string ModelId { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Gets or sets the provider hosting the model (e.g., "openai", "anthropic").
-    /// </summary>
-    public string Provider { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Gets or sets the priority of this candidate; higher values indicate stronger preference during routing.
-    /// </summary>
-    public int Priority { get; set; }
 }

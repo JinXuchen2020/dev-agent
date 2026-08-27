@@ -96,7 +96,7 @@ internal sealed class SemanticKernelModelClient : IModelClient
     /// <c>OpenAIChatCompletionService</c> constructor so the custom HttpClient can be injected directly —
     /// <c>AddOpenAIChatCompletion</c> would otherwise spin up its own HttpClient and bypass the normalizer.
     /// </summary>
-    private static IChatCompletionService BuildService(string modelName, string? baseUrl, string apiKey)
+    internal static IChatCompletionService BuildService(string modelName, string? baseUrl, string apiKey)
     {
 #pragma warning disable SKEXP0010
         if (!string.IsNullOrEmpty(baseUrl))

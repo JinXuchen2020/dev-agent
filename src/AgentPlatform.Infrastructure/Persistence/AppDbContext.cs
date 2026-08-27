@@ -10,6 +10,7 @@ using AgentPlatform.Domain.Aggregates.Conversations;
 using AgentPlatform.Domain.Aggregates.Debug;
 using AgentPlatform.Domain.Aggregates.ApiKeys;
 using AgentPlatform.Domain.Aggregates.KnowledgeBases;
+using AgentPlatform.Domain.Aggregates.PlatformModels;
 using AgentPlatform.Domain.Aggregates.TenantCredentials;
 using AgentPlatform.Domain.Aggregates.ToolDefinitions;
 using AgentPlatform.Domain.Aggregates.Users;
@@ -156,6 +157,12 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
     /// Gets the <see cref="DbSet{TEntity}"/> providing access to persisted agent run history records.
     /// </summary>
     public DbSet<AgentRunRecord> AgentRunRecords => Set<AgentRunRecord>();
+
+    /// <summary>
+    /// Gets the <see cref="DbSet{TEntity}"/> providing access to platform-level default model catalog
+    /// (non-tenant-scoped, shared across all tenants as the BYO fallback).
+    /// </summary>
+    public DbSet<PlatformModel> PlatformModels => Set<PlatformModel>();
 
     /// <summary>
     /// Returns all aggregate roots currently tracked by the change tracker, used for dispatching domain events on save.

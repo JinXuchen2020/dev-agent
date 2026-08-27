@@ -20,6 +20,7 @@ public class AgentRoutingSteps
     private CostController _costController;
     private readonly IResiliencePipelineProvider _pipeline = Substitute.For<IResiliencePipelineProvider>();
     private RouterSettings _routerSettings = null!;
+    private List<ModelCandidate> _platformCandidates = null!;
     private IModelRouter _router = null!;
     private string _primaryModel = "";
     private string _specifiedModel = "";
@@ -28,14 +29,14 @@ public class AgentRoutingSteps
 
     public AgentRoutingSteps()
     {
-        _routerSettings = new RouterSettings
+        _routerSettings = new RouterSettings();
+        // 平台候选模型直接驱动 IPlatformModelProvider（DB 驱动的 PlatformModels 目录的测试替身），
+        // 不再经由已移除的 RouterSettings.Candidates。
+        _platformCandidates = new List<ModelCandidate>
         {
-            Candidates =
-            [
-                new() { ModelId = "gpt-4o", Provider = "openai", Priority = 100 },
-                new() { ModelId = "deepseek", Provider = "deepseek", Priority = 80 },
-                new() { ModelId = "qwen", Provider = "qwen", Priority = 60 }
-            ]
+            new("gpt-4o", "openai", 100),
+            new("deepseek", "deepseek", 80),
+            new("qwen", "qwen", 60)
         };
         var pricingOptions = Substitute.For<IOptions<PricingSettings>>();
         pricingOptions.Value.Returns(new PricingSettings());
@@ -98,10 +99,7 @@ public class AgentRoutingSteps
             .ResolveAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(new List<TenantModelResolution>());
         var platformModelProvider = Substitute.For<IPlatformModelProvider>();
-        platformModelProvider.GetCandidates()
-            .Returns(_routerSettings.Candidates
-                .Select(c => new ModelCandidate(c.ModelId, c.Provider, c.Priority))
-                .ToList());
+        platformModelProvider.GetCandidates().Returns(_platformCandidates);
         var tenantProvider = Substitute.For<ITenantProvider>();
         tenantProvider.GetTenantId().Returns(Guid.NewGuid());
         var logger = Substitute.For<ILogger<ModelRouter>>();
@@ -176,7 +174,7 @@ public class AgentRoutingSteps
     [Given("候选模型列表为空")]
     public void Given候选模型列表为空()
     {
-        _routerSettings.Candidates = [];
+        _platformCandidates = [];
     }
 
     [Given(@"模型 ""(.*)"" 调用返回成功")]

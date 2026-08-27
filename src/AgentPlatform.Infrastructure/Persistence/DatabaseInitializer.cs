@@ -6,11 +6,13 @@ using AgentPlatform.Domain.Aggregates.AgentRoleDefinitions;
 using AgentPlatform.Domain.Aggregates.ApiKeys;
 using AgentPlatform.Domain.Aggregates.Users;
 using AgentPlatform.Domain.Aggregates.WorkflowTemplates;
+using AgentPlatform.Domain.Aggregates.PlatformModels;
 using AgentPlatform.Domain.Aggregates.Workflows;
 using AgentPlatform.Domain.Enums;
 using AgentPlatform.Domain.ValueObjects;
 using AgentPlatform.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -25,6 +27,7 @@ internal sealed class DatabaseInitializer : IDatabaseInitializer
 {
     private readonly AppDbContext _context;
     private readonly IServiceProvider _serviceProvider;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<DatabaseInitializer> _logger;
     private readonly TenantSettings _tenantSettings;
     private readonly IHostEnvironment _environment;
@@ -40,15 +43,17 @@ internal sealed class DatabaseInitializer : IDatabaseInitializer
     private const string IntegrationApiKeyPlaintext = "integration-fixture-key-0001";
     private const string IntegrationWorkflowName = "Integration Fixture Workflow";
 
-public DatabaseInitializer(
+    public DatabaseInitializer(
         AppDbContext context,
         IServiceProvider serviceProvider,
+        IConfiguration configuration,
         ILogger<DatabaseInitializer> logger,
         IOptions<TenantSettings> tenantSettings,
         IHostEnvironment environment)
     {
         _context = context;
         _serviceProvider = serviceProvider;
+        _configuration = configuration;
         _logger = logger;
         _tenantSettings = tenantSettings.Value;
         _environment = environment;
@@ -146,6 +151,47 @@ private async Task SeedDataAsync(CancellationToken ct = default)
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to seed default user, but continuing with startup");
+            }
+
+            // ── 平台默认模型目录（DB 驱动，取代已移除的 RouterSettings.Candidates）──
+            // 仅当 PlatformModels 表为空时，从 OpenAI:* 配置种子一条默认模型（幂等）。
+            // 运营方可在管理后台增删改；空表 + 空 Key 时 GetCandidates 回退 OpenAI:* 配置，
+            // 路由仍可用（兼容无种子场景）。密钥以 AES-256-GCM 密文落库，与租户凭据一致。
+            try
+            {
+                if (!await _context.PlatformModels.IgnoreQueryFilters().AnyAsync(ct))
+                {
+                    var openAiKey = _configuration["OpenAI:Key"];
+                    var openAiModelRaw = _configuration["OpenAI:Model"];
+                    var openAiModel = string.IsNullOrWhiteSpace(openAiModelRaw) ? "gpt-4o-mini" : openAiModelRaw!;
+                    var openAiBaseUrl = _configuration["OpenAI:BaseUrl"];
+                    if (!string.IsNullOrWhiteSpace(openAiKey))
+                    {
+                        var encryption = _serviceProvider.GetRequiredService<IApiKeyEncryptionService>();
+                        var (encrypted, prefix) = encryption.EncryptKey(openAiKey);
+                        _context.PlatformModels.Add(new PlatformModel(
+                            Guid.NewGuid(),
+                            "openai",
+                            openAiModel,
+                            100,
+                            true,
+                            baseUrl: openAiBaseUrl,
+                            encryptedApiKey: encrypted,
+                            apiKeyPrefix: prefix,
+                            displayName: openAiModel));
+                        await _context.SaveChangesAsync(ct);
+                        _logger.LogInformation("Seeded default platform model {Model} from OpenAI:* configuration.", openAiModel);
+                    }
+                    else
+                    {
+                        _logger.LogWarning(
+                            "OpenAI:Key is empty — skipping platform model seed. Routing will fall back to OpenAI:* config until a key is configured.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to seed platform model, but continuing with startup");
             }
 
             // 创建 / 对齐种子 Agent 角色定义（内建角色目录，DB 为准）。
