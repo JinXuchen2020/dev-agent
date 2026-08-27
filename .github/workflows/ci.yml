@@ -8,9 +8,9 @@ on:
 
 env:
   DOTNET_VERSION: 9.0.x
-  OPENAI_API_KEY: ${{ vars.OPENAI_API_KEY }}
-  OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL }}
-  OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+  OPENAI__KEY: ${{ vars.OPENAI_API_KEY }}
+  OPENAI__BASE_URL: ${{ vars.OPENAI_BASE_URL }}
+  OPENAI__MODEL: ${{ vars.OPENAI_MODEL }}
 
 jobs:
   build-and-test:
@@ -104,9 +104,9 @@ jobs:
         run: node scripts/integration.mjs --e2e --skip-bdd
         env:
           CI: 'true'
-          OPENAI_API_KEY: ${{ vars.OPENAI_API_KEY }}
-          OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL }}
-          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          OPENAI__KEY: ${{ vars.OPENAI_API_KEY }}
+          OPENAI__BASE_URL: ${{ vars.OPENAI_BASE_URL }}
+          OPENAI__MODEL: ${{ vars.OPENAI_MODEL }}
 
   quality-gate:
     runs-on: ubuntu-latest
