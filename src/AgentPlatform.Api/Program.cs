@@ -70,6 +70,7 @@ if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Integratio
 
 // ── Model client startup validation (fail-fast for non-Test environments) ─────
 // Test 环境使用 StubModelClient，其他环境强制要求配置 OpenAI Key（含 DeepSeek/vLLM 均走 OpenAI 兼容协议）。
+// 注意：Integration 环境（仅 SpecFlow 测试使用）同样强制要求真实 Key —— 集成测试必须跑真实 LLM。
 {
     var modelModeLogger = app.Services.GetRequiredService<ILogger<Program>>();
     var openAiKeyConfigured = !string.IsNullOrEmpty(app.Configuration["OpenAI:Key"]);
