@@ -66,9 +66,9 @@
 - ICommand<T> marker interface: 仅命令触发 SaveChanges, 查询跳过; UnitOfWorkBehavior 先发事件再提交
 - ModelDefaults/RouterSettings/PricingSettings: 全部通过 IOptions 注入, appsettings.json 配置
 - ProblemDetails + StatusCodePages: 结构化异常响应
-- WorkflowEngine: StubWorkflowEngine 占位, phase 2 替换
+- WorkflowEngine: StubWorkflowEngine 已移除（Phase 2）——真实编排器家族：`SequentialOrchestrator`（durable 检查点，F30）/ `NegotiationOrchestrator`（F8/F32）/ `AgenticOrchestrator`（ReAct，F29）
 - 测试: NSubstitute 模拟 IOptions<T>, 通过 .Value.Returns() 注入配置
-- StubModelClient: 条件注册，通过 `ModelClient:Provider=Stub` 启用，不依赖真实 API
+- StubModelClient: **仅 `Test` 环境显式配置 `ModelClient:Provider=Stub` 时注册**（F41 起 Development/Production/Staging 强制真实 LLM Key，无 Key 启动 fail-fast）
 - Money 值对象: 完整运算符集 (+ / <= / >=), 不允许跨货币比较
 - AgentsController/ConversationsController: 独立控制器，均通过 MediatR 与 Application 通信
 - IAggregateRoot: Domain.Abstractions 接口，聚合根自持 _domainEvents，UnitOfWorkBehavior 自动刷新
@@ -80,7 +80,8 @@
 ## Next Steps
 - Phase 5: 安全加固（launch-blocking）— ✅ 已完成（JWT/API-Key 认证、RBAC、真实多租户隔离、速率限制、审计日志、API Key AES-256-GCM 加密）
 - Phase 6: 前沿特性 — ✅ 已完成（第一期 Tier 1 共 29 个史诗全部 done：F5 行动层 / F6 Research / F8 Negotiation+Critic / F9–F12 沙箱与 e2e / F13–F19 多租户·i18n·Dashboard / F20–F28 工作流平台化 / F27–F28 BDD 全量 / F34 沙箱双层隔离）
-- 第二期（真 Agent Harness 升级）已解锁：F29 Durable Execution / F30 Agent 实体化 / F31 消息总线 / F32 语义记忆 / F33 评估门禁——见 features/backlog.md
+- 第二期（真 Agent Harness 升级）✅ 全部完成（2026-08-25 收口）：F29 Agentic Agent Primitive（ReAct 自主循环）/ F30 Durable Execution / F31 Agent 运行时实体化 / F32 消息总线 / F33 语义记忆 / F34 在线评估门禁——见 features/backlog.md 与 CHANGELOG v2.27–v2.31
+- F41 ✅ 已完成（2026-08-26，commit a11a6c6）：移除 QuickStart 模式、强制真实 LLM Key（无 Key 启动 fail-fast）、平台模型配置全部 DB 化
 - 蓝图同步: 版本 v1.5+, Phase 2–6 清单已勾选，第一期全部完成
 
 ## Critical Context
@@ -88,8 +89,8 @@
 - MediatR v12: `AddOpenBehavior(typeof(UnitOfWorkBehavior<,>))` 约束 `where TRequest : ICommand<TResponse>`
 - EF Core: OwnsMany + `.ValueGeneratedOnAdd()` + OwnsOne column disambiguation
 - Polly 8.5: non-generic ResiliencePipeline; return values via closure capture
-- Program.cs: 条件 HttpsRedirection (Development/QuickStart 跳过), Scalar/Swagger 默认启用, CORS from Cors:AllowedOrigins, HealthChecks at /health
-- `dotnet run --launch-profile QuickStart` → SQLite + Stub model + full config (ModelDefaults/Router/Pricing/Cors)
+- Program.cs: 条件 HttpsRedirection (Development 跳过), Scalar/Swagger 默认启用, CORS from Cors:AllowedOrigins, HealthChecks at /health；启动校验真实 LLM Key（F41，Test 环境豁免）
+- ~~`dotnet run --launch-profile QuickStart`~~ 已移除（F41，2026-08-26）——运行环境一律真实模型：`export OPENAI_API_KEY=... && dotnet run`
 - Domain.Entities 全部实现 ITenantScoped (TenantId), Global Query Filter 已通过 ITenantProvider 启用 (单租户模式)
 - Phase-1 all known issues resolved, 22 code quality items fixed in the final optimization round
 

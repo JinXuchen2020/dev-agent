@@ -37,10 +37,11 @@ curl -X POST "http://localhost:5000/api/v1/conversations/$CONV_ID/messages" \
 |------|------|
 | `AgentPlatform.Domain` | 领域层 — 聚合根、值对象（`AgentType`）、仓储接口，零外部依赖 |
 | `AgentPlatform.Application` | 应用层 — MediatR Command/Query、路由策略、状态机事件处理器、工具调度 |
-| `AgentPlatform.Infrastructure` | 基础设施 — EF Core、Semantic Kernel、Redis 短期记忆、AutoGen 编排、状态机引擎、ExecutionLog |
+| `AgentPlatform.Infrastructure` | 基础设施 — EF Core、Semantic Kernel、Redis 短期记忆、工作流编排器家族（Sequential/Negotiation/Agentic，F29–F30 durable）、沙箱隔离、ExecutionLog |
 | `AgentPlatform.Api` | 表现层 — ASP.NET Core Web API 含 Agents/AgentRoles/ExecutionLogs/Auth 端点、JWT（Cookie 承载）+ API-Key 认证（Smart policy scheme）、RBAC、限流、提示注入中间件、Swagger/Scalar、CORS |
 | `AgentPlatform.Workflow` | 工作流引擎（预留） |
 | `AgentPlatform.SpecFlowTests` | BDD 验收测试（Reqnroll + xUnit，覆盖 8 功能域 114 场景） |
+| `AgentPlatform.Web` | 前端 SPA — React 19 + Vite + TypeScript(strict) + Antd 5 + @xyflow/react DAG 画布 + zustand；含 playwright-bdd E2E（`e2e/` 27 场景，真实 key） |
 
 ## 构建与测试
 
@@ -48,9 +49,19 @@ curl -X POST "http://localhost:5000/api/v1/conversations/$CONV_ID/messages" \
 # 构建全部项目
 dotnet build src/AgentPlatform.sln
 
-# 运行全部测试
+# 运行全部后端测试（单元 + 集成 + BDD）
 dotnet test src/AgentPlatform.sln
+
+# 前端（src/AgentPlatform.Web）
+npm install
+npm run typecheck && npm run build
+
+# 前端 E2E（playwright-bdd，真实 key —— 需先设置 OPENAI_API_KEY）
+export OPENAI_API_KEY="sk-your-key-here"
+node scripts/integration.mjs --e2e
 ```
+
+> **测试环境约定（2026-08-28 起强制）**：后端集成测试（Reqnroll `Integration` 环境）与前端 E2E **一律使用真实 LLM Key**（CI 经 `OPENAI_API_KEY` Secret 注入，本地 `scripts/integration.mjs` 映射为 `OpenAI:Key`）；`ModelClient:Provider=Stub` 仅 `Test` 单元测试环境生效。SpecFlow `IntegrationHost` 的 HttpClient 超时已放宽至 5 分钟（真实 LLM 流式回复可能超默认 100s）。E2E 测试须自清理副作用（如 credentials 场景删除测试 BYO 凭据），防止租户状态污染后续场景。
 
 ## 配置真实 API Key
 
@@ -93,7 +104,7 @@ dotnet user-secrets set "OpenAI:Model" "gpt-4o-mini"
 - **短期记忆**: Redis 实现 `IShortTermMemory`，`IConnectionMultiplexer` Singleton，连接失败降级到内存
 - **运行时日志**: `ExecutionLog` 聚合根，5 个领域事件贯穿工作流生命周期
 - **可插拔数据库**: 条件编译 `USE_SQLITE`/`USE_POSTGRESQL`，`DatabaseInitializer` 自动初始化
-- **BDD**: Reqnroll（原 SpecFlow）+ playwright-bdd 验收用例驱动开发（后端 114 场景 + 前端 22 场景，全绿）
+- **BDD**: Reqnroll（原 SpecFlow）+ playwright-bdd 验收用例驱动开发（后端 114 场景 + 前端 27 场景，全绿；集成/E2E 用真实 LLM Key）
 
 ## 阶段路线
 
@@ -104,7 +115,7 @@ dotnet user-secrets set "OpenAI:Model" "gpt-4o-mini"
 | Phase 3 | 平台化 — 可视化编排、监控、自定义 AgentType | ✅ 完成 |
 | Phase 4 | 知识接地与加固 — RAG 真接地、Critic fail-loud、DB 分页、真 tokenizer | ✅ 完成 |
 | Phase 5 | 安全加固（launch-blocking）— JWT/API-Key 认证 / RBAC / 真实多租户 / 限流 / 提示注入防护 / 审计 / API Key AES-256-GCM 加密 | ✅ 完成 |
-| Phase 6 | 前沿特性 — Code Agent、压测、BDD 全量、差异化优势产品化 | ✅ 完成（第一期 Tier 1 共 29 个史诗已全部 done：F5 行动层 / F6 Research / F8 Negotiation+Critic / F9–F12 沙箱与 e2e / F13–F19 多租户·i18n·Dashboard / F20–F28 工作流平台化 / F27–F28 BDD 全量 / F34 沙箱双层隔离；第二期 F29–F33 已解锁待启动，详见 features/backlog.md） |
+| Phase 6 | 前沿特性 — Code Agent、压测、BDD 全量、差异化优势产品化 | ✅ 完成（第一期 Tier 1 共 29 个史诗全部 done：F5 行动层 / F6 Research / F8 Negotiation+Critic / F9–F12 沙箱与 e2e / F13–F19 多租户·i18n·Dashboard / F20–F28 工作流平台化 / F27–F28 BDD 全量 / F34 沙箱双层隔离；**第二期 F29–F34 亦已全部 done**：F29 ReAct 自主智能体 / F30 执行持久化 / F31 Agent 运行时实体化 / F32 消息总线 / F33 语义记忆 / F34 在线评估门禁；另 F41 移除 QuickStart 强制真实 Key 已 done，详见 features/backlog.md 与 CHANGELOG） |
 
 ## 功能特性进度
 
@@ -115,6 +126,9 @@ dotnet user-secrets set "OpenAI:Model" "gpt-4o-mini"
 - **F15 多语言 i18n** ✅ 已完成（2026-07-28，`feat/f15-i18n`）/ **F16 列表改卡片** ✅ 已完成（2026-07-29，`feat/f16-card-layout`）/ **F17 AgentConfiguration 实例化** ✅ 已完成（2026-07-29，`feat/f17-agent-config-instantiation`）/ **F18 Dashboard 图表** ✅ 已完成（2026-07-30，`feat/f18-dashboard-charts`）/ **F19 Agent Roles 内建+合并** ✅ 已完成（2026-08，各 feature 设计文档在 `features/` 目录）
 
 - **第一期其余史诗（F1–F12、F20–F34，含 F7 拆出的 F20–F26）亦已全部完成**，完整实现状态以 [`features/backlog.md`](./features/backlog.md) 为准。
+
+- **第二期（真 Agent Harness，2026-08-25 收口）**：F29 Agentic Agent Primitive（ReAct 自主循环）/ F30 执行持久化 / F31 Agent 运行时实体化 / F32 消息总线+多 Agent 协作 / F33 语义记忆 / F34 在线评估门禁 —— ✅ 全部完成（CHANGELOG v2.27–v2.31）。
+- **F41 移除 QuickStart、强制真实 Key 与环境变量配置** ✅ 已完成（2026-08-26，commit `a11a6c6`；平台模型配置全部 DB 化，设计文档 `features/f41-remove-quickstart-enforce-real-keys.md`）。
 
 > 约定：新增 feature 须先将设计文档放入 `features/`，再进入实现（见 backlog 红线）。
 

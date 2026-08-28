@@ -175,7 +175,7 @@ src/
 │   │   ├── TenantProvider.cs             # 租户提供者实现
 │   │   └── Repositories/                  # 仓储实现
 │   ├── VectorStore/
-│   │   └── PgVectorStore.cs               # PGVector 实现 IVectorStore（Stub）
+│   │   └── PgVectorStore.cs               # PGVector 实现 IVectorStore（真实 PG 检索；无 PG 环境回退 SQLite/InMemory）
 │   ├── Cache/
 │   │   └── InMemoryShortTermMemory.cs     # ConcurrentDictionary 内存缓存（原名 RedisShortTermMemory）
 │   ├── Sandbox/
@@ -196,9 +196,13 @@ src/
 │   │   ├── McpClient.cs                   # MCP 协议调用（IToolExecutor 实现）
 │   │   └── InMemoryToolRegistry.cs        # 内存工具注册表
 │   ├── Agents/
-│   │   └── AutoGenAgentOrchestrator.cs    # AutoGen 多 Agent（Stub，Phase 2 实现）
+│   │   ├── SequentialOrchestrator.cs      # 顺序编排器（durable：检查点/恢复/暂停，F30）
+│   │   ├── NegotiationOrchestrator.cs     # 协商式多 Agent 编排（F8/F32 并行协作）
+│   │   └── AgenticOrchestrator.cs         # ReAct 自主智能体循环（F29：工具白名单 + 迭代护栏）
 │   └── Workflows/
-│       └── StubWorkflowEngine.cs          # 工作流引擎 Stub
+│       ├── WorkflowNodeRunner.cs          # 节点执行路由（StepExecutor 分派）
+│       ├── SequentialOrchestrator.cs      # 顺序编排器（含检查点恢复）
+│       ├── OrchestrationPrimitive.cs      # durable 执行原语（租约/检查点/暂停恢复，F30）
 │
 ├── AgentPlatform.Api/                     # 表现层（ASP.NET Core Web API）
 │   ├── Controllers/
@@ -626,34 +630,23 @@ AuditLog
 
 > 节奏建议：每个阶段结束后做一次 git commit，让 AI 先跑全量测试再提交。
 
-> **当前 Stub 组件**（Phase 1 占位，Phase 2 替换为真实实现）：
-> - `PgVectorStore`（总是返回模拟向量搜索结果）
-> - `DockerCodeSandbox`（F9 已真实化：Docker.DotNet 真实容器隔离；**F34 起不再是并列 `ICodeSandbox`**，改为经 `DockerSandboxIsolation` 复用其内部容器执行能力，`Provider=Docker` 且守护进程可用时默认强隔离）
-> - `NativeToolExecutor` / `SkillPackageExecutor` / `McpClient`（F10 已真实化：原生工具真实 HTTP、SK Plugin 真实调用、MCP SDK 真实连接/列举/调用；三者均经 `IToolExecutor` 分派）
-> - `ProcessCodeSandbox` OS 级隔离（F11 已真实化：Windows JobObject 资源限额 + AppContainer 真实禁网，fail-safe 回退；`ISandboxIsolation` 抽象）+ **F34 双层**：`Provider=Docker` 且守护进程可用 → `DockerSandboxIsolation` 容器强隔离（复用 `DockerCodeSandbox`，结果标 `IsolationStrength.Strong`）；否则回退 F11 进程级（Weak）/非 Windows（None）；`SandboxResult.IsolationStrength` 回传强度供观测
-> - `StubWorkflowEngine`（空实现）
-> - `AutoGenAgentOrchestrator`（`Task.Delay(200)` + 返回字符串，未使用 AutoGen.NET）
-> - `RoutingPolicyDomainService.EstimateCost`（总是返回 `Money.Zero`）
-> - `StubModelClient`（条件注册，`ModelClient:Provider=Stub` 时启用）
-> - `InMemoryToolRegistry`（内存实现，重启后不持久）
-> - `AgentPlatform.Workflow` 项目（仅空目录骨架，零代码文件）
+> **Stub 组件清单现状（2026-08-28 核实，随各 feature 持续真实化）**：
+> - ~~`PgVectorStore`~~（RAG 地基层已真实化：PG 全文/向量检索真实召回；测试/无 PG 环境回退 SQLite/InMemory 实现）
+> - ~~`DockerCodeSandbox`~~（F9 已真实化：Docker.DotNet 真实容器隔离；**F34 起不再是并列 `ICodeSandbox`**，改为经 `DockerSandboxIsolation` 复用其内部容器执行能力，`Provider=Docker` 且守护进程可用时默认强隔离）
+> - ~~`NativeToolExecutor` / `SkillPackageExecutor` / `McpClient`~~（F10 已真实化：原生工具真实 HTTP、SK Plugin 真实调用、MCP SDK 真实连接/列举/调用；三者均经 `IToolExecutor` 分派）
+> - ~~`ProcessCodeSandbox`~~（F11 已真实化：Windows JobObject 资源限额 + AppContainer 真实禁网，fail-safe 回退；`ISandboxIsolation` 抽象）+ **F34 双层**：`Provider=Docker` 且守护进程可用 → `DockerSandboxIsolation` 容器强隔离（复用 `DockerCodeSandbox`，结果标 `IsolationStrength.Strong`）；否则回退 F11 进程级（Weak）/非 Windows（None）；`SandboxResult.IsolationStrength` 回传强度供观测
+> - ~~`StubWorkflowEngine`~~（Phase 2 已移除，由真实工作流编排器家族取代：`SequentialOrchestrator` + 13 类 StepExecutor + `OrchestrationPrimitive` durable 执行，F30 检查点持久化）
+> - ~~`AutoGenAgentOrchestrator`~~（已由真实编排器取代：`SequentialOrchestrator` / `NegotiationOrchestrator` 协商式，F29 新增 `AgenticOrchestrator` ReAct 自主循环）
+> - ~~`RoutingPolicyDomainService.EstimateCost`~~（已被 `CostController` 成本控制体系取代：配置化定价表 + 每租户每日预算）
+> - `StubModelClient`（**仅 `Test` 环境显式配置 `ModelClient:Provider=Stub` 时注册**——F41 起运行环境强制真实 LLM Provider，无 Key 启动即 fail-fast）
+> - `InMemoryToolRegistry`（内存实现；F29 起 DI 工厂种子 6 个工作区工具）
+> - `AgentPlatform.Workflow` 项目（预留骨架，编排能力实际落在 Infrastructure/Workflows）
 
-### 10.1 5 分钟快速开始（跳过 Docker）
+### 10.1 5 分钟快速开始
 
-> **场景**：你只想看一眼平台的长相，不想启动 PostgreSQL、Redis、vLLM 等外部依赖。
+> **场景**：你想快速把平台跑起来。默认 SQLite 数据库 + MemoryCache 缓存，无需 PostgreSQL/Redis；但 **模型调用必须配置真实 LLM Key**（F41 起不再提供 Stub 一键体验）。
 >
-> 以下 `dotnet run` 命令自动使用 **10 个 stub 组件**（全部返回模拟响应或空实现），无需任何外部依赖：
->
-> 1. **模型调用** — Stub 模拟回复
-> 2. **数据库** — SQLite（代替 PostgreSQL）
-> 3. **缓存** — MemoryCache（代替 Redis）
-> 4. **向量库** — SQLite 内存模式（代替 PGVector）
-> 5. **工作流引擎** — StubWorkflowEngine 空实现
-> 6. **代码沙箱** — 禁用（代替 Docker）
-> 7. **用户认证** — Development 模式下鉴权正常生效（Cookie JWT + PBKDF2 密码校验）
-> 8. **Tool 执行器** — NativeToolExecutor 已真实化（真实 HTTP）/ SkillPackageExecutor 占位
-> 9. **向量嵌入** — 空返回（不调用真实 Embedding API）
-> 10. **通知/告警** — 空实现（不发送任何通知）
+> 启动即得：真实模型调用、鉴权（Cookie JWT + PBKDF2）、工作流编排、工具/代码执行器、i18n 前端。
 
 ```bash
 # 1. 克隆项目，进入源码目录

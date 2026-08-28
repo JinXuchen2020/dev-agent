@@ -20,6 +20,12 @@
 
 > 每个史诗含：目标 + 验收子项（原 B/O/P 归并，保留 `文件:行号` 锚点）+ 优先级 + 风险 + 设计文档链接。验收子项里的前端细项可由 `feature-dev` 直接取做。
 
+### F41 · 移除 QuickStart 模式、强制真实 Key 与环境变量配置  [P1]  done  ✅（2026-08-26，commit `a11a6c6`；BREAKING CHANGE：运行环境无真实 LLM Key 启动即 fail-fast；平台模型配置 DB 化 `62ede44`；设计文档 features/f41-remove-quickstart-enforce-real-keys.md）
+- 设计文档：`features/f41-remove-quickstart-enforce-real-keys.md`（本文件即为设计文档，验收标准 §4）
+- 动机：QuickStart 注册 `StubModelClient` 但未替换 `ITenantModelClientResolver`，租户有 BYO 凭据时 `model: "stub"` 被忽略直连真实 OpenAI → 403 `insufficient_user_quota`；且 Stub 体验掩盖真实链路问题。
+- 落地：删 QuickStart profile 与环境判断；`DependencyInjection.cs` 仅 `Test` 环境允许 Stub；启动校验 `OpenAI:Key`/`OpenAI:BaseUrl`（Test 豁免）；`IntegrationAppFactory` 环境变量注入真实 Key；CI Secret `OPENAI_API_KEY`；README/BLUEPRINT 同步。
+- 后续衍生修复：CI 环境变量映射（`OpenAI__Key` 双下划线）、SpecFlow HttpClient 5 分钟超时、E2E 测试自清理 BYO 凭据——见 CHANGELOG v2.33。
+
 ### F34 · 沙箱双层隔离（Docker 默认强隔离 + JobObject/AppContainer 兜底）  [P0 最高优先级]  done  ✅（2026-08-07，分支 `feat/f34-dual-layer-sandbox`；设计文档 features/dual-layer-sandbox-isolation.md + 质量报告 docs/quality/f34-dual-layer-sandbox-gate.md）  ⬆️原置顶  ⚠️中风险（跨 F9/F11 集成；Docker 可用性探测 + 模式选择）
 
 - 设计文档：`features/dual-layer-sandbox-isolation.md`（已建，完整设计文档）

@@ -1,5 +1,33 @@
 # 变更日志
 
+## v2.33 (2026-08-28)
+
+### CI/E2E 真实 Key 链路修复系列（8 commits，`496f3bb` → `05028e6`）——「E2E 用真实 key 不用 stub」方向全面收口
+
+F41 落地后，集成测试与前端 E2E 全部切到真实 LLM，暴露一批环境映射与测试隔离问题，本轮集中根治：
+
+**CI 环境变量映射（`496f3bb`/`c9157e3`/`a6396b8`）**：
+- CI 注入 `OPENAI_API_KEY`（单下划线），.NET 配置绑定读 `OpenAI:Key` 需**双下划线**环境变量覆盖——`scripts/integration.mjs` 在 `startBackend` 把 `OPENAI_API_KEY/OPENAI_BASE_URL/OPENAI_MODEL` 映射为 `OpenAI__Key` 等注入 frontend-e2e 后端；此前 `Program.cs:93` 启动守卫读不到 Key 直接抛 `InvalidOperationException` 崩溃，`/health` 永远起不来。
+
+**SpecFlow 超时（`c5042f5`）**：
+- `IntegrationAppFactory` 单例 `Api`（CreateClient 默认 `Timeout=100s`）在真实 LLM 冷启动/抖动下被截断为 `TaskCanceledException`——放宽至 `TimeSpan.FromMinutes(5)`，F12 宿主一并受益。
+
+**测试隔离与断言加固（`7f35864`/`23ed7b5`/`714142f`/`05028e6`）**：
+- `/debug/step` 500 真因：credentials E2E 场景创建的 BYO 凭据（假 key + gpt-4o + 空 BaseUrl→api.openai.com）**污染默认租户**，ModelRouter「BYO 优先」使后续所有真实 LLM 调用走必失败凭据 → 修复为测试自清理（场景末尾 DELETE 凭据，接受 200/204）。前两轮「列截断」迁移（7f35864/23ed7b5）基于 SQLite 不强制 varchar 长度的实证被推翻，无害保留。
+- agentic-run.feature「最终回答」断言：真实 key 下 `AgenticOrchestrator` 无工具调用分支连发两次模型请求（探测 + 流式）常超 20s；且模型 429/异常时 `runError` 置位致「最终回答」区块永不渲染、原断言静默超时掩盖真实失败——改为等终态（`最终回答` OR `.ant-alert-error`）90s，错误先现抛真实原因。
+
+**质量门**：每笔 src/ 改动均带 `.quality-gate.json`（聚焦修复口径）+ `Quality-Gate:` 行，报告见 `docs/quality/phase-6-frontend-e2e-500-gate.md` 与 `phase-6-frontend-e2e-agentic-run-gate.md`。本地前端 E2E 27/27。
+
+## v2.32 (2026-08-26 ~ 08-27)
+
+### F41 · 移除 QuickStart 模式、强制真实 Key、平台模型配置 DB 化（commit `a11a6c6` + `62ede44`，BREAKING）
+
+**BREAKING CHANGE**：不再提供 QuickStart（Stub 模型）零依赖一键体验；`Development`/`Production`/`Staging` 启动强制校验至少一个真实 LLM Provider（`OpenAI:Key` 或 `OpenAI:BaseUrl`），无 Key fail-fast 抛 `InvalidOperationException`。`ModelClient:Provider=Stub` 仅 `Test` 环境生效。设计文档 `features/f41-remove-quickstart-enforce-real-keys.md`。
+
+- 删除 `launchSettings.json` QuickStart profile 与相关环境判断；删除 `StubTenantModelClientResolver`
+- CI workflow 合并去重（`c3c4b89`），保留综合 `ci.yml`
+- **平台模型配置 DB 化**（`62ede44`）：移除 `RouterSettings.Candidates` 静态配置，平台模型由 DB-backed `PlatformModels` 驱动——平台模型增删改从「改 appsettings + 重启」变为「后台管理即时生效」，与租户 BYO 凭据同构
+
 ## v2.31 (2026-08-25)
 
 ### F34 · 在线评估门禁完成（feature-builder 全栈闭环，🟢低风险，三道质量门全 PASS）——二期 F29–F34 全部收口
