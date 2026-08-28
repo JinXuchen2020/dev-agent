@@ -27,7 +27,12 @@ const useEdge = process.env.CI !== 'true' || process.env.E2E_BROWSER === 'edge';
 
 export default defineConfig({
   testDir: bddOutputDir,
-  timeout: 30000,
+  // 测试级 timeout 必须 > 步骤内 expect 的显式 timeout，否则 Playwright 会在 expect 等待完成前
+  // 强杀整个测试（F29 曾踩坑：步骤写 90s、这里 30s → 90s 永不生效，30s 就被 timeout 干掉）。
+  // 60s 为通用基线（覆盖 research 步骤 30s 等待等）；走真实 LLM 的场景另用 Gherkin 标签
+  // @timeout:<ms> 单独放大（playwright-bdd 会渲染成 test.describe.configure({ timeout })，
+  // 并透传到 testInfo.timeout，步骤可据此推导等待预算，两者不会再打架）。
+  timeout: 60000,
   expect: { timeout: 8000 },
   // F28：前端 E2E 共享同一 Integration 后端（文件 SQLite + 单 admin 账号），
   // 且本沙箱 Edge 在多 worker 并行时会因 8 个浏览器实例内存压力崩溃（Target crashed）。

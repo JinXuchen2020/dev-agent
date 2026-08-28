@@ -1,4 +1,7 @@
-@e2e
+# F29 走真实 LLM：单场景含登录 + 建智能体 + 发起运行 + 等待终态，整体远超通用 60s 基线，
+# 故用 playwright-bdd 特殊标签 @timeout 单独放大本 Feature 的测试级 timeout（毫秒）。
+# 它决定用例总预算，步骤内等待时长由 testInfo.timeout 自动推导（见 steps/agent.steps.ts）。
+@e2e @timeout:180000
 Feature: 自主智能体运行（F29）
   As a 租户管理员
   I want 对智能体发起自主运行
