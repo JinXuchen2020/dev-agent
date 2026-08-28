@@ -51,7 +51,8 @@ internal sealed class WorkflowConfiguration : IEntityTypeConfiguration<Workflow>
             // 模型输出可能很长（真实 LLM 回复常超 16k），改用无长度上限的 text，
             // 避免 SaveChanges 时 String or binary data would be truncated → 500。
             sb.Property(s => s.Result).HasColumnType("text");
-            sb.Property(s => s.ErrorDetail).HasMaxLength(8000);
+            // 错误分支的异常明细常超 8k，改用 text 避免截断 → 500。
+            sb.Property(s => s.ErrorDetail).HasColumnType("text");
         });
 
         builder.Navigation(w => w.Steps)
@@ -75,7 +76,8 @@ internal sealed class WorkflowConfiguration : IEntityTypeConfiguration<Workflow>
                 .HasConversion<string>()
                 .HasMaxLength(50);
             nb.Property(n => n.Result).HasColumnType("text");
-            nb.Property(n => n.ErrorDetail).HasMaxLength(8000);
+            // 错误分支的异常明细常超 8k，改用 text 避免截断 → 500。
+            nb.Property(n => n.ErrorDetail).HasColumnType("text");
         });
 
         builder.Navigation(w => w.Nodes)

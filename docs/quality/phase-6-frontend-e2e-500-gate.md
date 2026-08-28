@@ -82,3 +82,31 @@
 
 ## 诚实性声明
 本标记仅覆盖上述聚焦修复，未对全库做多轮扫描。被改代码经对抗式审查与结构审计确认为 0 open findings，可放心 `cleared: true`。
+
+---
+
+## 4. 追加修复（调试路径 VariablesJson + ErrorDetail 仍截断 → 500，CI 复现）
+
+CI 在提交 `7f35864`（仅放宽 `Result` 三列）后，`workflow-debug` 的 `/debug/step` **仍 500**。复查调试路径发现首轮遗漏列：
+
+### 根因（调试路径专属写库）
+`DebugStepCommandHandler` 在 `primitive.DebugStepAsync` 之后调用 `sessionRepo.Update(session)`，把**累积黑板变量**（`Dictionary<string,string>`，含各节点真实 LLM 输出）序列化进 `DebugSession.VariablesJson`——该列原 `HasMaxLength(8000)`。真实长回复使 JSON 超 8k → `DbUpdateException` → 500。这是调试路径相对正常运行路径多出来的写库点，首轮只放宽了 `ExecutionLogEntry/WorkflowStep/WorkflowNode.Result` 而漏掉它。
+
+同一测试还覆盖「错误分支」：`ExecutionLogEntry.ErrorDetail`(2000) / `WorkflowStep.ErrorDetail`(8000) / `WorkflowNode.ErrorDetail`(8000) 存放真实异常 + 堆栈，亦易超长 → 同类截断 500。
+
+### 修复
+- `DebugSessionConfiguration.cs`：`VariablesJson` `HasMaxLength(8000)` → `HasColumnType("text")`。
+- `ExecutionLogConfiguration.cs`：`ErrorDetail` `HasMaxLength(2000)` → `text`。
+- `WorkflowConfiguration.cs`：`WorkflowStep.ErrorDetail` / `WorkflowNode.ErrorDetail` `HasMaxLength(8000)` → `text`。
+- 新增迁移 `20260828061418_WidenDebugAndErrorColumns`（`Up` 四列 varchar→text、`Down` 还原长度；含 `#pragma warning disable IDE0161`）+ `AppDbContextModelSnapshot.cs` 自动更新为 text。
+
+### 验证
+- `dotnet build` Infrastructure + Api → **0 警告 / 0 错误**。
+- 快照确认 `VariablesJson` 与三处 `ErrorDetail` 均为 `text`。
+- 已覆盖调试单步（`VariablesJson`）+ 错误分支（`ErrorDetail`）两类截断 500 根因。
+
+### 风险审查
+- 是否仍有其他截断点？调试路径持久化面 = `ExecutionLogEntry.(Result,ErrorDetail)` + `WorkflowNode.(Result,ErrorDetail)` + `WorkflowStep.(Result,ErrorDetail)` + `DebugSession.VariablesJson`，现已**全部 text**。其余有界列（`Conversation.Content` 16000 / `AuditLog.Details` 4000 / `WorkflowNode.ConfigJson` 16000）不在本失败路径（会话/审计/调试覆盖配置）且当前 e2e 未触发，留待后续按需放宽，不在本次聚焦修复内。
+- `Down()` 还原长度与上一快照对齐，回滚安全。
+
+**结论：0 open（scoped follow-up）。**

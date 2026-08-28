@@ -84,8 +84,10 @@ internal sealed class ExecutionLogConfiguration : IEntityTypeConfiguration<Execu
             entryBuilder.Property(x => x.Result)
                 .HasColumnType("text");
 
+            // 错误明细可能是真实异常 + 堆栈（常超 2k），改用无长度上限的 text，
+            // 避免调试错误分支落库时 String or binary data would be truncated → 500。
             entryBuilder.Property(x => x.ErrorDetail)
-                .HasMaxLength(2000);
+                .HasColumnType("text");
 
             // F24 trace: token accounting + node type
             entryBuilder.Property(x => x.TokensIn)

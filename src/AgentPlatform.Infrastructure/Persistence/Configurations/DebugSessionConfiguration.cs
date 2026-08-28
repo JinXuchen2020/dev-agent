@@ -33,7 +33,9 @@ internal sealed class DebugSessionConfiguration : IEntityTypeConfiguration<Debug
 
         builder.Property(x => x.VariablesJson)
             .IsRequired()
-            .HasMaxLength(8000);
+            // 黑板变量持有各节点输出（真实 LLM 回复常超 8k），改用无长度上限的 text，
+            // 避免调试单步落库时 String or binary data would be truncated → 500。
+            .HasColumnType("text");
 
         builder.Property(x => x.CreatedAt)
             .IsRequired();
