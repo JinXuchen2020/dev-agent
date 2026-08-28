@@ -37,8 +37,17 @@ When('我在运行弹窗输入目标 {string}', async ({ page }, goal: string) =
 });
 
 Then('运行弹窗显示最终回答', async ({ page }) => {
-  // 运行完成后展示「最终回答」区块；stub 模型直接返回文本，1 次迭代即结束。
-  await expect(page.getByText('最终回答', { exact: true })).toBeVisible({ timeout: 20000 });
+  // 真实 key 下自主运行走真实 LLM：编排器先 RouteAsync 探测工具调用、再审 RouteStreamAsync 逐 token 返回，
+  // 单次真实调用在 CI 网络下常 > 20s，原 20s 超时易误判。且若模型返回 429/错误，runError 置位、
+  // 「最终回答」区块永不渲染，需抛出真实失败原因而非静默超时。
+  // 故改为等待「终态」：最终回答区块 或 错误告警任一先出现；若先出现错误，抛真实原因以便诊断。
+  const answer = page.getByText('最终回答', { exact: true });
+  const error = page.locator('.ant-alert-error');
+  await expect(answer.or(error)).toBeVisible({ timeout: 90000 });
+  if (await error.isVisible()) {
+    const msg = (await error.innerText()).trim();
+    throw new Error(`智能体运行失败：${msg}`);
+  }
 });
 
 Then('智能体创建成功', async ({ page }) => {
