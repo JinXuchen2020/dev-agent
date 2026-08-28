@@ -13,6 +13,7 @@
  * 任意阶段失败即以非 0 退出，供 CI / 本地作为合并前最终闸门。
  */
 import { spawn, execSync } from 'node:child_process';
+import os from 'node:os';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -28,6 +29,11 @@ const skipBdd = process.argv.includes('--skip-bdd');
 const BACKEND_PORT = 5000;
 const BACKEND_URL = `http://localhost:${BACKEND_PORT}`;
 const HEALTH_URL = `${BACKEND_URL}/health`;
+// 后端启动日志落盘（同时回显到控制台），用于诊断 /health 不就绪的根因
+// （之前 stdio:'ignore' 会吞掉崩溃日志，导致只能看到超时报错）。
+const BACKEND_LOG = path.join(os.tmpdir(), `integration-backend-${process.pid}.log`);
+// 后端进程退出码（非 null 表示已退出，可据此 fail-fast 而非傻等超时）。
+let backendExitCode = null;
 
 function banner(msg) {
   console.log(`\n=== ${msg} ===`);
@@ -35,6 +41,17 @@ function banner(msg) {
 function fail(msg) {
   console.error(`❌ ${msg}`);
   process.exitCode = 1;
+}
+
+// 后端启动失败时回显日志末尾，便于定位（构建错误 / 缺密钥 / 端口占用等）。
+function dumpBackendLog() {
+  try {
+    const lines = fs.readFileSync(BACKEND_LOG, 'utf8').split('\n');
+    const tail = lines.slice(-50);
+    console.error('\n----- 后端启动日志（末尾 50 行）-----');
+    console.error(tail.join('\n'));
+    console.error(`----- 完整日志位于：${BACKEND_LOG} -----`);
+  } catch { /* ignore */ }
 }
 
 // 绕过 WorkBuddy 沙箱的「批量删除确认」护栏（genie-safe-delete）。
@@ -89,9 +106,13 @@ function spawnSyncSafe(cmd, args, opts = {}) {
   });
 }
 
-async function waitForHealth(timeoutMs) {
+async function waitForHealth(child, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
+    // 后端进程已退出但未就绪 → 立即失败（保留退出码供诊断），不再空等超时。
+    if (child.exitCode !== null) {
+      return { healthy: false, exited: true };
+    }
     try {
       const ok = await new Promise((resolve) => {
         const req = http.get(HEALTH_URL, (res) => {
@@ -104,17 +125,17 @@ async function waitForHealth(timeoutMs) {
           resolve(false);
         });
       });
-      if (ok) return true;
+      if (ok) return { healthy: true, exited: false };
     } catch {
       /* ignore */
     }
     await new Promise((r) => setTimeout(r, 1500));
   }
-  return false;
+  return { healthy: false, exited: child.exitCode !== null };
 }
 
 function startBackend() {
-  banner('启动 Integration 后端 (dotnet run --environment Integration)');
+  banner('启动 Integration 后端 (dotnet run --no-build --configuration Release --environment Integration)');
   const env = {
     ...process.env,
     ConnectionStrings__DefaultConnection: `Data Source=${E2E_DB};Cache=Private`,
@@ -124,23 +145,39 @@ function startBackend() {
     // 前端 E2E 起真实后端，故此处经 env 显式关闭（与 InfrastructureConfiguration 的
     // Security:RateLimitingEnabled 开关对应），避免未来增 spec 触发 429 抖动。
     Security__RateLimitingEnabled: 'false',
+    // CI 注入的是单下划线 OPENAI_API_KEY（SpecFlow 工厂按字面量 Environment.GetEnvironmentVariable 读取），
+    // 但 Program.cs 经 .NET 配置绑定读取 OpenAI:Key，环境变量覆盖需用双下划线 OpenAI__Key。
+    // 若不做此映射，真实 dotnet run 进程读不到 Key，Program.cs:93 启动守卫会直接崩溃 → /health 永远 200 不了
+    // （integration job 因走进程内工厂读字面量变量而不受影响，故仅 frontend-e2e 挂）。
+    OpenAI__Key: process.env.OPENAI_API_KEY ?? '',
+    OpenAI__BaseUrl: process.env.OPENAI_BASE_URL ?? '',
+    OpenAI__Model: process.env.OPENAI_MODEL ?? '',
   };
+  // 日志同时回显到控制台 + 落盘（stdio:'ignore' 会吞掉崩溃原因，导致只能看到超时）。
+  const logStream = fs.createWriteStream(BACKEND_LOG, { flags: 'w' });
   const child = _spawn(
     'dotnet',
     // --no-launch-profile 绕过 Properties/launchSettings.json 中写死的
     // ASPNETCORE_ENVIRONMENT=Development，确保 Integration 夹具（ApiKey + 工作流）被播种。
+    // --no-build 复用下方已构建的 Release 产物，避免健康检查窗口内做全量隐式构建而超时。
     [
       'run',
       '--project',
       'src/AgentPlatform.Api',
       '--no-launch-profile',
+      '--no-build',
+      '--configuration',
+      'Release',
       '--environment',
       'Integration',
       '--urls',
       BACKEND_URL,
     ],
-    { cwd: ROOT, env, stdio: 'ignore' },
+    { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] },
   );
+  child.stdout.on('data', (d) => { process.stdout.write(d); logStream.write(d); });
+  child.stderr.on('data', (d) => { process.stderr.write(d); logStream.write(d); });
+  child.on('exit', (code) => { backendExitCode = code; try { logStream.end(); } catch { /* ignore */ } });
   return child;
 }
 
@@ -170,13 +207,21 @@ async function main() {
     try {
       // 隔离 E2E 库，避免与开发库 / BDD 库冲突
       if (fs.existsSync(E2E_DB)) safeCleanE2EDb();
-      backend = startBackend();
-      console.log('等待后端健康就绪 ...');
-      const healthy = await waitForHealth(120000);
-      if (!healthy) {
-        fail('后端在超时内未就绪（/health 未返回 200）');
+      // 预构建后端（Release）：避免 dotnet run 在健康检查窗口内做全量隐式构建而超时。
+      banner('构建后端 (dotnet build src/AgentPlatform.Api --configuration Release)');
+      const buildCode = await run('dotnet', ['build', 'src/AgentPlatform.Api', '--configuration', 'Release']);
+      if (buildCode !== 0) {
+        fail(`后端构建失败（退出码 ${buildCode}）`);
       } else {
-        console.log('✅ 后端已就绪');
+        backend = startBackend();
+        console.log('等待后端健康就绪 ...');
+        const { healthy, exited } = await waitForHealth(backend, 180000);
+        if (!healthy) {
+          if (exited) fail(`后端进程在启动期退出（退出码 ${backendExitCode ?? 'unknown'}），详见后端日志`);
+          else fail('后端在超时内未就绪（/health 未返回 200）');
+          dumpBackendLog();
+        } else {
+          console.log('✅ 后端已就绪');
         const webCwd = path.join(ROOT, 'src/AgentPlatform.Web');
         // 清理上一轮产物（逐文件删，绕过沙箱批量删除护栏）。
         safeCleanDir(path.join(webCwd, 'test-results'));
@@ -200,10 +245,12 @@ async function main() {
         if (e2eCode !== 0) fail(`前端 E2E 失败（退出码 ${e2eCode}）`);
         else console.log('✅ 前端 E2E 通过');
       }
-    } finally {
+    } } finally {
       if (backend) {
         try { backend.kill('SIGTERM'); } catch { /* ignore */ }
       }
+      // 清理后端启动日志（位于系统临时目录，非仓库）。
+      try { if (fs.existsSync(BACKEND_LOG)) fs.rmSync(BACKEND_LOG, { force: true }); } catch { /* ignore */ }
       // dotnet 收到 SIGTERM 后可能仍未释放 SQLite 文件句柄，直接 unlink 会 EBUSY；
       // 退避重试直至释放或上限。
       for (let i = 0; i < 6; i++) {
