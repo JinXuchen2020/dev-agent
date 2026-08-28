@@ -21,3 +21,6 @@ Feature: 租户凭据（BYO-Key）管理界面
     And 我在凭据表单填写模型名称 "gpt-4o"
     And 我点击按钮 "保存"
     Then 页面出现凭据 "E2E 测试模型凭据"
+    # 测试隔离：删除该 BYO 凭据，恢复租户为平台模型（真实 CI key），
+    # 避免 ModelRouter「BYO 优先」让后续 workflow 运行 / debug/step 走这条必失败的假凭据。
+    When 我删除测试模型凭据以恢复租户状态

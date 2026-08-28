@@ -137,3 +137,33 @@ CI 在提交 `7f35864`（仅放宽 `Result` 三列）后，`workflow-debug` 的 
 - 是否影响其他测试？`Api.Timeout` 为全局，仅放宽上限；非 LLM 的 CRUD/RBAC 场景仍秒级完成，不受影响。
 
 **结论：0 open（scoped follow-up）。**
+
+---
+
+## 6. 真正的根因：credentials E2E 测试的 BYO 凭据污染默认租户（CI 复现，commit 待提交）
+
+前两轮（§1-§5）把 `/debug/step` 500 归因于「列截断」并放宽了多列——**该假设在本环境不成立**：前端 E2E 后端用 SQLite（`integration.mjs` 注入 `ConnectionStrings__DefaultConnection`），而 **SQLite 不强制 varchar(n) 长度**（EF Core 在 SQLite 上把字符串统一映射为 TEXT），截断 `DbUpdateException` 在此环境不可能发生。本地全链路复现（真实 `SemanticKernelModelClient` + 本地 mock OpenAI 端点，短/长 30KB/慢 15s/401 多形态）中 `/debug/step` 一律 200，证明 debug 路径本身无逻辑缺陷。真实根因在 **E2E 测试顺序污染**：
+
+### 根因
+`credentials.feature` E2E 测试「添加模型凭据并保存成功」给默认租户 T1 保存了一条 **BYO 凭据**（Provider=OpenAI、API Key=`sk-e2e-test-12345` 假 key、模型=`gpt-4o`、BaseUrl 空 → 默认 `api.openai.com/v1`）。`ModelRouter.RouteAsync` 的候选序是 **BYO 优先**（`byoCandidates.Concat(platformCandidates)`）——**此后 T1 的所有真实 LLM 调用（含更靠后的 publish-workflow 运行、workflow-debug 的 `/debug/step`）都改走这条必失败的假凭据**：
+- CI（能达 api.openai.com）：401 → 步骤失败 → publish-workflow 的 run 返回 200+失败节点（测试仅断言非 401/404 故误绿）；`/debug/step` 的 LLM 调用失败 → 500（失败路径在 CI 下的确切 500 机制未能在本地复现，本地同场景返回 200+RolledBack；触发源同一）。
+- 本地（沙箱无 api.openai.com 出站）：连接超时 21s → publish-workflow 测试 30s 超时失败；workflow-debug 快速失败返回 200 故误绿。
+
+本地全量 E2E（真实后端 + mock LLM 端点）实证：修复前 26/27（publish-workflow 失败、workflow-debug 依赖快速失败误绿）；修复后 **27/27 全绿**。
+
+### 修复（测试隔离，非后端行为改动）
+- `credentials.steps.ts`：新增步骤「我删除测试模型凭据以恢复租户状态」——经独立 `request` 夹具 + fixture ApiKey（`X-API-Key: integration-fixture-key-0001`）调用 `GET /api/v1/tenant/credentials?category=0` 找到同名凭据后 `DELETE /api/v1/tenant/credentials/{id}`（接受 200/204），恢复租户回平台模型（CI 注入的真实 key）。走独立 request 不挂 page，避免污染 flowErrors。
+- `credentials.feature`：场景「添加模型凭据并保存成功」末尾追加该清理步骤。
+- 若凭据未创建成功（非必现路径），清理步骤幂等跳过。
+
+### 验证
+- 本地全量前端 E2E（`scripts/integration.mjs --e2e --skip-bdd`，mock LLM 端点）：**27/27 passed（52.8s）**，publish-workflow（#21）与 workflow-debug（#25）均绿；修复前同环境 26/27。
+- 前端 `tsc --noEmit` exit 0。
+- CI 上 bddgen 无本地沙箱的批量删除护栏问题，不受本地复现环境差异影响。
+
+### 风险审查
+- 是否掩盖真实缺陷？后端 BYO 优先是设计（F13 多租户 BYO-Key 语义），测试应自清理；修复不改变任何后端行为。
+- 是否还有其他污染源？E2E 仅 credentials 场景创建凭据，清理后租户恢复；agentic-run 等仅建 Agent 不涉模型凭据。
+- 前两轮列放宽（`7f35864`/`23ed7b5`）基于错误的截断假设，未解决 E2E 失败；已确认**无害**（Postgres 上 text 与 varchar 同存储、无数据丢失），故保留在历史中不另做回滚（回滚只会引入无谓 churn）。
+
+**结论：0 open（scoped follow-up）。根因已 100% 定位并本地全量验证。**
