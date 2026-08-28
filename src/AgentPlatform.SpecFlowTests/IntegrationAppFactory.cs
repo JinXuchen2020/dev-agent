@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
@@ -148,6 +149,13 @@ public class IntegrationAppFactory : WebApplicationFactory<Program>, IAsyncLifet
         // 任一响应写入的 ap_access_token cookie 会被后续「匿名」请求自动重放，导致鉴权泄漏
         // （匿名/越权场景误判为已认证）。认证统一由 AuthHelper 显式提取 JWT 经 WithBearer 附加。
         Api = CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+
+        // Integration 强制真实 LLM（gpt-4o-mini 或 OPENAI_BASE_URL 指向的 DeepSeek/vLLM 兼容端点）。
+        // 真实端点首调用冷启动 / CI 网络抖动下，单条消息的完整回复常需 > 100s；HttpClient 默认
+        // Timeout=100s 会把仍在进行的真实调用截断为 TaskCanceledException（客户端中止 → 服务端响应流
+        // 中断 → 测试报 500/取消）。放宽到 5 分钟，给真实 LLM 完整回复留出余量（服务端 RouteAsync
+        // 本身不设单次调用超时：RouterSettings.TimeoutSeconds 默认 0）。
+        Api.Timeout = TimeSpan.FromMinutes(5);
 
         // 在基础种子之上追加集成专用数据（T2 用户 / T1·T2 ApiKey / 示例工作流）。
         await IntegrationSeeder.SeedAsync(Services);

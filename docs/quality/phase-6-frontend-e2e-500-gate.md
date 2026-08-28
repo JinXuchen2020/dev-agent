@@ -110,3 +110,30 @@ CI 在提交 `7f35864`（仅放宽 `Result` 三列）后，`workflow-debug` 的 
 - `Down()` 还原长度与上一快照对齐，回滚安全。
 
 **结论：0 open（scoped follow-up）。**
+
+---
+
+## 5. 追加修复（Conversation.feature 真实 LLM 调用超 100s 客户端超时）
+
+### 现象（CI 复现）
+`Conversation.feature` 场景「Admin 创建会话后向其发送消息得到回复」在 `向该会话发送消息 "你好，介绍一下自己"` 步骤抛 `TaskCanceledException`（~100.1s）。堆栈：`IntegrationClient.SendAsync`（line 34）→ `ConversationSteps.SendMessage`（line 83）→ `HttpClient` 默认 100s `Timeout` 触发，服务端响应流被客户端中止（`ResponseBodyReaderStream.CheckAborted`）。结果：1 failed / 114 passed。
+
+### 根因
+`IntegrationHost.Api` 是单例 `HttpClient`，在 `IntegrationAppFactory.InitializeAsync` 经 `CreateClient(...)` 创建，**未设置 Timeout**，故沿用默认 100s。`POST /conversations/{id}/messages` 经 `SendMessageCommandHandler` → `ModelRouter.RouteAsync` → **单次真实 LLM 调用**（Integration 强制真实 key，模型默认 `gpt-4o-mini` 或 `OPENAI_BASE_URL` 指向的 DeepSeek/vLLM 兼容端点）。真实端点首调用冷启动 / CI 网络抖动下，单条消息完整回复常 > 100s；`HttpClient.Timeout` 把仍在进行的调用截断为客户端取消 → 服务端流中断 → 测试报取消/500。后端 `RouterSettings.TimeoutSeconds` 默认 0（不限制单次调用），故唯一硬上限是测试客户端 100s。
+
+此非 500 列截断回归（列放宽不影响时延），而是真实 key 方向暴露的**客户端超时过紧**。stub 禁用（用户裁定），故只能放宽测试客户端超时。
+
+### 修复
+- `IntegrationAppFactory.cs`：`Api = CreateClient(...)` 后增设 `Api.Timeout = TimeSpan.FromMinutes(5);`，并注释说明缘由。
+- 补充 `using System;`（供 `TimeSpan`）。
+- `RealStepsIntegrationAppFactory` 继承基类且未覆写 `InitializeAsync`，故 F12 宿主（`F12IntegrationHost.Api`）一并受益，无需重复修改。
+
+### 验证
+- `dotnet build src/AgentPlatform.SpecFlowTests/AgentPlatform.SpecFlowTests.csproj` → **0 警告 / 0 错误**。
+- 无法在沙箱本地重跑（需真实 `OPENAI_API_KEY` + 运行中的后端；沙箱无 GitHub 出站，待 CI 实跑确认）。结构上：客户端 5 分钟天花板足以容纳真实 LLM 冷启动/抖动，单条「自我介绍」完整回复通常 < 5 min。
+
+### 风险审查
+- 是否掩盖真实挂死？端点真挂会快速抛连接异常（非挂起）；仅「慢但不死」的调用需更长天花板，5 min 合理。CI `integration` job 无 `timeout-minutes`（默认 360 min），单测挂 5 min 不拖垮整 job。
+- 是否影响其他测试？`Api.Timeout` 为全局，仅放宽上限；非 LLM 的 CRUD/RBAC 场景仍秒级完成，不受影响。
+
+**结论：0 open（scoped follow-up）。**
