@@ -69,5 +69,5 @@ F8 为最小化、低风险纯前端产品化，改动面小且自洽：
 
 ## 5. 残留风险
 
-- **E2E 协商收敛确定性（低）**：Integration 环境 `ModelClient:StubResponse` 非 Critic JSON 且 `AllowCriticOverride=false` → Critic 判 Approved=false 后仍按「无可选步」路径完成（不无限循环）；E2E 仅断言 **Completed** 终态 + 无意外错误，不耦合具体评审结果（设计文档 §7）。
+- **E2E 协商收敛确定性（低）**：`Test` 环境（Stub）下 `ModelClient:StubResponse` 非 Critic JSON 且 `AllowCriticOverride=false` → Critic 判 Approved=false 后仍按「无可选步」路径完成（不无限循环）；协商 E2E 仅断言 **Completed** 终态 + 无意外错误，不耦合具体评审结果（设计文档 §7）。
 - **脚手架覆盖既有画布（低）**：`scaffoldAgentTeam` 采用替换式（保证单一 Start 通过 `ValidateGraph`），依赖单一 history 快照撤销；不静默丢弃未保存内容——符合「模板脚手架」语义。

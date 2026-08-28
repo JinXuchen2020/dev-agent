@@ -30,13 +30,13 @@
 
 ### 控制流 / 回退核对
 
-- `ModelRouter.RouteAsync`（line 59, 77-79, 94-95）：`tenantResolutions` 为空时回退到 `_platformModelClient`（平台 stub 客户端）→ Stub 模式返回空列表不崩溃，E2E 会话收到 stub 回复已验证。
+- `ModelRouter.RouteAsync`（line 59, 77-79, 94-95）：`tenantResolutions` 为空时回退到 `_platformModelClient`（平台 stub 客户端）→ Stub 模式返回空列表不崩溃（此短路路径经单测实证；frontend-e2e 现已改用真实模型客户端，CI 注入真实 key，不再依赖 Stub 回复）。
 - `PlatformModelsController`（line 42）：空解析仅返回空模型列表，无副作用。
 - DI：`IConfiguration` 为框架内置根服务，自动解析，无需新增注册。
 
 ### Top 3 运行时风险（已确认非问题）
 
-1. Stub 短路致 `ResolveAsync` 返回空 → 由 `ModelRouter` 回退平台客户端覆盖；E2E 已实证。（非风险）
+1. Stub 短路致 `ResolveAsync` 返回空 → 由 `ModelRouter` 回退平台客户端覆盖；单测已实证。（非风险）
 2. `TenantModelClientResolver` 在 Stub 下不解密 BYO 凭据 → 避免任何种子/演示数据触发真实 LLM。（设计预期，正向）
 3. antd 按钮 accessible name 插入空格/图标前缀 → 已由 `common.steps.ts` 的 `looseName` 宽松正则统一兼容，22/22 E2E 通过。（已解决）
 
@@ -68,9 +68,9 @@
 | 架构 | 0 — 测试按 BDD 约定组织（feature/steps 分离，fixtures 共享）；无新架构引入 |
 | 代码质量 | 0 — `common.steps` 共享、`looseName` 辅助消除重复；`create-agent.feature` 与 `agent-crud.feature` 部分场景重叠属有意冒烟转换 |
 | 正确性 | 0 — 选择器经 22/22 E2E 实证；生产守卫经单测实证 |
-| 测试 | 0 — 114 后端 + 22 前端 + 124 单元，断言有意义（真实 stub 回复文本、真实 UI heading、租户隔离 Id） |
+| 测试 | 0 — 114 后端 + 22 前端 + 124 单元，断言有意义（真实模型回复文本、真实 UI heading、租户隔离 Id） |
 | 性能 | 0 — 单 worker 规避 Edge 多实例内存崩溃；22 场景 52s，无回归 |
-| 安全 | 0 — 无硬编码密钥；`appsettings.Integration.json` 仅 Stub 配置；测试 ApiKey 为夹具 |
+| 安全 | 0 — 无硬编码密钥；`appsettings.Integration.json` 已去除 Stub 配置（Stub 仅 `Test` 环境），Integration 走真实模型客户端（CI 注入真实 key）；测试 ApiKey 为夹具 |
 | 工程化 | 0 — `bddgen`+`playwright` 已接线；无 `dangerouslySetInnerHTML`/XSS |
 
 桩代码替换进度：后端已实现（`TenantModelClientResolver` Stub 短路为测试契约，非未完工桩）；前端无对应清单 → N/A。

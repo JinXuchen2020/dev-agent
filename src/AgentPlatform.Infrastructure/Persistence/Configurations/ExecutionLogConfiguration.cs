@@ -79,8 +79,10 @@ internal sealed class ExecutionLogConfiguration : IEntityTypeConfiguration<Execu
             entryBuilder.Property(x => x.Duration)
                 .IsRequired();
 
+            // 模型输出可能很长（真实 LLM 回复常超 4k），改用无长度上限的 text，
+            // 避免 StepCompleted 落库时 String or binary data would be truncated → 500。
             entryBuilder.Property(x => x.Result)
-                .HasMaxLength(4000);
+                .HasColumnType("text");
 
             entryBuilder.Property(x => x.ErrorDetail)
                 .HasMaxLength(2000);

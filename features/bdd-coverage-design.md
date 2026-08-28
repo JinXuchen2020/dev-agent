@@ -85,7 +85,7 @@
 ### 前端 BDD（11 feature / 22 场景 @e2e，全绿）
 - 约定：playwright-bdd 9.x，`createBdd(test)` 的 `test` 继承 `playwright-bdd` 自带 `test`（见 `e2e/steps/fixtures.ts`）；feature 在 `e2e/features`，steps 在 `e2e/steps`；zh-CN 断言对齐默认 locale。
 - 契约修复：`playwright.config.ts` `testDir` 必须 = `defineBddConfig()` 返回的 `outputDir`（playwright-bdd 9.x 按 outputDir 注册/查找配置，否则运行期 `BDD config not found`）。
-- 基础设施：`appsettings.Integration.json`（`ModelClient:Provider=Stub` + `StubResponse="Integration test stub response."` + `Security:RateLimitingEnabled=false`）使 E2E 后端确定性，不触真实 LLM/SerpApi。
+- 基础设施：`appsettings.Integration.json` 现已去除 `ModelClient:Provider=Stub`（Stub 仅 `Test` 环境启用）；Integration 环境后端走真实 `SemanticKernelModelClient`，CI 通过 `scripts/integration.mjs` 将 `OPENAI_API_KEY` 映射为 `OpenAI__Key` 注入真实 LLM 密钥，E2E 触发真实模型调用（不再依赖 Stub 回复）。`Security:RateLimitingEnabled=false` 保留。
 - feature 清单（@e2e）：`login-auth` / `credentials` / `workflow-crud` / `conversation` / `knowledge-base` / `research` / `dashboard` / `agent-crud` / `create-agent`（转换）/ `page-polish`（转换）/ `publish-workflow`。
 - 转换：遗留 `create-agent.spec.ts` / `page-polish.spec.ts`（英文断言，与 zh-CN 错配，预存失败）删除并改写为 BDD；`smoke.*.spec.ts` 保留为冒烟基线（不含 @e2e）。
 - 共享步骤：`common.steps.ts`（登录/导航/重定向/可见性/无意外错误，含 benign `/api-keys` 404 排除）；其余按域拆分。

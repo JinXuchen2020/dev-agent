@@ -320,9 +320,11 @@ const { id = '' } = useParams<{ id: string }>();
                   marginBottom: 12,
                 }}
               >
-                <div
-                  style={{
-                    maxWidth: '72%',
+              <div
+                data-testid="chat-message"
+                data-role={m.role}
+                style={{
+                  maxWidth: '72%',
                     padding: '10px 14px',
                     borderRadius: 12,
                     whiteSpace: 'pre-wrap',

@@ -14,10 +14,10 @@ When('我点击发送', async ({ page }) => {
 });
 
 Then('收到智能体回复', async ({ page }) => {
-  // Integration 后端 ModelClient:Provider=Stub，回复固定为 appsettings.Integration.json 的 StubResponse。
-  await expect(page.getByText('Integration test stub response.', { exact: false })).toBeVisible({
-    timeout: 20000,
-  });
+  // e2e 走真实模型（非 stub）：等待助手回复气泡出现且内容非空。
+  const agentReply = page.locator('[data-testid="chat-message"][data-role="agent"]').last();
+  await expect(agentReply).toBeVisible({ timeout: 20000 });
+  await expect(agentReply).toHaveText(/\S/, { timeout: 20000 });
 });
 
 Then('状态筛选控件可见', async ({ page }) => {

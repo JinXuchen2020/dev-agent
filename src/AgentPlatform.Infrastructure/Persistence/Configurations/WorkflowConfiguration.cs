@@ -48,7 +48,9 @@ internal sealed class WorkflowConfiguration : IEntityTypeConfiguration<Workflow>
             sb.Property(s => s.State)
                 .HasConversion<string>()
                 .HasMaxLength(50);
-            sb.Property(s => s.Result).HasMaxLength(16000);
+            // 模型输出可能很长（真实 LLM 回复常超 16k），改用无长度上限的 text，
+            // 避免 SaveChanges 时 String or binary data would be truncated → 500。
+            sb.Property(s => s.Result).HasColumnType("text");
             sb.Property(s => s.ErrorDetail).HasMaxLength(8000);
         });
 
@@ -72,7 +74,7 @@ internal sealed class WorkflowConfiguration : IEntityTypeConfiguration<Workflow>
             nb.Property(n => n.State)
                 .HasConversion<string>()
                 .HasMaxLength(50);
-            nb.Property(n => n.Result).HasMaxLength(16000);
+            nb.Property(n => n.Result).HasColumnType("text");
             nb.Property(n => n.ErrorDetail).HasMaxLength(8000);
         });
 

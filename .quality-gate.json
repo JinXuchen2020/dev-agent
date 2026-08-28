@@ -1,9 +1,9 @@
 {
-  "phase": "remove-routersettings-candidates-db-platformmodels",
-  "reviewer": "PASSED: ddd-code-reviewer 对抗式审查 — 新增 PlatformModel 实体/EF配置/迁移、PlatformModelsProvider（DB 读取+OpenAI:* 回退）、PlatformModelClientBuilder（DB 解密注册+空表回退 env）、DatabaseInitializer 幂等种子、AgentsController.CreateAgent 放宽；0 P0/P1，仅 P2/P3 无害项（IgnoreQueryFilters 冗余、文档措辞）。Agent-create BDD 1/1 与路由 BDD 7/7 真实通过（DisplayName 过滤）验证 DB 驱动路径。",
-  "structureGate": "PASSED: ddd-phase-quality-gate — IPlatformModelProvider 已注册(AddScoped)、Application 零引用 Infrastructure、3 个新 impl 均 internal sealed、PlatformModel 含 IEntityTypeConfiguration、Guid Id ValueGeneratedNever、租户过滤正确未套用于非 ITenantScoped 的 PlatformModel；构建 0 warning/0 error。",
-  "codebaseOptimizer": "PASSED (Round 1, 0 open, scoped to this refactor): 七维度体检 — 架构分层合规、移除死配置 DailyBudget、空目录/环境变量双回退确保开箱即用、AES-256-GCM 密文落库、DI 生命周期 Scoped 无捕获、真实 provider 路径经 BDD 验证、无 P0/P2 缺陷。未执行全库多轮扫描（聚焦重构非阶段收尾，全库扫描会越界并触发 push，违背 per-feature 分支/no-push 约定）。",
+  "phase": "phase-6-frontend-e2e",
+  "reviewer": "PASSED: ddd-code-reviewer 对抗式审查 — 新增迁移 WidenModelOutputResultColumns（WorkflowStep/WorkflowNode/ExecutionLogEntries 的 Result 列 varchar→text），改动 WorkflowConfiguration/ExecutionLogConfiguration 三处 HasMaxLength→HasColumnType(\"text\")；Up 仅增宽、Down 还原 varchar 长度，oldMaxLength(16000/16000/4000) 与上一快照一致无漂移；无数据丢失、无 FK 变动、无新增接口。0 P0/P1/P2/P3 open。",
+  "structureGate": "PASSED: ddd-phase-quality-gate — 三类审计(WorkflowConfiguration/ExecutionLogConfiguration 均为 internal sealed + IEntityTypeConfiguration，无新接口故无 DI 缺口；appsettings.Integration.json 仅删死 Stub 配置无漂移；前端 conversation.steps.ts/ConversationDetailPage.tsx 无后端 DDD 关注)；EF Core 映射与迁移一致；构建 0 warning/0 error。0 open。",
+  "codebaseOptimizer": "PASSED (Round 1, 0 open, scoped to this fix): 七维度体检 — 架构(config→迁移一致)、代码质量(迁移含 IDE0161 pragma + 注释说明 500 根因)、正确性(text 列消除 String or binary data would be truncated → 500)、测试(E2E 改为断言真实助手回复气泡非空，data-testid/data-role 稳定选择器)、性能(Postgres text 与 varchar 同存储无回归)、安全(删 Stub 配置无新风险)、工程化(后端构建 0/0、前端 tsc 0 error)。未执行全库多轮扫描(聚焦本次修复非阶段收尾，全库扫描会越界并触发 push，违背 per-feature 分支/no-push 约定)。",
   "cleared": true,
-  "reportRef": "docs/quality/remove-candidates-db-platformmodels-gate.md",
-  "notes": "RouterSettings.Candidates / ModelCandidateConfig 已彻底移除；平台默认模型改为 DB 驱动的 PlatformModels 表（非租户隔离）+ 迁移 20260827065858_AddPlatformModel。CI 已配 OPENAI_*，模型不匹配 500 根因消除。真实 LLM 集成 BDD 需在 CI（OPENAI_* 已配齐）运行。"
+  "reportRef": "docs/quality/phase-6-frontend-e2e-500-gate.md",
+  "notes": "修复 frontend-e2e 两处 CI 失败：(1) /debug/step 真实 LLM 长输出超 ExecutionLogEntry.Result varchar(4000) → DbUpdateException → 500，已拓宽三列到 text；(2) conversation E2E 断言 stub 文本，真实 key 方向下永不产出，已改为断言非空真实回复。appsettings.Integration.json 移除误导性 Stub 配置，文档同步更新为真实模型方向。"
 }
