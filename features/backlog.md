@@ -20,6 +20,11 @@
 
 > 每个史诗含：目标 + 验收子项（原 B/O/P 归并，保留 `文件:行号` 锚点）+ 优先级 + 风险 + 设计文档链接。验收子项里的前端细项可由 `feature-dev` 直接取做。
 
+### F42 · 工作流数据流：节点显式输入映射 + 显式终端输出  [P1]  open  ⚠️中风险（执行器契约 + 节点 schema + API 契约；向后兼容设计，存量工作流回退黑板模式）
+- 设计文档：`features/f42-workflow-dataflow.md`
+- 动机：数据不走边（`SequentialOrchestrator.BuildWorkflowContext` 拍平全量 artifacts），边只承载控制流；节点输出裸字符串无契约；无显式最终输出，触发方拿不到结构化返回值。
+- 落地：`configJson.inputs` 引用表达式（`{{nodes.<name>.output}}` / `{{trigger.<path>}}` / `{{blackboard.<key>}}`）+ `IInputResolver` fail-fast 解析；新增 `StepType.Output` 终端节点 + API 运行响应 `outputs` 字段；保存期校验（引用存在性/环引用/trigger 路径白名单）；前端输入映射编辑器。Non-goals：类型化 schema（另立题）、上下文隔离（F36）。
+
 ### F41 · 移除 QuickStart 模式、强制真实 Key 与环境变量配置  [P1]  done  ✅（2026-08-26，commit `a11a6c6`；BREAKING CHANGE：运行环境无真实 LLM Key 启动即 fail-fast；平台模型配置 DB 化 `62ede44`；设计文档 features/f41-remove-quickstart-enforce-real-keys.md）
 - 设计文档：`features/f41-remove-quickstart-enforce-real-keys.md`（本文件即为设计文档，验收标准 §4）
 - 动机：QuickStart 注册 `StubModelClient` 但未替换 `ITenantModelClientResolver`，租户有 BYO 凭据时 `model: "stub"` 被忽略直连真实 OpenAI → 403 `insufficient_user_quota`；且 Stub 体验掩盖真实链路问题。
