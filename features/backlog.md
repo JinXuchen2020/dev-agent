@@ -10,6 +10,12 @@
 
 状态图例：`open`(待做) · `doing`(进行中) · `done`(已完成) · `blocked`(阻塞等待依赖)
 
+> **完成度统计（2026-08-30 二次整理）**：Tier 1 史诗 40 条 + 延后项 6 条 = **46 条**；其中 **done 36 / open 10**。
+> 当前 open 清单（按建议执行顺序）：`F38`(CI YAML 门禁样例) → `F45`(发布端点完整 URL 展示) → `F44`(ApiKeys 租户自助端点，**阻断 F22 生产可用**) → `F42`(工作流数据流) → `F39`(监控告警聚合) → `F46`(生产部署编排) → `F37`(队列化执行与水平扩展) → `F40`(异常回放诊断) → `F36`(Agent 上下文隔离) → `F35`(多工作空间隔离)。
+>
+> **编号冲突已修正（2026-08-30）**：原存在两个 `F34`（沙箱双层隔离 / 在线评估门禁）。后者现改号为 **F43**（旧号仅作历史别名保留），详情见 `### F43` 条目备注。
+> **2026-08-30 走查新增 3 项**：`F44`（ApiKeys 生命周期闭环，P1）、`F45`（发布端点完整 URL 展示，P3）、`F46`（生产部署编排，P2）——均来自 ApiKeysPage / F22 链路代码走查，缺口定性见各条目；原「待立题」分组已清空（ApiKeys 项升级为 F44）。
+
 代码基现状（2026-07-22 全量走查）：React 19 + Vite 8 + TS（strict）+ Antd 5 + @xyflow/react + zustand；`typecheck/lint/build/unit/e2e` 五道闸门当前全绿。优点：严格 TS、0 处 `any`、0 TODO/FIXME、lint 净。问题集中于「前端数据真实性 / 鉴权态 / 错误兜底 / 工程化」与「后端行动层（工具·代码·调研）空心」两类。
 
 > **测试约定（2026-08-04 确立，feature-builder 硬约束 #7）**：**前端 E2E 必须 BDD 驱动**——凡触及 UI 的 feature，须配套 `playwright-bdd` 风格的 Gherkin E2E（`src/AgentPlatform.Web/e2e/features/*.feature` + `e2e/steps/*.steps.ts`，`createBdd(test)` 的 `test` 须 `extend` 自 `playwright-bdd` 自带 `test`），运行链路 `bddgen && playwright test`。禁止写裸 `@playwright/test` `.spec.ts` 作 feature E2E（既有 `smoke.*.spec.ts` 属冒烟基线，除外）。F27 已落地示范：`e2e/features/publish-workflow.feature`。
@@ -19,6 +25,35 @@
 ## Feature 史诗（Tier 1 —— feature-builder 消费单元）
 
 > 每个史诗含：目标 + 验收子项（原 B/O/P 归并，保留 `文件:行号` 锚点）+ 优先级 + 风险 + 设计文档链接。验收子项里的前端细项可由 `feature-dev` 直接取做。
+
+### F44 · ApiKeys 租户自助端点 + 前端接线（API Key 生命周期闭环）  [P1]  open  ⚠️设计文档待产出（实现前必须先建 `features/f44-*.md`）🔴升级理由：阻断 F22「发布工作流为 API/MCP」生产可用
+- 来源：F1 史诗子项 `B8`（2026-08-30 走查升级立项；原「待立题」分组收容，现正式进入 Tier 1）
+- 缺口定性（2026-08-30 代码走查）：
+  - **前端**：`pages/ApiKeysPage.tsx`（97 行）是不可达孤儿页——`App.tsx` 无路由（`git log -S` 零提交）、`AppLayout` 导航无入口、全仓无 import；rotate/revoke 按钮是 `rotateTodo/revokeTodo` 占位 toast；`services/api.ts:528` 仅封装 `GET /api-keys` 且 `WorkflowsPage.tsx:248` 调用处 `.catch(() => setApiKeys([]))` 静默吞错 → **发布抽屉密钥下拉永远为空**。
+  - **后端**：ApiKey 校验基建齐全（`Domain.Aggregates.ApiKeys.ApiKey` + `ApiKeyConfiguration` + `ApiKeyAuthenticationHandler`(scheme="ApiKey") + `ApiKeyEncryptionService`(AES-256-GCM) + `KeyRotationService` + `ApiKeyExpiryJob`），但 `IApiKeyRepository` 仅被校验/轮换/过期消费，**无创建 Command、无管理 Controller**。全局唯一 key = `DatabaseInitializer` 在 Integration 播种的 `integration-fixture-key-0001`（明文 dev-only）。
+  - **影响面**：`PublishedWorkflowsController`(`api/v1/published-workflows`) 与 `McpController`(`api/v1/mcp`) 均为 `[Authorize(AuthenticationSchemes="ApiKey")]` + `PerApiKey` 限流 → 除集成测试外无法自助签发调用凭证。
+- 立项范围（设计文档须覆盖）：
+  - 后端 `GET/POST/DELETE /api/v1/api-keys`（+ 可选 `POST /{id}/rotate`）；创建/轮换**一次性明文返回**（落库后不可再读）；AES-256-GCM 存储 + tenant 隔离 + RBAC（Admin/Operator），**禁止明文落库**。
+  - 前端：`ApiKeysPage` 接真实 CRUD + 错误兜底（补 catch）；接入 `App.tsx` 路由 + `AppLayout` 导航；`WorkflowsPage` 发布抽屉密钥下拉消费真实数据。
+  - E2E：playwright-bdd 场景（创建 key → 发布工作流绑定 → 外部带 `X-API-Key` 调通）。
+- 依赖：无（Phase 5 加密/鉴权基建已就绪，可独立开工）。
+- 风险：🟡 中（密钥生命周期管理 + 一次性明文展示安全性）。
+
+### F45 · 发布端点完整 URL 展示 + 一键复制  [P3]  open  🟢低风险（纯前端小项，可由 feature-dev 直接取做；设计文档可并入 F44 或独立轻量）
+- 来源：2026-08-30 F22 链路走查——发布抽屉仅显示相对路径 `POST /api/v1/published-workflows/{slug}`（`WorkflowsPage.tsx:563`），不带 host，外部调用方需自行拼 Base URL。
+- 落地：发布抽屉展示完整端点 URL（`window.location.origin` + 相对路径）；REST 与 MCP 两种模式分别展示（MCP 为 `POST {origin}/api/v1/mcp`）；完整 URL 一键复制（现仅复制 slug）。
+- 验收：抽屉内可见完整可调用 URL；复制按钮产出完整 URL；typecheck/build/E2E 全绿。
+- 风险：🟢 纯前端展示层，无契约变更。
+
+### F46 · 生产部署编排（docker-compose 补齐 API 服务）  [P2]  open  🟡中风险（首次容器化 + USE_POSTGRESQL 条件编译验证）
+- 来源：2026-08-30 走查——`docker-compose.yml` 当前**只有 postgres 服务**，无 api 服务；API 仅能 `dotnet run` 裸跑，无容器化生产拓扑。
+- 落地：
+  - 多阶段 `Dockerfile`（build + runtime）；`docker-compose.yml` 增加 `api` 服务（`USE_POSTGRESQL` 编译/配置切换 + 连接串 + `OPENAI__Key` 等环境变量映射 + healthcheck）。
+  - 可选预留 `redis` 服务（为 F37 队列化铺路）；`deploy/docker-compose.monitoring.yml`（F39 产物）与主 compose 对齐网络。
+  - 前端产物静态托管方案（nginx 容器或 api 静态文件中间件）二选一并写入文档。
+  - `docs/` 补部署指南（环境变量清单 / 升级流程 / 备份）。
+- 验收：`docker compose up` 一键起完整栈；健康检查通过；真实 LLM Key 注入后对话/工作流可跑通；build 0/0。
+- 风险：🟡 条件编译切换 SQLite→PostgreSQL 的迁移与初始化路径需实测；镜像体积与密钥注入方式需评审。
 
 ### F42 · 工作流数据流：节点显式输入映射 + 显式终端输出  [P1]  open  ⚠️中风险（执行器契约 + 节点 schema + API 契约；向后兼容设计，存量工作流回退黑板模式）
 - 设计文档：`features/f42-workflow-dataflow.md`
@@ -50,11 +85,11 @@
 - 目标：UI 展示真实登录身份、失败有兜底，消灭静默吞错与无 404 白屏。纯前端、低风险，无后端契约变更。
 - 验收子项：
   - **B7** Dashboard 假数据 —— ✅ **done（漂移校正）**：现走真实 `getAgents/getWorkflows/getExecutionLogs`，原行号已失效。
-  - **B8 / ApiKeys 页真实化** —— 🔒 **blocked**：后端无公开 API Key 端点（GET/POST/DELETE /api-keys、复制密钥），属 Phase 6 后端范围；待端点就绪后独立 feature 实现，本次不做。
-  - **O4** 真实用户身份上顶栏（从 JWT 解码 email/role；dev-login 令牌无 tenant_id 声明，故不展示 tenant）→ open（本次实现）。
-  - **O5** 静默吞错 → 统一错误 Alert + 重试（受改：`DashboardPage`、`ExecutionLogDetailPage:50`）→ open（本次实现；复用 `useApiState` + `ErrorState`）。
+  - **B8 / ApiKeys 页真实化** —— 🔒 **blocked（2026-08-30 复核仍然成立）**：`pages/ApiKeysPage.tsx` 前端页已存在，但 `services/api.ts:528` 仅封装 `GET /api-keys`，后端 `src/**/*.cs` 全文检索**无任何 api-keys 路由/控制器**（无 `ApiKeysController`）——即该端点为 404，页面 rotate/revoke 按钮仍是 `rotateTodo/revokeTodo` 占位 toast。已从本史诗移出至文末「待立题」分组，待后端端点立题后闭环。
+  - **O4** 真实用户身份上顶栏 —— ✅ **done（2026-08-30 归档校正）**：`layouts/AppLayout.tsx:30` 从 `useAppStore` 取 `userEmail`/`userRole`，`:145` 顶栏展示；RBAC 判定 `:40/:44`。
+  - **O5** 静默吞错 → 统一错误 Alert + 重试 —— ✅ **done（2026-08-30 归档校正）**：`DashboardPage.tsx:106` 与 `ExecutionLogDetailPage.tsx:80` 均走 `ErrorState` + `onRetry`。
   - **O1** 顶层 ErrorBoundary —— ✅ **done（漂移校正）**：`components/ErrorBoundary.tsx` 已在 `App.tsx:32` 挂载包裹全部路由。
-  - **O11** 404 兜底（新增 `NotFoundPage` + `App.tsx` `*` catch-all）→ open（本次实现）。文档链接原引用已失效（前端无硬编码文档链接），聚焦 404。
+  - **O11** 404 兜底 —— ✅ **done（2026-08-30 归档校正）**：`App.tsx:39` 懒加载 `NotFoundPage`，`:132` 注册 `<Route path="*" element={<NotFoundPage />} />`。
 
 ### F2 · 登录与鉴权态一致性  [P1]  done  ✅（2026-07-23，分支 `feat/f2-login-auth-state`，commit 19af124）
 - 设计文档：`features/auth-ux.md`（已建）
@@ -75,7 +110,7 @@
   - **B9** AgentConfigurations 的 YAML 从不展示（`AgentConfigurationsPage.tsx:11-17`）→ 详情抽屉展示 `yamlContent`（语法高亮可选）。
   - **B10** 状态筛选枚举可能大小写不匹配后端（`ExecutionLogsPage.tsx:56-61`）→ 前端建状态映射表，不裸传字面量。
   - **B11** Workflows「快速运行」无错误处理且可能建空工作流（`WorkflowsPage.tsx:27-33`）→ try/catch + 失败 toast + 空名 `message.warning`。
-  - **Conversations 搜索/状态筛选**（复用 conversations 数据，交互对齐 Agents 页）→ open。
+  - **Conversations 搜索/状态筛选** —— ✅ **done（2026-08-30 归档校正）**：`ConversationsPage.tsx:29-31` 持有 `search`/`appliedQ`/`statusFilter` 状态，`:38` 传参 `getConversations({ status, q, signal })`，`:105-122` 渲染 `Input.Search` + 状态 `Select`（含 AbortController 取消）。
   - **O12** 列表分页与后端 `totalCount` 不一致（`ExecutionLogsPage.tsx:70-77`）→ 接入服务端分页（传 `skip/take` + 用 `totalCount`）。
   - **O13** 无请求取消（AbortController）/ 卸载后 setState 风险 → effect cleanup + `AbortController`。
 
@@ -416,22 +451,18 @@
   - **③** 自动 compaction（超限上下文压缩，替代明文 MaxSummaryTokens 截断；并为 F29 长程 agent 提供上下文压缩）。
 - 优先级：P1。
 
-### F34 · 在线评估门禁 + 部署闭环  [P2]  done  🟢低风险（复用 F24 数据集）
+### F43 · 在线评估门禁 + 部署闭环  [P2]  done  🟢低风险（复用 F24 数据集）
+> **编号变更（2026-08-30 归档整理）**：原编号 `F34` 与「F34 沙箱双层隔离」冲突，现改号 **F43**；旧号仅作历史别名保留——分支 `feat/f34-online-eval-gate`、设计文档 `features/f34-online-eval-gate.md` 文件名均不改（避免断链）。同时清理了本条目下与上方重复的旧片段（重复的设计依据/验收 v1 段）。
+- 目标：将 F24 评估数据集接入生产前 / 影子门禁（队列化水平扩展 → 已独立排期为 `F37`）。
 - 设计依据：`phases/phase-11-online-eval-gate.md` + `docs/agent-harness-blueprint.md` §Phase 11；设计文档 `features/f34-online-eval-gate.md`（v1 仅验收①，§3 设计+§5 完成记录）
 - 验收子项：
   - **①** 在线 eval 门禁 → ✅ `RunEvaluationGateCommand`：阈值解析链（请求显式 > `EvaluationSettings.GateMinPassRate`=0.8）；执行委托 RunEvaluation（一次性克隆=影子隔离零生产写入）；Passed=false 端点返回 **HTTP 422 阻断语义**；空数据集显式守卫恒不通过；审计新增 `AuditActionType.EvaluationGate`
-  - **延后项** → CI YAML 接入样例、队列化执行/水平扩展、监控告警聚合、异常回放诊断——均独立排期（与 backlog 延后声明一致）
+  - **延后项** → CI YAML 接入样例 → `F38`；队列化执行/水平扩展 → `F37`；监控告警聚合 → `F39`；异常回放诊断 → `F40`
 - **完成记录（2026-08-25）**：feature-builder 全栈闭环（分支 `feat/f34-online-eval-gate`，基于 f33）。端点 `POST /api/v1/evaluation-datasets/{id}/gate/{workflowId}`（Admin/Operator）。新增测试 5 例（超阈值通过+审计/低于阈值阻断/显式覆盖配置/空数据集恒拦/越界抛错）；全绿 App226/Infra154+6skip/Api35/Arch9，build 0/0，前端零改动。三道质量门 PASS。**二期 F29–F34 全部收口。**
-- 设计依据：`phases/phase-11-online-eval-gate.md` + `docs/agent-harness-blueprint.md` §Phase 11
-- 目标：将 F24 评估数据集接入生产前 / 影子门禁；队列化水平扩展。
-- 验收子项（v1）：
-  - **①** 在线 eval 门禁（F24 数据集 → 生产前 / 影子评估，纯应用层复用）。
-- 延后项（依赖 F30/F32 分布式落点）：队列化部署 / 水平扩展 → 独立排期。
-- 优先级：P2。
 
 ## 延后项（独立排期，从已 done 史诗中拆出）
 
-> 以下条目均来自 F26/F30/F31/F32/F34 设计文档中显式标注的「延后项」——v1 边界明确排除、依赖未就绪或破坏性过大，需独立 feature 闭环。
+> 以下条目均来自 F26/F30/F31/F32/F43（原 F34 评估门禁）设计文档中显式标注的「延后项」——v1 边界明确排除、依赖未就绪或破坏性过大，需独立 feature 闭环。
 
 ### F35 · 多工作空间隔离（Workspace）  [P2]  open  🔴高风险（全聚合加 WorkspaceId + query filter + TenantProvider 体系扩展）
 - 来源：F26 企业增强 · S1「Workspace v1 不做，独立排期」
@@ -467,7 +498,7 @@
 - 风险：🟡 Blackboard 值对象变更影响 WorkflowContext 全链路；Conversation 加列为最小迁移。依赖 F31/F32 已合入。
 
 ### F37 · 队列化执行与水平扩展  [P1]  open  🔴高风险（分布式消息中间件 + 租约机制重构 + 多 worker 协调）
-- 来源：F30 执行持久化 · 延后项；F34 评估门禁 · 延后项
+- 来源：F30 执行持久化 · 延后项；F43 评估门禁（原 F34）· 延后项
 - 设计依据：`features/f30-durable-execution.md` + `features/f34-online-eval-gate.md` §延后项
 - 目标：将当前进程内 BackgroundService 轮询升级为基于消息队列的分布式任务分发——多 worker 实例可水平消费执行任务，无状态执行引擎横向扩展。复用 F30 租约机制（RunningExecution）防多 worker 重复驱动。
 - 核心改造：
@@ -484,7 +515,7 @@
 - 风险：🔴 分布式一致性（租约竞态、消息去重、幂等）+ 运维复杂度（Redis/RabbitMQ 部署）。建议分两阶段：① Redis Stream 最小闭环 ② RabbitMQ 企业级（独立排期）。
 
 ### F38 · CI YAML 接入评估门禁样例  [P2]  open  🟢低风险（文档 + 模板，不触后端代码）
-- 来源：F34 评估门禁 · 延后项
+- 来源：F43 评估门禁（原 F34）· 延后项
 - 设计依据：`features/f34-online-eval-gate.md` §延后项
 - 目标：提供可直接复制使用的 CI/CD 流水线模板，将评估门禁端点接入 GitHub Actions / GitLab CI，实现「模型/prompt 变更前自动回归，未达阈值阻断合并」。
 - 核心改造：
@@ -497,10 +528,10 @@
   - GitLab CI YAML 语法校验通过（`gitlab-ci-lint` 或 `grep` 关键字）。
   - 接口示例 `curl` 可在本地 QuickStart 模式下跑通（200/422 路径各覆盖）。
   - 指南文档完整：环境变量 / 阈值 / 失败处理 / 故障排查。
-- 风险：🟢 纯增量，不触后端。但需与 F34 端点保持接口一致（API schema 变更须同步更新模板）。
+- 风险：🟢 纯增量，不触后端。但需与 F43（原 F34 评估门禁）端点保持接口一致（API schema 变更须同步更新模板）。
 
 ### F39 · 监控告警聚合  [P2]  open  🟡中风险（OpenTelemetry 指标 + 告警规则 + Dashboard 配置）
-- 来源：F34 评估门禁 · 延后项
+- 来源：F43 评估门禁（原 F34）· 延后项
 - 设计依据：`features/f34-online-eval-gate.md` §延后项
 - 目标：将当前裸 OpenTelemetry `/metrics` 端点升级为可用的可观测性栈——Prometheus 抓取配置 + Grafana Dashboard 模板 + 告警规则（执行失败率、门禁阻断率、队列积压、模型调用延迟），实现「平台运行状态一目了然 + 异常自动通知」。
 - 核心改造：
@@ -517,7 +548,7 @@
 - 风险：🟡 Grafana Dashboard JSON 维护成本（版本升级可能断面板）；缓解：文档注明版本要求。
 
 ### F40 · 异常回放诊断入口  [P2]  open  🟡中风险（执行日志回放引擎 + 前端诊断视图）
-- 来源：F34 评估门禁 · 延后项
+- 来源：F43 评估门禁（原 F34）· 延后项
 - 设计依据：`features/f34-online-eval-gate.md` §延后项
 - 目标：从执行日志重建失败工作流的异常路径——定位失败节点、回放输入输出、展示上下文快照（Blackboard/变量/模型响应），辅助快速定位根因。复用 F24 Trace + F25 调试器能力。
 - 核心改造：
@@ -531,6 +562,12 @@
   - 前端回放视图清晰展示失败链路，可折叠/展开每节点详情。
   - build 0/0 + 全量测试 0 失败 + 前端 tsc 0 + vitest 通过。
 - 风险：🟡 回放依赖 ExecutionLog Entries 数据完整性（F20 Trace 节点级数据采集）；历史日志可能缺少 TokensIn/TokensOut/NodeType 列（F24 前迁移的数据）——需降级兼容。
+
+## 待立题（缺设计文档，feature-builder 不取）
+
+> 已识别但尚未正式立项的需求：须先产出 `features/<id>.md` 设计文档，再移入上方「Feature 史诗」分组。本分组仅登记意图，**不参与 feature-builder 取数**。
+>
+> **当前为空**——原收容的 ApiKeys 租户自助端点已于 2026-08-30 升级为正式史诗 **F44**（含其走查证据与缺口定性）。
 
 ## 已完成归档（done）
 
