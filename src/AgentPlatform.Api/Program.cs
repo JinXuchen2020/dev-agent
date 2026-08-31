@@ -112,6 +112,8 @@ app.UseMiddleware<MetricsMiddleware>();
 app.UseMiddleware<PromptInjectionMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
+// F35（决策 D3=B）：剥离非可见工作空间的 X-Workspace-Id 头，防止伪造头绕过成员可见性。
+app.UseMiddleware<WorkspaceHeaderGuardMiddleware>();
 if (app.Configuration.GetValue<bool>("Security:RateLimitingEnabled", true))
     app.UseRateLimiter();
 

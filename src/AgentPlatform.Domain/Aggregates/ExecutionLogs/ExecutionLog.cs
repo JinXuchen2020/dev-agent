@@ -30,6 +30,7 @@ public sealed class ExecutionLog : IAggregateRoot
     /// Gets the tenant that owns this execution log.
     /// </summary>
     public Guid TenantId { get; private init; }
+    public Guid WorkspaceId { get; private init; }
 
     /// <summary>
     /// Gets the overall status of the workflow execution.

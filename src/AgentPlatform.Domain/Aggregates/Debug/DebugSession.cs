@@ -10,7 +10,7 @@ namespace AgentPlatform.Domain.Aggregates.Debug;
 /// debug UI can step through a workflow, inspect variables, and recover from errors
 /// without affecting production runs.
 /// </summary>
-public sealed class DebugSession : ITenantScoped, IAggregateRoot
+public sealed class DebugSession : ITenantScoped, IWorkspaceScoped, IAggregateRoot
 {
     /// <summary>Gets the unique identifier of the session.</summary>
     public Guid Id { get; private init; }
@@ -20,6 +20,7 @@ public sealed class DebugSession : ITenantScoped, IAggregateRoot
 
     /// <summary>Gets the tenant that owns this session (auto query-filtered).</summary>
     public Guid TenantId { get; private init; }
+    public Guid WorkspaceId { get; private init; }
 
     /// <summary>Gets the current lifecycle status of the session.</summary>
     public DebugSessionStatus Status { get; private set; }

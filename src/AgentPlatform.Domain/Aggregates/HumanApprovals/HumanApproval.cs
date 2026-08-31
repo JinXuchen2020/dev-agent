@@ -8,13 +8,14 @@ namespace AgentPlatform.Domain.Aggregates.HumanApprovals;
 /// 经专门的审批恢复端点解析（Approved/Rejected）后，节点结果被写回并续跑工作流。
 /// 实体遵循租户隔离（<see cref="ITenantScoped"/>），由 AppDbContext 的查询过滤器强制。
 /// </summary>
-public sealed class HumanApproval : ITenantScoped
+public sealed class HumanApproval : ITenantScoped, IWorkspaceScoped
 {
     /// <summary>获取审批记录的唯一标识符（由调用方以 ValueGeneratedNever 显式提供）。</summary>
     public Guid Id { get; private init; }
 
     /// <summary>获取拥有该审批记录的租户标识符（租户隔离键）。</summary>
     public Guid TenantId { get; private init; }
+    public Guid WorkspaceId { get; private init; }
 
     /// <summary>获取关联工作流的标识符。</summary>
     public Guid WorkflowId { get; private init; }

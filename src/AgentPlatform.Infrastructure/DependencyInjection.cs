@@ -324,6 +324,13 @@ public static class DependencyInjection
         services.AddScoped<ITenantProvider, TenantProvider>();
         // 后台调度 / 匿名 Webhook 的 scope 内租户注入持有器（TenantProvider 优先读此覆盖值）。
         services.AddScoped<ITenantContext, TenantContext>();
+        // ── F35 多工作空间：上下文持有器 + 解析器（claim → header → 租户默认 workspace 目录兜底）──
+        services.AddScoped<IWorkspaceContext, WorkspaceContext>();
+        services.AddScoped<IWorkspaceProvider, WorkspaceProvider>();
+        services.AddSingleton<IWorkspaceDirectory, WorkspaceDirectory>();
+        services.AddScoped<IWorkspaceProvisioner, WorkspaceProvisioner>();
+        services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
+        services.AddScoped<IWorkspaceMemberRepository, WorkspaceMemberRepository>();
         services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IAesEncryptor, AesGcmEncryptor>();

@@ -8,7 +8,7 @@ namespace AgentPlatform.Domain.Aggregates.Evaluation;
 /// Contains a bounded collection of <see cref="EvaluationCase"/> items that are
 /// replayed against a target workflow to compute a pass rate / score report.
 /// </summary>
-public sealed class EvaluationDataset : ITenantScoped, IAggregateRoot
+public sealed class EvaluationDataset : ITenantScoped, IWorkspaceScoped, IAggregateRoot
 {
     private readonly List<EvaluationCase> _cases = [];
 
@@ -17,6 +17,7 @@ public sealed class EvaluationDataset : ITenantScoped, IAggregateRoot
 
     /// <summary>Gets the tenant that owns this dataset (auto query-filtered).</summary>
     public Guid TenantId { get; private init; }
+    public Guid WorkspaceId { get; private init; }
 
     /// <summary>Gets the display name of the dataset.</summary>
     public string Name { get; private set; } = null!;

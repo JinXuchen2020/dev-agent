@@ -9,6 +9,7 @@ public sealed class AuditLog : IAggregateRoot
 {
     public Guid Id { get; private init; }
     public Guid TenantId { get; private init; }
+    public Guid WorkspaceId { get; private init; }
     public string? UserId { get; private init; }
     public AuditActionType Action { get; private init; }
     public string Entity { get; private init; } = null!;

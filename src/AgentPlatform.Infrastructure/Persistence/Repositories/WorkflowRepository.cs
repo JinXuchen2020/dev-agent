@@ -33,6 +33,18 @@ internal sealed class WorkflowRepository : IWorkflowRepository
     }
 
     /// <summary>
+    /// 触发器路径专用查询：绕过租户 + 工作空间全局过滤器，改为显式按 Id + TenantId 定位
+    /// （工作空间维度放开是 F35 语义：后台 / 匿名 scope 的工作空间上下文恒为租户默认工作空间，
+    /// 不应导致非默认工作空间的工作流被静默跳过；租户维度仍严格隔离）。
+    /// </summary>
+    public async Task<Workflow?> GetByIdForTriggerAsync(Guid id, Guid tenantId, CancellationToken ct = default)
+    {
+        return await _context.Workflows
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(w => w.Id == id && w.TenantId == tenantId, ct);
+    }
+
+    /// <summary>
     /// Retrieves all workflows belonging to the specified tenant.
     /// </summary>
     /// <param name="tenantId">The tenant identifier to filter workflows by.</param>

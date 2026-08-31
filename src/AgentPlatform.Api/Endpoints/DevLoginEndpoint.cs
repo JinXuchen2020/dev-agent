@@ -24,6 +24,9 @@ internal static class DevLoginEndpoint
                     : request.TenantId!;
                 var role = string.IsNullOrWhiteSpace(request.Role) ? "Admin" : request.Role!;
                 var userId = string.IsNullOrWhiteSpace(request.UserId) ? "dev-user" : request.UserId!;
+                var workspaceId = string.IsNullOrWhiteSpace(request.WorkspaceId)
+                    ? Guid.Empty.ToString()
+                    : request.WorkspaceId!;
 
                 var claims = new List<Claim>
                 {
@@ -31,6 +34,7 @@ internal static class DevLoginEndpoint
                     new(ClaimTypes.Name, userId),
                     new("sub", userId),
                     new("tenant_id", tenantId),
+                    new("workspace_id", workspaceId),
                     new(ClaimTypes.Role, role),
                 };
 
@@ -50,7 +54,7 @@ internal static class DevLoginEndpoint
 /// Request body for the dev-only simulated-login endpoint (<c>POST /api/dev/login</c>).
 /// All fields are optional; sensible dev defaults are applied server-side.
 /// </summary>
-internal sealed record DevLoginRequest(string? TenantId = null, string? Role = null, string? UserId = null);
+internal sealed record DevLoginRequest(string? TenantId = null, string? Role = null, string? UserId = null, string? WorkspaceId = null);
 
 /// <summary>Response from the dev-only simulated-login endpoint.</summary>
 internal sealed record DevLoginResponse(string Token, DateTime ExpiresAt);

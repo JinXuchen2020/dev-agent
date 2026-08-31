@@ -1,5 +1,24 @@
 # 变更日志
 
+## v2.34 (2026-08-31)
+
+### F35 · 多工作空间隔离（Workspace）—— 同租户内第二层隔离维度（分支 `feat/f35-workspace-isolation`）
+
+**后端**：
+- Domain：`Workspace`/`WorkspaceMember` 新聚合（不实现 `IWorkspaceScoped`——其 `WorkspaceId` 是数据而非隔离范围）+ `IWorkspaceScoped` 接口 + `IWorkspaceRepository`/`IWorkspaceMemberRepository`；18 个业务聚合全量加 `WorkspaceId`（`AuditLog`/`ExecutionLog`/`AgentRunRecord` 仅补列不过滤，决策 D2=A）。
+- Infrastructure：`AppDbContext` 组合 query filter（tenant AND workspace，闭包 field per-query 求值）+ `SaveChanges` 对新增 `IWorkspaceScoped` 实体自动注入当前工作空间（显式赋值优先）；`IWorkspaceProvider` 三级解析链（JWT `workspace_id` claim → `X-Workspace-Id` header → `WorkspaceDirectory` 租户默认工作空间兜底 → 空=fail-closed）；`WorkspaceProvisioner`（幂等补默认工作空间 + 空 `WorkspaceId` 存量行回填）；迁移 `20260831052610_AddWorkspaceIsolation`（2 新表 + 21 表加列 + 唯一索引）。
+- Api：`WorkspacesController`（list/create/update/delete/members CRUD/switch，switch 重签 JWT + cookie）；登录写 `workspace_id` claim、`/auth/me` 返回 `currentWorkspaceId`、dev-login 支持可选 `workspaceId`；`WorkspaceHeaderGuardMiddleware`（非 Admin 剥离不可见的 `X-Workspace-Id` 头，Admin 亦校验头 id 属于本租户）；API-Key 认证成功后把请求 scope 钉到 Key 所属工作空间（F22 发布端点/MCP 不受影响）。
+- 触发路径：`GetByIdForTriggerAsync`（仅按租户定位）修复非默认工作空间工作流被触发器静默跳过的回归；调度执行 v1 语义 = 落租户默认工作空间（设计文档已知限制）。
+
+**前端**：
+- `WorkspaceSwitcher`（顶栏：Select 切换 + Admin 管理菜单 = 新建/编辑/成员管理 Drawer/删除守卫提示）+ `api.ts` 请求拦截器注入 `X-Workspace-Id` + `appStore.currentWorkspaceId`（localStorage `app-workspace-id` 持久化）+ `useApiState` 订阅 workspace 变更全站自动刷新（决策 D5=A，单点改 hook）+ i18n 中英对称。
+
+**决策（features/f35-workspace-isolation.md §6，2026-08-31 用户锁定）**：D1=C claim+header 双通道 / D2=A 18 聚合 / D3=B 成员表 / D4=删除守卫绝不级联 / D5=A 状态驱动刷新。
+
+**质量门**：三道门全 PASS（`.quality-gate.json` 推进 `f35-workspace-isolation`，`cleared:true`）；ddd-code-reviewer 修复 2×P1（header 越权剥离中间件、触发路径回归）+ 3 项 P2/P3；ddd-phase-quality-gate P0-P2=0（1×P3 已修 + 2×P3 waiver）；codebase-optimizer Round F35-01 0 open（1×P3 存储键常量单源化 + 5×P3 waiver）。测试：后端 build 0/0 + Application 238 / Infrastructure 158+6skip / Api 35 / Architecture 9 / SpecFlow 114/115（唯一失败为 master 既有 LLM 用例）/ Integration 5（需 `OPENAI__Key` 环境变量）；新增 Application handler 测试 12 例 + Infrastructure EF 隔离测试 4 例；前端 tsc 0 error + vitest（2 个 master 既有失败豁免）+ vite build 通过；BDD E2E `e2e/features/workspace-switch.feature`（CI 驱动）。质量报告 `docs/quality/f35-workspace-isolation-gate.md`。
+
+**已知残留（非阻断）**：触发/调度执行仅落租户默认工作空间；成员列表 N+1（量小可接受）；workspace 名称唯一性大小写语义依赖 DB collation；AuditLog/ExecutionLog/AgentRunRecord 运行期 WorkspaceId 恒空（D2=A 设计，仅为未来过滤预留）。
+
 ## v2.33 (2026-08-28)
 
 ### CI/E2E 真实 Key 链路修复系列（8 commits，`496f3bb` → `05028e6`）——「E2E 用真实 key 不用 stub」方向全面收口

@@ -18,6 +18,8 @@ internal sealed class RunDueScheduledWorkflowsCommandHandler
     private readonly IMediator _mediator;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ITenantContext _tenantContext;
+    private readonly IWorkspaceContext _workspaceContext;
+    private readonly IWorkspaceDirectory _workspaceDirectory;
     private readonly ILogger<RunDueScheduledWorkflowsCommandHandler> _logger;
 
     public RunDueScheduledWorkflowsCommandHandler(
@@ -27,6 +29,8 @@ internal sealed class RunDueScheduledWorkflowsCommandHandler
         IMediator mediator,
         IUnitOfWork unitOfWork,
         ITenantContext tenantContext,
+        IWorkspaceContext workspaceContext,
+        IWorkspaceDirectory workspaceDirectory,
         ILogger<RunDueScheduledWorkflowsCommandHandler> logger)
     {
         _triggerRepo = triggerRepo;
@@ -35,6 +39,8 @@ internal sealed class RunDueScheduledWorkflowsCommandHandler
         _mediator = mediator;
         _unitOfWork = unitOfWork;
         _tenantContext = tenantContext;
+        _workspaceContext = workspaceContext;
+        _workspaceDirectory = workspaceDirectory;
         _logger = logger;
     }
 
@@ -63,6 +69,8 @@ internal sealed class RunDueScheduledWorkflowsCommandHandler
 
                 // 注入租户，使 TriggerWorkflowCommand 的 DbContext 过滤器落到正确租户。
                 _tenantContext.OverrideTenantId = trigger.TenantId;
+                // F35：同步注入工作空间上下文（v1 = 租户默认工作空间）。
+                _workspaceContext.OverrideWorkspaceId = _workspaceDirectory.GetDefaultWorkspaceId(trigger.TenantId);
                 await _unitOfWork.SaveChangesAsync(ct);
 
                 await _mediator.Send(new TriggerWorkflowCommand(

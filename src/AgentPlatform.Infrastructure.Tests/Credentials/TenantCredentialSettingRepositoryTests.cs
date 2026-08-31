@@ -24,9 +24,11 @@ public class TenantCredentialSettingRepositoryTests
     private static AppDbContext CreateContext(Guid tenantId, SqliteConnection connection)
     {
         var tenantProvider = Substitute.For<ITenantProvider>();
+        var workspaceProvider = Substitute.For<IWorkspaceProvider>();
+        workspaceProvider.GetWorkspaceId().Returns(Guid.Empty);
         tenantProvider.GetTenantId().Returns(tenantId);
         var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
-        return new AppDbContext(options, tenantProvider);
+        return new AppDbContext(options, tenantProvider, workspaceProvider);
     }
 
     [Fact]

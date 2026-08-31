@@ -258,6 +258,33 @@ public enum PublishMode
     Mcp     // 平台内 MCP tool（JSON-RPC 2.0 tools/list + tools/call）
 }
 
+// Domain/Aggregates/Workspaces/Workspace.cs（F35 多工作空间）
+public sealed class Workspace : ITenantScoped   // 工作空间容器（不实现 IWorkspaceScoped：它是隔离范围本身）
+{
+    public Guid Id { get; private init; }                  // 调用方生成；EF 配置 ValueGeneratedNever
+    public Guid TenantId { get; private init; }             // 租户 ID（HasQueryFilter 隔离）
+    public string Name { get; private set; } = null!;       // 同租户内唯一（唯一索引 (TenantId, Name)）
+    public string? Description { get; private set; }
+    public bool IsDefault { get; private init; }            // 默认工作空间（每租户恒一个，不可删除）
+    public DateTime CreatedAt { get; private init; }
+    public DateTime UpdatedAt { get; private set; }
+}
+
+// Domain/Aggregates/Workspaces/WorkspaceMember.cs（F35，决策 D3=B）
+public sealed class WorkspaceMember : ITenantScoped   // 成员关联（WorkspaceId 是关联数据，非隔离范围）
+{
+    public Guid Id { get; private init; }                  // 调用方生成；EF 配置 ValueGeneratedNever
+    public Guid TenantId { get; private init; }             // 租户 ID（HasQueryFilter 隔离）
+    public Guid WorkspaceId { get; private init; }          // 加入的工作空间
+    public Guid UserId { get; private init; }               // 成员用户
+    public DateTime CreatedAt { get; private init; }
+}
+
+// F35 隔离约定：18 个业务聚合实现 IWorkspaceScoped（AppDbContext 组合 query filter：
+// TenantId == 当前租户 AND WorkspaceId == 当前工作空间）；AuditLog/ExecutionLog/AgentRunRecord
+// 仅补 WorkspaceId 列不叠加过滤（D2=A）；写路径由 AppDbContext.SaveChangesAsync 对新增
+// IWorkspaceScoped 实体自动注入当前工作空间（显式赋值优先）。
+
 // Domain/Aggregates/WorkflowTemplates/WorkflowTemplate.cs（F23 模板市场 / 示例库）
 public sealed class WorkflowTemplate : IAggregateRoot   // 平台级共享模板（刻意不 ITenantScoped）
 {

@@ -235,6 +235,30 @@
 { "title": "Bad Request", "status": 400, "detail": "API Key 无效或无权访问该 provider 的模型列表" }
 ```
 
+### I.11 工作空间 API（F35）
+
+同租户内第二层隔离维度。决策 D1=C：JWT `workspace_id` claim 默认 + `X-Workspace-Id` header 覆盖（服务端
+`WorkspaceHeaderGuardMiddleware` 对非 Admin 剥离不可见的头）；决策 D3=B：非 Admin 仅可见/可切默认空间与自己已加入的空间。
+
+| 方法 | 路径 | 说明 | 权限 |
+| :--- | :--- | :--- | :--- |
+| GET | `/api/v1/workspaces` | 列出对调用者可见的工作空间（Admin 全部；非 Admin = 默认 + 已加入） | authenticated |
+| POST | `/api/v1/workspaces` | 新建 `{name, description?}`；重名 409 | Admin |
+| PUT | `/api/v1/workspaces/{id}` | 重命名/改描述；不存在 404；重名 409 | Admin |
+| DELETE | `/api/v1/workspaces/{id}` | 删除空的非默认工作空间；默认空间 409；仍含成员/业务实体 409（绝不级联） | Admin |
+| GET | `/api/v1/workspaces/{id}/members` | 成员列表（`[{userId,email,joinedAt}]`） | Admin |
+| POST | `/api/v1/workspaces/{id}/members` | 按邮箱添加成员 `{email}`；用户不存在 404；已是成员 409 | Admin |
+| DELETE | `/api/v1/workspaces/{id}/members/{userId}` | 移除成员 | Admin |
+| POST | `/api/v1/workspaces/{id}/switch` | 切换：校验可见性后重签 JWT（`workspace_id` claim）并刷新 httpOnly cookie；不可见 404 | authenticated |
+
+```jsonc
+// GET /api/v1/workspaces 响应（WorkspaceDto[]）
+[ { "id": "guid", "name": "Default", "description": null, "isDefault": true, "createdAt": "2026-08-31T00:00:00Z" } ]
+
+// POST /{id}/switch 响应
+{ "workspace": { "id": "guid", "name": "W1", "isDefault": false, "...": "..." }, "token": "eyJ..." }
+```
+
 ### I.6 对话 API（SSE 流式）
 
 | 方法 | 路径 | 说明 | 权限 |
@@ -412,4 +436,4 @@ data: {}
 
 > 注：`EvaluationDataset` 实现 `ITenantScoped`（自动全局过滤）；`RunEvaluation` 每 case 克隆全新 `Workflow`（new Guid）避免污染源工作流，逐 case 复用编排器 step 超时 bounding，硬上限 `EvaluationSettings.MaxCases`（默认 10，可配）；`matchMode`：`Exact=string.Equals(Ordinal)` / `Contains=actual.Contains(expected, OrdinalIgnoreCase)`；缺失 dataset / workflow → 404。
 
-> **一句话总结**：前端通过统一前缀 `/api/v1/` 的 REST API 与后端通信，10 个资源域（认证 / 工作流 / 模板市场 / Agent / 模型 / 对话 / 调研 / 管理 / 监控 / 评估），对话与调研流均走 SSE 流式输出，权限按 RBAC 粒度控制。Agent 角色类型 API（`/agents/types`）支持动态加载自定义角色。完整 Swagger 文档在开发环境 `{host}/swagger` 实时生成。
+> **一句话总结**：前端通过统一前缀 `/api/v1/` 的 REST API 与后端通信，11 个资源域（认证 / 工作流 / 模板市场 / Agent / 模型 / 对话 / 调研 / 管理 / 监控 / 评估 / 工作空间），对话与调研流均走 SSE 流式输出，权限按 RBAC 粒度控制。Agent 角色类型 API（`/agents/types`）支持动态加载自定义角色。完整 Swagger 文档在开发环境 `{host}/swagger` 实时生成。

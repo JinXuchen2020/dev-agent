@@ -10,7 +10,7 @@ namespace AgentPlatform.Domain.Aggregates.AgentConfigurations;
 /// the YAML-based configuration content, versioning, lifecycle status, and tenant scoping.
 /// Supports version management for tracking changes over time.
 /// </summary>
-public sealed class AgentConfiguration : ITenantScoped, IAggregateRoot
+public sealed class AgentConfiguration : ITenantScoped, IWorkspaceScoped, IAggregateRoot
 {
     private readonly List<IDomainEvent> _domainEvents = [];
 
@@ -53,6 +53,7 @@ public sealed class AgentConfiguration : ITenantScoped, IAggregateRoot
     /// Gets the tenant that owns this configuration.
     /// </summary>
     public Guid TenantId { get; private init; }
+    public Guid WorkspaceId { get; private init; }
 
     /// <summary>
     /// Gets the UTC timestamp when the configuration was created.

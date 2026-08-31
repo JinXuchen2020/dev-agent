@@ -428,7 +428,7 @@
 
 > 以下条目均来自 F26/F30/F31/F32/F34 设计文档中显式标注的「延后项」——v1 边界明确排除、依赖未就绪或破坏性过大，需独立 feature 闭环。
 
-### F35 · 多工作空间隔离（Workspace）  [P2]  open  🔴高风险（全聚合加 WorkspaceId + query filter + TenantProvider 体系扩展）
+### F35 · 多工作空间隔离（Workspace）  [P2]  done  ✅（2026-08-31，分支 `feat/f35-workspace-isolation`；设计文档 features/f35-workspace-isolation.md §6 决策 D1–D5 已锁定 + 质量报告 docs/quality/f35-workspace-isolation-gate.md）🔴高风险（全聚合加 WorkspaceId + query filter + TenantProvider 体系扩展）
 - 来源：F26 企业增强 · S1「Workspace v1 不做，独立排期」
 - 设计依据：`features/enterprise-enhancements.md` §6 S1
 - 目标：创建/切换 workspace；实体按 workspace 隔离；切换后查询仅见当前 workspace 数据。本质是「第二租户维度」——同一租户内再分一层工作空间。
@@ -444,6 +444,7 @@
   - EF 迁移覆盖全仓 ITenantScoped 实体；无遗漏。
   - build 0/0 + 全量测试 0 失败 + 前端 tsc 0 + vitest 通过。
 - 风险：🔴 破坏性极大——全聚合加列 + query filter 修改 + TenantProvider 体系重构 + 前端全局切换。建议独立分支 feature-builder 全栈闭环。
+- **完成记录（2026-08-31）**：feature-builder 全栈实跑落地。决策（用户锁定）：D1=C claim+header 双通道（`IWorkspaceProvider`：claim → header → `WorkspaceDirectory` 租户默认兜底 → 空 fail-closed）/ D2=A 18 聚合全量（AuditLog/ExecutionLog/AgentRunRecord 仅补列）/ D3=B 成员表（非 Admin 仅见默认+已加入，switch 校验成员资格）/ D4=删除守卫（默认 409、非空 409、绝不级联）/ D5=A `useApiState` 单点订阅全站刷新。后端：`Workspace`/`WorkspaceMember` 聚合 + `IWorkspaceScoped` + 18 聚合加列 + `AppDbContext` 组合过滤器与 SaveChanges 注入 + `WorkspaceProvisioner` 幂等供应/回填 + 迁移 `AddWorkspaceIsolation` + `WorkspacesController` 8 端点 + `WorkspaceHeaderGuardMiddleware`（非 Admin 剥离越权头）+ 登录/`/auth/me`/dev-login 携带 workspace claim + API-Key 认证钉到 Key 所属工作空间 + 触发路径 `GetByIdForTriggerAsync`（修复非默认空间工作流被静默跳过的回归）。前端：`WorkspaceSwitcher` + 拦截器注入头 + `appStore.currentWorkspaceId` 持久化 + i18n 对称 + BDD E2E `workspace-switch.feature`。三道质量门全 PASS：ddd-code-reviewer 修 2×P1（header 越权中间件、触发回归）+3 项；结构门 P0-P2=0（2 waiver）；optimizer Round F35-01 0 open（1 修复 + 5 waiver）。验证：build 0/0；App 238 / Infra 158+6skip / Api 35 / Arch 9 / SpecFlow 114/115（唯一失败=master 既有 LLM 用例）/ Integration 5（需 `OPENAI__Key`）；新增 12 handler 测试 + 4 EF 隔离测试；前端 tsc 0 + vitest（2 既有失败豁免）+ vite build。文档同步：CHANGELOG v2.34、BLUEPRINT 平台化清单、appendices/core-aggregates.md（Workspace/WorkspaceMember 聚合）、appendices/api-spec.md（I.11 工作空间 API，资源域 10→11）。已知残留：触发/调度仅落租户默认工作空间、成员列表 N+1、名称唯一大小写依赖 collation、3 个补列实体运行期 WorkspaceId 恒空（D2=A 设计）。
 
 ### F36 · Agent 上下文隔离（Blackboard 分区 + 独立对话历史）  [P2]  open  🟡中风险（Blackboard 语义重构 + per-agent 对话状态）
 - 来源：F31 Agent 运行时实体化 · D4「Blackboard 按 agent 分区 / 每 agent 独立对话历史延后」；F32 消息总线 · 明确不做

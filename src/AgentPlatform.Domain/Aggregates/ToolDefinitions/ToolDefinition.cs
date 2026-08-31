@@ -7,7 +7,7 @@ namespace AgentPlatform.Domain.Aggregates.ToolDefinitions;
 /// Represents a tool definition aggregate root that describes a callable tool
 /// available to agents, including its source, parameters schema, and handler.
 /// </summary>
-public sealed class ToolDefinition : ITenantScoped, IAggregateRoot
+public sealed class ToolDefinition : ITenantScoped, IWorkspaceScoped, IAggregateRoot
 {
     /// <summary>
     /// Gets the unique identifier of the tool definition.
@@ -18,6 +18,7 @@ public sealed class ToolDefinition : ITenantScoped, IAggregateRoot
     /// Gets the unique identifier of the tenant that owns this tool definition.
     /// </summary>
     public Guid TenantId { get; private init; }
+    public Guid WorkspaceId { get; private init; }
 
     /// <summary>
     /// Gets the human-readable name of the tool.

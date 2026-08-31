@@ -8,7 +8,7 @@ namespace AgentPlatform.Domain.Aggregates.Conversations;
 /// Represents a conversation aggregate root, managing a sequence of messages between
 /// users and agents, tracking total token usage, and maintaining lifecycle state.
 /// </summary>
-public sealed class Conversation : ITenantScoped, IAggregateRoot
+public sealed class Conversation : ITenantScoped, IWorkspaceScoped, IAggregateRoot
 {
     private readonly List<Message> _messages = [];
     private readonly List<IDomainEvent> _domainEvents = [];
@@ -42,6 +42,7 @@ public sealed class Conversation : ITenantScoped, IAggregateRoot
     /// Gets the unique identifier of the tenant that owns this conversation.
     /// </summary>
     public Guid TenantId { get; private init; }
+    public Guid WorkspaceId { get; private init; }
 
     /// <summary>
     /// Gets the optional identifier of the knowledge base linked to this conversation.

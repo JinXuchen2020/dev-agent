@@ -7,7 +7,7 @@ namespace AgentPlatform.Domain.Aggregates.WorkflowTriggers;
 /// 工作流触发器聚合根（ITenantScoped）。一个工作流至多一个 Webhook 触发器与一个 Schedule
 /// 触发器，以 <see cref="TriggerType"/> 区分；类型相关字段按需可空。
 /// </summary>
-public sealed class WorkflowTrigger : ITenantScoped, IAggregateRoot
+public sealed class WorkflowTrigger : ITenantScoped, IWorkspaceScoped, IAggregateRoot
 {
     /// <summary>Gets the unique identifier of the trigger.</summary>
     public Guid Id { get; private init; }
@@ -17,6 +17,7 @@ public sealed class WorkflowTrigger : ITenantScoped, IAggregateRoot
 
     /// <summary>Gets the identifier of the tenant that owns this trigger.</summary>
     public Guid TenantId { get; private init; }
+    public Guid WorkspaceId { get; private init; }
 
     /// <summary>Gets the type of the trigger (Webhook or Schedule).</summary>
     public TriggerType Type { get; private set; }

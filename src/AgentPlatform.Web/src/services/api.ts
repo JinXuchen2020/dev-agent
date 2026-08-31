@@ -63,6 +63,12 @@ import type {
   DebugVariablesResponse,
   DebugWorkflowStateSnapshot,
   OrchestrationPresetMode,
+  Workspace,
+  WorkspaceMember,
+  CreateWorkspaceRequest,
+  UpdateWorkspaceRequest,
+  AddWorkspaceMemberRequest,
+  SwitchWorkspaceResponse,
 } from '../types';
 
 const api = axios.create({
@@ -72,6 +78,19 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
   // Send the httpOnly auth cookie on every request (F2: cookie-based auth).
   withCredentials: true,
+});
+
+// F35: workspace 切换的 localStorage 持久化键（单一事实来源，appStore 从此处导入，
+// 避免 api.ts ↔ appStore 循环依赖；appStore 在 setCurrentWorkspaceId 时同步写 localStorage）。
+export const WORKSPACE_STORAGE_KEY = 'app-workspace-id';
+
+// F35: 每个请求附带 X-Workspace-Id（决策 D1=C：JWT claim 默认 + header 覆盖）。
+api.interceptors.request.use((config) => {
+  const workspaceId = localStorage.getItem(WORKSPACE_STORAGE_KEY);
+  if (workspaceId) {
+    config.headers['X-Workspace-Id'] = workspaceId;
+  }
+  return config;
 });
 
 // No Authorization header injection: the auth cookie is sent automatically via
@@ -619,6 +638,32 @@ export const getAuthMe = () =>
 
 export const logoutRequest = () =>
   api.post<void>('/auth/logout').then(() => undefined);
+
+// ── F35 多工作空间 ──
+export const getWorkspaces = () =>
+  api.get<Workspace[]>('/workspaces').then((r) => r.data ?? []);
+
+export const createWorkspace = (data: CreateWorkspaceRequest) =>
+  api.post<Workspace>('/workspaces', data).then((r) => r.data);
+
+export const updateWorkspace = (id: string, data: UpdateWorkspaceRequest) =>
+  api.put<Workspace>(`/workspaces/${id}`, data).then((r) => r.data);
+
+export const deleteWorkspace = (id: string) =>
+  api.delete<void>(`/workspaces/${id}`).then(() => undefined);
+
+export const getWorkspaceMembers = (id: string) =>
+  api.get<WorkspaceMember[]>(`/workspaces/${id}/members`).then((r) => r.data ?? []);
+
+export const addWorkspaceMember = (id: string, data: AddWorkspaceMemberRequest) =>
+  api.post<WorkspaceMember>(`/workspaces/${id}/members`, data).then((r) => r.data);
+
+export const removeWorkspaceMember = (id: string, userId: string) =>
+  api.delete<void>(`/workspaces/${id}/members/${userId}`).then(() => undefined);
+
+// 切换工作空间：后端校验可见性并重签 httpOnly cookie（workspace_id claim）。
+export const switchWorkspace = (id: string) =>
+  api.post<SwitchWorkspaceResponse>(`/workspaces/${id}/switch`).then((r) => r.data);
 
 // F13 多租户凭据（模型 + 搜索，BYO-Key + 平台内置）。
 // 一个租户可配置多个同类凭据，统一以列表返回（可能为空数组）。

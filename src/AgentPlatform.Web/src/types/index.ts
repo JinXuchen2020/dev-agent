@@ -616,6 +616,43 @@ export interface AuthUser {
   email: string;
   role: string;
   tenantId: string;
+  // F35: 当前活跃工作空间（无 claim / 空 Id 时缺省，前端回退租户默认工作空间）。
+  currentWorkspaceId?: string | null;
+}
+
+// ── Workspace (F35: 同租户内第二层隔离维度) ──
+export interface Workspace {
+  id: string;
+  name: string;
+  description?: string | null;
+  isDefault: boolean;
+  createdAt: string;
+}
+
+export interface WorkspaceMember {
+  userId: string;
+  email: string;
+  joinedAt: string;
+}
+
+export interface CreateWorkspaceRequest {
+  name: string;
+  description?: string | null;
+}
+
+export interface UpdateWorkspaceRequest {
+  name: string;
+  description?: string | null;
+}
+
+export interface AddWorkspaceMemberRequest {
+  email: string;
+}
+
+// F35: switch 响应（后端重签 httpOnly cookie；token 字段仅调试用，前端不落盘）。
+export interface SwitchWorkspaceResponse {
+  workspace: Workspace;
+  token: string;
 }
 
 export interface LoginRequest {

@@ -17,6 +17,17 @@ public interface IWorkflowRepository
     Task<Workflow?> GetByIdAsync(Guid id, CancellationToken ct = default);
 
     /// <summary>
+    /// 触发器路径专用查询（F35）：仅按租户定位工作流，不受当前工作空间查询过滤器约束。
+    /// 后台调度 / 匿名 Webhook scope 的工作空间上下文恒解析为租户默认工作空间，
+    /// 若沿用工作空间过滤，非默认工作空间的工作流会被静默跳过（永不触发）。
+    /// </summary>
+    /// <param name="id">The unique identifier of the workflow.</param>
+    /// <param name="tenantId">The owning tenant identifier (cross-tenant guard).</param>
+    /// <param name="ct">A cancellation token to cancel the asynchronous operation.</param>
+    /// <returns>The workflow if found within the tenant; otherwise <c>null</c>.</returns>
+    Task<Workflow?> GetByIdForTriggerAsync(Guid id, Guid tenantId, CancellationToken ct = default);
+
+    /// <summary>
     /// Retrieves all workflows belonging to a specific tenant.
     /// </summary>
     /// <param name="tenantId">The unique identifier of the tenant.</param>
