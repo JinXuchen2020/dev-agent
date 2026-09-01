@@ -1,5 +1,23 @@
 # 变更日志
 
+## v2.35 (2026-09-01)
+
+### F36 · Agent 上下文隔离（Blackboard 分区 + 独立对话历史）—— 分支 `feat/f36-agent-context-isolation`（基于 f35 分支）
+
+**后端**：
+- Blackboard 软分区（决策 D1=A）：`agent:{agentId}:` 键约定 + `GetPartitionView(agentId)`（全局区+自分区、自分区键剥离前缀）+ `GetGlobalView()`（未绑定 agent 的 LLM 步骤剔除 agent 分区键，对存量数据零变化）；底层扁平存储与 F30 检查点/F25 调试器/RunningExecution 快照三个持久化格式零变更。
+- `Conversation.AgentId`（D2=A）：迁移 `AddConversationAgentId`（nullable 列 + 唯一过滤索引 `IX_Conversations_TenantId_WorkflowId_AgentId` 防并发重复创建 + 复合索引覆盖查询）；`AgentCallStepExecutor` 自动创建/复用 per-agent per-workflow 会话并写入 prompt 摘要与回复消息；best-effort——持久化失败先 `Detach` 隔离再吞（防 Added 实体滞留 change tracker 毒化编排器后续 SaveChanges），OCE 穿透。
+- agent 回复显式回写全局键 `agent:{agentId}:output`（D4=A），下游步骤经 `Blackboard.Get` 引用。
+- 会话列表端点 `GET /conversations?agentId=` 过滤（D3=A）；种子 agent 会话 + BDD 场景（Conversation.feature，确定性无 LLM）。
+
+**前端**：ConversationsPage agent 筛选 Select（getAgents 补 AbortSignal）+ 卡片紫色 agent 标签（agentId→名称映射）+ 新建兜底刷新携带筛选条件 + i18n 中英对称。
+
+**决策（features/f36-agent-context-isolation.md §5，2026-08-31 用户锁定）**：D1=A 软分区 / D2=A 自动建会话 / D3=A 筛选+标签 / D4=A 显式回写。现实修正：Blackboard 实为 `Dictionary<string,string>`（非 backlog 原文的 `<string,object>`）、AgentCallStepExecutor 原本从不接触 Conversation。
+
+**质量门**：三道门全 PASS（`.quality-gate.json` 推进 `f36-agent-context-isolation`，`cleared:true`）。ddd-code-reviewer 修复 P1（唯一过滤索引防并发双建会话）+ 3×P2（OCE 不吞用例锁定、getAgents AbortSignal、兜底刷新带筛选）；结构门 P0-P2=0（2×P3 waiver：分区预留 API、截断字面量）；optimizer Round F36-01 修 P1（Detach 隔离）+ 3×P3（doc 注释归位/if 合并/冗余单列索引移除），0 open。测试：build 0/0；Application **253** / Infrastructure **162+6skip** / Api 35 / Architecture 9 / Integration 5 / SpecFlow **115/116**（唯一失败=master 既有 LLM 用例）；新增 Blackboard 分区 7 例 + executor 7 例 + EF 会话隔离 4 例 + SpecFlow 1 场景；前端 tsc 0 error + vitest（既有豁免×2）+ vite build。质量报告 `docs/quality/f36-agent-context-isolation-gate.md`。
+
+**已知残留（非阻断）**：硬分区（`Dictionary<Guid,…>` 重构 + 持久化 SchemaVersion 升级）列 v2；分区写入 API（SetInPartition/GetFromPartition）v1 为预留、agent 工具链落地时接入；截断字面量 8000/12000 未抽配置。
+
 ## v2.34 (2026-08-31)
 
 ### F35 · 多工作空间隔离（Workspace）—— 同租户内第二层隔离维度（分支 `feat/f35-workspace-isolation`）

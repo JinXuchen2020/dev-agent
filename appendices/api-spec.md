@@ -263,7 +263,7 @@
 
 | 方法 | 路径 | 说明 | 权限 |
 | :--- | :--- | :--- | :--- |
-| GET | `/api/v1/conversations` | 会话列表 | read:workflow |
+| GET | `/api/v1/conversations` | 会话列表；可选 `?agentId={guid}` 按归属 agent 过滤（F36，agent 步骤自动建的 per-agent 会话；不传=全部含全局会话） | read:workflow |
 | POST | `/api/v1/conversations` | 创建会话 | write:workflow |
 | GET | `/api/v1/conversations/{id}` | 会话详情（含消息历史） | read:workflow |
 | POST | `/api/v1/conversations/{id}/messages` | 发送消息（流式响应 via SSE） | write:workflow |

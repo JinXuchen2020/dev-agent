@@ -97,6 +97,8 @@ export interface ApiKey {
 export interface Conversation {
   id: string;
   agentName?: string;
+  // F36：归属 agent（agent 步骤自动创建的 per-agent 会话绑定其 agent；人工/Chat 会话为空）。
+  agentId?: string | null;
   workflowId?: string;
   knowledgeBaseId?: string;
   collectionName?: string;

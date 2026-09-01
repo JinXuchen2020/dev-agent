@@ -51,6 +51,13 @@ public sealed class Conversation : ITenantScoped, IWorkspaceScoped, IAggregateRo
     public Guid? KnowledgeBaseId { get; private set; }
 
     /// <summary>
+    /// Gets the optional identifier of the agent this conversation belongs to (F36).
+    /// Agent 步骤运行时创建/复用的 per-agent per-workflow 会话绑定其 agent，实现同一工作流内
+    /// 不同 agent 的对话历史隔离；<c>null</c> = 人工创建 / Chat 绑定的全局会话（存量兼容）。
+    /// </summary>
+    public Guid? AgentId { get; private set; }
+
+    /// <summary>
     /// Gets the vector collection name of the linked knowledge base. Denormalized from
     /// the knowledge base so message retrieval does not require a cross-aggregate lookup.
     /// </summary>
@@ -86,11 +93,13 @@ public sealed class Conversation : ITenantScoped, IWorkspaceScoped, IAggregateRo
     /// <param name="id">The unique identifier of the conversation.</param>
     /// <param name="tenantId">The unique identifier of the tenant that owns the conversation.</param>
     /// <param name="workflowId">The optional identifier of the associated workflow.</param>
-    public Conversation(Guid id, Guid tenantId, Guid? workflowId = null)
+    /// <param name="agentId">The optional identifier of the owning agent (F36 per-agent conversation isolation).</param>
+    public Conversation(Guid id, Guid tenantId, Guid? workflowId = null, Guid? agentId = null)
     {
         Id = id;
         TenantId = tenantId;
         WorkflowId = workflowId;
+        AgentId = agentId;
         TotalTokenUsage = new TokenUsage(0, 0);
         Status = ConversationStatus.Active;
         CreatedAt = DateTime.UtcNow;

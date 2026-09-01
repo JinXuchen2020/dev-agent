@@ -719,6 +719,8 @@ export const zhCN = {
       status: '状态',
       searchPlaceholder: '搜索 ID / 智能体 / 工作流 / 知识库',
       statusFilter: '状态筛选',
+      agentFilter: '按智能体筛选',
+      agentTag: '智能体',
       empty: '暂无会话记录',
       created: '已创建新会话',
       createFailed: '创建失败，请确认已登录',

@@ -1,7 +1,9 @@
 using System.Threading;
 using System.Threading.Tasks;
 using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Domain.Aggregates.Conversations;
 using AgentPlatform.Domain.Aggregates.ApiKeys;
+using AgentPlatform.Domain.Enums;
 using AgentPlatform.Domain.Aggregates.Users;
 using AgentPlatform.Domain.Aggregates.Workflows;
 using AgentPlatform.Infrastructure.Persistence;
@@ -81,6 +83,21 @@ public static class IntegrationSeeder
                 wf.ReplaceSteps(new[] { "Translate" });
                 wf.Complete();
                 db.Workflows.Add(wf);
+            }
+
+            // ── T1 agent 归属会话（F36 per-agent 对话隔离 BDD 用）──
+            // 归属 DatabaseInitializer 播种的 F29 demo agent（默认租户 = T1），挂种子工作流。
+            if (await db.Conversations.IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(c => c.Id == IntegrationConstants.AgentConversationId, ct) is null)
+            {
+                var conv = new Conversation(
+                    IntegrationConstants.AgentConversationId,
+                    IntegrationConstants.Tenant1Id,
+                    IntegrationConstants.SampleWorkflowId,
+                    IntegrationConstants.F29DemoAgentId);
+                conv.AddMessage(new Message(Guid.NewGuid(), MessageRole.User, "BDD agent 对话种子消息"));
+                conv.AddMessage(new Message(Guid.NewGuid(), MessageRole.Agent, "BDD agent 对话种子回复"));
+                db.Conversations.Add(conv);
             }
 
             await db.SaveChangesAsync(ct);

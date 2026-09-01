@@ -157,6 +157,7 @@ public class Conversation                        // 聚合根
 
     public Guid Id { get; private init; }
     public Guid? WorkflowId { get; private set; }                 // 关联工作流（可为空）
+    public Guid? AgentId { get; private set; }                    // F36 归属 agent（agent 步骤自动建/复用的会话绑定；null=全局会话，存量兼容）
     public IReadOnlyList<Message> Messages => _messages;
     public TokenUsage TotalTokenUsage { get; private set; }       // 累计 token 用量（值对象）
     public ConversationStatus Status { get; private set; }

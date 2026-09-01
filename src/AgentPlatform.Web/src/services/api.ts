@@ -119,7 +119,8 @@ api.interceptors.response.use(
 );
 
 // Agents
-export const getAgents = () => api.get<Agent[]>('/agents').then((r) => r.data);
+export const getAgents = (signal?: AbortSignal) =>
+  api.get<Agent[]>('/agents', { signal }).then((r) => r.data);
 export const getAgent = (id: string) => api.get<Agent>(`/agents/${id}`).then((r) => r.data);
 export const createAgent = (data: CreateAgentRequest) =>
   api.post<Agent>('/agents', data).then((r) => r.data);
@@ -550,11 +551,13 @@ export const getApiKeys = () => api.get<ApiKey[]>('/api-keys').then((r) => r.dat
 export const getConversations = (params?: {
   status?: number | string;
   q?: string;
+  // F36：按归属 agent 过滤（per-agent 对话隔离）。
+  agentId?: string;
   signal?: AbortSignal;
 }) => {
-  const { status, q, signal } = params ?? {};
+  const { status, q, agentId, signal } = params ?? {};
   return api
-    .get<Conversation[]>('/conversations', { params: { status, q }, signal })
+    .get<Conversation[]>('/conversations', { params: { status, q, agentId }, signal })
     .then((r) => r.data);
 };
 export const createConversation = () =>

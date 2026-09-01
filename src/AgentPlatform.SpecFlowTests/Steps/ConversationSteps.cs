@@ -53,6 +53,18 @@ public sealed class ConversationSteps
         _scenario["LastBody"] = await resp.ReadBodyAsync();
     }
 
+    /// <summary>F36：按归属 agent 过滤会话列表（per-agent 对话隔离契约验证）。</summary>
+    [Given("^列出会话并按 agent \"([^\"]*)\" 过滤$")]
+    [When("^列出会话并按 agent \"([^\"]*)\" 过滤$")]
+    [Then("^列出会话并按 agent \"([^\"]*)\" 过滤$")]
+    public async Task ListConversationsFilteredByAgent(string agentId)
+    {
+        var resp = await IntegrationClient.SendAsync(
+            HttpMethod.Get, $"/api/v1/conversations?agentId={agentId}", AdminToken());
+        _scenario["LastResponse"] = resp;
+        _scenario["LastBody"] = await resp.ReadBodyAsync();
+    }
+
     [Given("^以 成员 身份列出会话$")]
     [When("^以 成员 身份列出会话$")]
     [Then("^以 成员 身份列出会话$")]

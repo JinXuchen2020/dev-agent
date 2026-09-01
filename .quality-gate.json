@@ -1,9 +1,9 @@
 {
-  "phase": "f35-workspace-isolation",
-  "reviewer": "ddd-code-reviewer PASSED (P0/P1/P2=0 open；修复 5 项：P1 X-Workspace-Id 头越权→WorkspaceHeaderGuardMiddleware 剥离中间件；P1 触发路径回归→GetByIdForTriggerAsync 按租户定位；P2 空 Guid claim/header 沿链回退；P2 删除当前空间后自动回切默认；P3 API-Key 主体重签 claim 回退)",
-  "structureGate": "ddd-phase-quality-gate PASS (P0=0 P1=0 P2=0；P3 1 修复 + 2 waiver：WorkspaceDirectory 有界字典、Default 契约常量；checklist 已嵌入 features/f35-workspace-isolation.md §Quality Gate Checklist)",
-  "codebaseOptimizer": "codebase-optimizer PASSED (Round F35-01, 0 open; 修复 1 项 P3 存储键常量单源化 WORKSPACE_STORAGE_KEY；5 项 P3 waiver 见 .codebase-optimizer/rounds/round-f35-01-tasks.md)",
+  "phase": "f36-agent-context-isolation",
+  "reviewer": "ddd-code-reviewer PASSED (P0/P1/P2=0 open；修复 4 项：P1 唯一过滤索引 IX_Conversations_TenantId_WorkflowId_AgentId 防并发双建会话；P2 OCE 不吞用例锁定；P2 getAgents AbortSignal；P2 新建兜底刷新带筛选)",
+  "structureGate": "ddd-phase-quality-gate PASS (P0=0 P1=0 P2=0；P3 2 waiver：SetInPartition/GetFromPartition 预留 API、截断字面量；checklist 已嵌入 features/f36-agent-context-isolation.md §Quality Gate Checklist)",
+  "codebaseOptimizer": "codebase-optimizer PASSED (Round F36-01, 0 open; P1 best-effort 持久化失败 Detach 隔离已修+测试锁定；3×P3 已修：doc 注释归位/if 合并/冗余单列索引移除；沿用结构门 2 项 P3 waiver)",
   "cleared": true,
-  "reportRef": "docs/quality/f35-workspace-isolation-gate.md",
-  "notes": "F35 多工作空间隔离全栈闭环：Domain(Workspace/WorkspaceMember 聚合 + IWorkspaceScoped + 18 聚合加列)、Infrastructure(组合 query filter + SaveChanges 注入 + IWorkspaceProvider 三级解析链 + WorkspaceProvisioner 幂等供应/回填 + 迁移 AddWorkspaceIsolation + WorkspaceHeaderGuardMiddleware)、Api(WorkspacesController 8 端点 + 登录/auth-me/dev-login 携带 workspace claim + API-Key 钉所属空间 + 触发路径回归修复)、前端(WorkspaceSwitcher + 拦截器注入头 + appStore 持久化 + useApiState 单点订阅全站刷新 + i18n 对称 + BDD E2E workspace-switch.feature)。决策 D1=C/D2=A/D3=B/D4/D5=A 用户锁定。模型一致性 camelCase 逐字段对齐，tsc 0 error。测试：build 0/0；App 238/Infra 158+6skip/Api 35/Arch 9/SpecFlow 114/115(既有豁免)/Integration 5(需 OPENAI__Key)；新增 16 测试。文档同步：CHANGELOG v2.34、BLUEPRINT、appendices/core-aggregates.md、appendices/api-spec.md(I.11)、backlog F35 done。"
+  "reportRef": "docs/quality/f36-agent-context-isolation-gate.md",
+  "notes": "F36 Agent 上下文隔离全栈闭环：Blackboard 软分区视图（agent:{agentId}: 键约定 + GetPartitionView/GetGlobalView，F30/F25/RunningExecution 持久化格式零变更）+ Conversation.AgentId（迁移 AddConversationAgentId + 唯一过滤索引）+ AgentCallStepExecutor 自动创建/复用 per-agent per-workflow 会话（best-effort + Detach 隔离）+ agent 回复显式回写 agent:{agentId}:output + 会话列表 agentId 过滤 + 前端 agent 筛选/标签 + BDD 场景。决策 D1=A/D2=A/D3=A/D4=A 用户锁定。模型一致性 camelCase 对齐，tsc 0 error。测试：build 0/0；App 253/Infra 162+6skip/Api 35/Arch 9/SpecFlow 115/116(既有豁免)/Integration 5；新增 18 测试 + 1 BDD 场景。文档同步：CHANGELOG v2.35、BLUEPRINT、appendices、backlog F36 done。"
 }

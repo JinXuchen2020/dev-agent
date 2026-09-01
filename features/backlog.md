@@ -446,7 +446,8 @@
 - 风险：🔴 破坏性极大——全聚合加列 + query filter 修改 + TenantProvider 体系重构 + 前端全局切换。建议独立分支 feature-builder 全栈闭环。
 - **完成记录（2026-08-31）**：feature-builder 全栈实跑落地。决策（用户锁定）：D1=C claim+header 双通道（`IWorkspaceProvider`：claim → header → `WorkspaceDirectory` 租户默认兜底 → 空 fail-closed）/ D2=A 18 聚合全量（AuditLog/ExecutionLog/AgentRunRecord 仅补列）/ D3=B 成员表（非 Admin 仅见默认+已加入，switch 校验成员资格）/ D4=删除守卫（默认 409、非空 409、绝不级联）/ D5=A `useApiState` 单点订阅全站刷新。后端：`Workspace`/`WorkspaceMember` 聚合 + `IWorkspaceScoped` + 18 聚合加列 + `AppDbContext` 组合过滤器与 SaveChanges 注入 + `WorkspaceProvisioner` 幂等供应/回填 + 迁移 `AddWorkspaceIsolation` + `WorkspacesController` 8 端点 + `WorkspaceHeaderGuardMiddleware`（非 Admin 剥离越权头）+ 登录/`/auth/me`/dev-login 携带 workspace claim + API-Key 认证钉到 Key 所属工作空间 + 触发路径 `GetByIdForTriggerAsync`（修复非默认空间工作流被静默跳过的回归）。前端：`WorkspaceSwitcher` + 拦截器注入头 + `appStore.currentWorkspaceId` 持久化 + i18n 对称 + BDD E2E `workspace-switch.feature`。三道质量门全 PASS：ddd-code-reviewer 修 2×P1（header 越权中间件、触发回归）+3 项；结构门 P0-P2=0（2 waiver）；optimizer Round F35-01 0 open（1 修复 + 5 waiver）。验证：build 0/0；App 238 / Infra 158+6skip / Api 35 / Arch 9 / SpecFlow 114/115（唯一失败=master 既有 LLM 用例）/ Integration 5（需 `OPENAI__Key`）；新增 12 handler 测试 + 4 EF 隔离测试；前端 tsc 0 + vitest（2 既有失败豁免）+ vite build。文档同步：CHANGELOG v2.34、BLUEPRINT 平台化清单、appendices/core-aggregates.md（Workspace/WorkspaceMember 聚合）、appendices/api-spec.md（I.11 工作空间 API，资源域 10→11）。已知残留：触发/调度仅落租户默认工作空间、成员列表 N+1、名称唯一大小写依赖 collation、3 个补列实体运行期 WorkspaceId 恒空（D2=A 设计）。
 
-### F36 · Agent 上下文隔离（Blackboard 分区 + 独立对话历史）  [P2]  open  🟡中风险（Blackboard 语义重构 + per-agent 对话状态）
+### F36 · Agent 上下文隔离（Blackboard 分区 + 独立对话历史）  [P2]  done  ✅（2026-09-01，分支 `feat/f36-agent-context-isolation` 基于 f35；设计文档 features/f36-agent-context-isolation.md §5 决策 D1–D4 已锁定 + §8 审查修复记录 + 质量报告 docs/quality/f36-agent-context-isolation-gate.md）🟡中风险（Blackboard 语义重构 + per-agent 对话状态）
+- 设计文档：`features/f36-agent-context-isolation.md`（已建，§5 决策 D1–D4 待用户锁定；现实修正：Blackboard 实为 Dictionary<string,string>、AgentCallStepExecutor 现从不接触 Conversation）
 - 来源：F31 Agent 运行时实体化 · D4「Blackboard 按 agent 分区 / 每 agent 独立对话历史延后」；F32 消息总线 · 明确不做
 - 设计依据：`features/f31-agent-runtime.md` §明确不做 + `features/f32-agent-message-bus.md` §明确不做
 - 目标：每个 agent 拥有独立的上下文视图——Blackboard 按 agent 分区（agent 只读写自己的分区），对话历史按 agent 隔离（同一工作流内不同 agent 的 Conversation 不互相污染）。
@@ -461,6 +462,7 @@
   - 无 AgentId 的 Conversation（F31 前遗留）回退到全局视图（向后兼容）。
   - build 0/0 + 全量测试 0 失败 + 前端 tsc 0 + vitest 通过。
 - 风险：🟡 Blackboard 值对象变更影响 WorkflowContext 全链路；Conversation 加列为最小迁移。依赖 F31/F32 已合入。
+- **完成记录（2026-09-01）**：feature-builder 全栈实跑落地（基于 feat/f35-workspace-isolation）。决策（用户锁定）：D1=A 软分区视图（`agent:{agentId}:` 键约定 + GetPartitionView/GetGlobalView；F30/F25/RunningExecution 持久化格式零变更）/ D2=A AgentCallStepExecutor 自动创建/复用 per-agent per-workflow 会话（唯一过滤索引防并发双建；持久化失败 Detach 隔离不阻断）/ D3=A 会话页 agent 筛选+标签 / D4=A 回复显式回写 `agent:{agentId}:output`。现实修正（相对 backlog 原文）：Blackboard 实为 Dictionary<string,string>，AgentCall 原不接触 Conversation。三道质量门全 PASS：reviewer 修 P1（唯一过滤索引）+3×P2；结构门 P0-P2=0（2 waiver）；optimizer 修 P1（Detach）+3×P3，0 open。验证：build 0/0；App 253/Infra 162+6skip/Api 35/Arch 9/SpecFlow 115/116（既有豁免）/Integration 5；新增 18 测试 + SpecFlow 1 场景；前端 tsc 0 + vitest（既有豁免×2）+ vite build。文档同步：CHANGELOG v2.35、BLUEPRINT、appendices（Conversation.AgentId + 会话列表 agentId 参数）、backlog F36 done。已知残留：硬分区列 v2；SetInPartition/GetFromPartition 为预留 API（agent 工具链接入）；截断字面量未抽配置。
 
 ### F37 · 队列化执行与水平扩展  [P1]  open  🔴高风险（分布式消息中间件 + 租约机制重构 + 多 worker 协调）
 - 来源：F30 执行持久化 · 延后项；F34 评估门禁 · 延后项

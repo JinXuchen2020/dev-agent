@@ -729,6 +729,8 @@ export const enUS: Resources = {
       status: 'Status',
       searchPlaceholder: 'Search ID / Agent / Workflow / Knowledge base',
       statusFilter: 'Status filter',
+      agentFilter: 'Filter by agent',
+      agentTag: 'Agent',
       empty: 'No conversations yet',
       created: 'New conversation created',
       createFailed: 'Creation failed, please sign in',

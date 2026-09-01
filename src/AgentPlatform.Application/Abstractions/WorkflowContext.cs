@@ -67,6 +67,12 @@ public sealed record StepArtifact
 /// </summary>
 public sealed class Blackboard
 {
+    /// <summary>
+    /// F36：agent 分区键前缀约定。<c>agent:{agentId}:{key}</c> 归属该 agent 的分区；
+    /// 无前缀的键 = 全局共享区（既有行为不变）。
+    /// </summary>
+    public const string AgentKeyPrefix = "agent:";
+
     private readonly Dictionary<string, string> _data;
 
     private Blackboard(Dictionary<string, string> data) => _data = data;
@@ -87,6 +93,69 @@ public sealed class Blackboard
 
     /// <summary>All entries currently stored.</summary>
     public IReadOnlyDictionary<string, string> Entries => _data;
+
+    /// <summary>
+    /// Writes a key inside the given agent's partition (F36 D1=A 软分区)：实际存储键为
+    /// <c>agent:{agentId}:{key}</c>，对其他 agent 的分区视图不可见。
+    /// </summary>
+    public Blackboard SetInPartition(Guid agentId, string key, string value) =>
+        Set(PartitionKey(agentId, key), value);
+
+    /// <summary>Reads a key from the given agent's partition; returns null when absent.</summary>
+    public string? GetFromPartition(Guid agentId, string key) =>
+        Get(PartitionKey(agentId, key));
+
+    /// <summary>
+    /// F36：agent 的上下文视图 = 全局共享区（无 <c>agent:</c> 前缀的键）+ 该 agent 自己的分区。
+    /// agent 步骤的 prompt 注入只用此视图，杜绝其他 agent 的中间产物无声泄漏进本 agent 的 prompt。
+    /// 自分区键返回时<b>剥离</b> <c>agent:{agentId}:</c> 前缀（prompt 可读性）；全局键原样。
+    /// </summary>
+    public IReadOnlyDictionary<string, string> GetPartitionView(Guid agentId)
+    {
+        var ownPrefix = PartitionKey(agentId, string.Empty);
+        var view = new Dictionary<string, string>();
+        foreach (var (key, value) in _data)
+        {
+            if (key.StartsWith(ownPrefix, StringComparison.Ordinal))
+            {
+                view[key[ownPrefix.Length..]] = value;
+            }
+            else if (!key.StartsWith(AgentKeyPrefix, StringComparison.Ordinal))
+            {
+                view[key] = value;
+            }
+        }
+
+        return view;
+    }
+
+    /// <summary>
+    /// F36：全局共享区视图（剔除所有 <c>agent:</c> 前缀键）。
+    /// 未绑定 agent 的 LLM 步骤用此视图替代全量 <see cref="Entries"/>——行为对既有工作流零变化
+    /// （存量数据无 agent: 键），但不会无声读到 agent 分区的中间产物。
+    /// </summary>
+    public IReadOnlyDictionary<string, string> GetGlobalView()
+    {
+        var view = new Dictionary<string, string>();
+        foreach (var (key, value) in _data)
+        {
+            if (!key.StartsWith(AgentKeyPrefix, StringComparison.Ordinal))
+            {
+                view[key] = value;
+            }
+        }
+
+        return view;
+    }
+
+    /// <summary>Builds the storage key for a key inside an agent's partition.</summary>
+    public static string PartitionKey(Guid agentId, string key) => $"{AgentKeyPrefix}{agentId}:{key}";
+
+    /// <summary>
+    /// F36 D4=A：agent 步骤最终回复的全局回写键——下游步骤（Condition / 后续 LLM）经
+    /// <see cref="Get"/> 显式引用，键名带 agentId、无泄漏歧义。
+    /// </summary>
+    public static string AgentOutputKey(Guid agentId) => PartitionKey(agentId, "output");
 }
 
 /// <summary>

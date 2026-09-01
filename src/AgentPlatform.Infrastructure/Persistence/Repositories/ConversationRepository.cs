@@ -76,6 +76,21 @@ internal sealed class ConversationRepository : IConversationRepository
     }
 
     /// <summary>
+    /// Retrieves the agent-owned conversation for a (workflow, agent) pair (F36).
+    /// Tenant isolation is enforced by the global query filter; the explicit tenantId
+    /// predicate keeps the query self-contained for tests and background scopes.
+    /// </summary>
+    public async Task<Conversation?> GetByAgentAsync(
+        Guid tenantId, Guid workflowId, Guid agentId, CancellationToken ct = default)
+    {
+        return await _context.Conversations
+            .FirstOrDefaultAsync(c =>
+                c.TenantId == tenantId &&
+                c.WorkflowId == workflowId &&
+                c.AgentId == agentId, ct);
+    }
+
+    /// <summary>
     /// Adds a new conversation aggregate to the change tracker.
     /// </summary>
     /// <param name="conversation">The conversation aggregate to add.</param>
@@ -100,5 +115,15 @@ internal sealed class ConversationRepository : IConversationRepository
     public void Remove(Conversation conversation)
     {
         _context.Conversations.Remove(conversation);
+    }
+
+    /// <summary>
+    /// Detaches the specified conversation aggregate from the change tracker so it is no
+    /// longer flushed by subsequent saves in the same scope (F36 best-effort persistence).
+    /// </summary>
+    /// <param name="conversation">The conversation aggregate to detach.</param>
+    public void Detach(Conversation conversation)
+    {
+        _context.Entry(conversation).State = EntityState.Detached;
     }
 }

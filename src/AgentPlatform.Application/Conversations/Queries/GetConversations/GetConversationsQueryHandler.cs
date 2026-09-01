@@ -30,6 +30,12 @@ internal sealed class GetConversationsQueryHandler : IRequestHandler<GetConversa
             conversations = conversations.Where(c => c.Status == request.Status.Value);
         }
 
+        // F36：按归属 agent 过滤（D3=A）；AgentId=null 的全局会话不匹配任何 agent 筛选。
+        if (request.AgentId.HasValue)
+        {
+            conversations = conversations.Where(c => c.AgentId == request.AgentId.Value);
+        }
+
         if (!string.IsNullOrWhiteSpace(request.Q))
         {
             var kw = request.Q.Trim();

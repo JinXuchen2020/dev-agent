@@ -33,6 +33,12 @@ public static class IntegrationConstants
     /// <summary>T2 绑定密钥明文。</summary>
     public const string T2ApiKeyPlaintext = "test-integration-key-t2";
 
+    /// <summary>F29 demo 自主 agent（DatabaseInitializer 播种，默认租户 T1）——F36 agent 会话归属。</summary>
+    public static readonly Guid F29DemoAgentId = Guid.Parse("33333333-3333-3333-3333-333333333301");
+
+    /// <summary>F36 agent 归属会话种子（归属 F29DemoAgentId，挂 SampleWorkflowId）。</summary>
+    public static readonly Guid AgentConversationId = Guid.Parse("55555555-5555-5555-5555-555555555501");
+
     /// <summary>固定密钥 Id，便于 Steps 在发布时引用（绑定 Key 场景）。</summary>
     public static readonly Guid T1ApiKeyId = Guid.Parse("22222222-2222-2222-2222-222222222222");
 
