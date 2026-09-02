@@ -46,6 +46,7 @@ import {
   getErrorMessage,
 } from '../services/api';
 import type { ApprovalDto, WorkflowDetail } from '../types';
+import { isQueuedRunResponse } from '../types';
 import { useCanvasStore } from '../stores/workflowCanvasStore';
 import DagNode from '../components/canvas/DagNode';
 import NodePalette from '../components/canvas/NodePalette';
@@ -275,8 +276,13 @@ const CanvasInner: React.FC = () => {
           edges: payload.edges,
         });
         // F8 · 把编排模式映射为 int 预设传入（auto=省略，由后端 DetectPreset 识别）。
-        await runExistingWorkflow(id, presetMode);
-        message.success(t('pages.workflows.savedAndRun'));
+        const runResult = await runExistingWorkflow(id, presetMode);
+        if (isQueuedRunResponse(runResult)) {
+          // F37 队列模式：等待窗口内未到达终态 → 202 queued，进度经 SSE/详情查看。
+          message.info(t('pages.workflows.queuedRun'));
+        } else {
+          message.success(t('pages.workflows.savedAndRun'));
+        }
         // refresh states（含暂停态检测与审批弹窗触发）
         await refreshWorkflow();
       } else {
@@ -286,14 +292,19 @@ const CanvasInner: React.FC = () => {
           initialContext: payload.initialContext,
           steps: buildStepsForNew(),
         });
-        await updateWorkflow(created.id, {
+        // F37：queued 响应带 workflowId（仍在执行），完成响应带聚合 id。
+        const createdId = isQueuedRunResponse(created) ? created.workflowId : created.id;
+        await updateWorkflow(createdId, {
           name: name.trim(),
           initialContext: payload.initialContext,
           nodes: payload.nodes,
           edges: payload.edges,
         });
-        message.success(t('pages.workflows.createdDag'));
-        navigate(`/workflows/${created.id}/edit`);
+        message.success(
+          isQueuedRunResponse(created)
+            ? t('pages.workflows.queuedRun')
+            : t('pages.workflows.createdDag'));
+        navigate(`/workflows/${createdId}/edit`);
       }
     } catch (err) {
       message.error(getErrorMessage(err));

@@ -1,4 +1,5 @@
 using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Application.Workflows;
 using AgentPlatform.Application.Workflows.Commands.ResolveApproval;
 using AgentPlatform.Application.Workflows.Commands.RunExistingWorkflow;
 using AgentPlatform.Application.Workflows.Commands.RunNode;
@@ -24,6 +25,7 @@ using AgentPlatform.Application.Debug.Queries.GetDebugState;
 using AgentPlatform.Application.Debug.Queries.GetDebugVariables;
 using AgentPlatform.Domain.Enums;
 using MediatR;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -99,10 +101,39 @@ public sealed class WorkflowsController : ControllerBase
             request.Name,
             request.InitialContext,
             TenantId: _tenant.GetTenantId(),
-            Steps: request.Steps);
+            Steps: request.Steps,
+            RequestingUserId: RequestingUserId());
 
+        // F37 D2=B：队列模式下等待超时 → 202 queued；入队被拒 → 503（绝不静默丢任务）。
         var result = await _mediator.Send(command, ct);
-        return Ok(result);
+        return QueueResult(result.Dispatch, result.WorkflowId, result.State, () => Ok(result.Workflow));
+    }
+
+    /// <summary>F37：发起用户归属（JWT NameIdentifier claim 解析失败时为 null，匿名/系统路径可空）。</summary>
+    private Guid? RequestingUserId()
+        => Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId) ? userId : null;
+
+    private IActionResult QueueResult(
+        QueueDispatchStatus dispatch,
+        Guid workflowId,
+        WorkflowState? state,
+        Func<IActionResult> completed)
+    {
+        return dispatch switch
+        {
+            QueueDispatchStatus.Queued => Accepted(new { queued = true, workflowId, state = state?.ToString() }),
+            QueueDispatchStatus.Rejected => StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new ProblemDetails
+                {
+                    Status = StatusCodes.Status503ServiceUnavailable,
+                    Title = "执行队列不可用",
+                    Detail = "工作流已保存但未入队成功（队列满或队列后端不可用），请稍后重试或改用直接运行。",
+                    // 工作流已落库（未丢），回带 Id 供调用方定位/重跑，不产生孤儿引用。
+                    Extensions = { ["workflowId"] = workflowId }
+                }),
+            _ => (IActionResult)completed(),
+        };
     }
 
     /// <summary>
@@ -166,9 +197,12 @@ public sealed class WorkflowsController : ControllerBase
         var command = new RunExistingWorkflowCommand(
             id,
             request?.Preset ?? OrchestrationPreset.Sequential,
-            _tenant.GetTenantId());
+            _tenant.GetTenantId(),
+            RequestingUserId());
         var result = await _mediator.Send(command, ct);
-        return result == null ? NotFound() : Ok(result);
+        if (result is null)
+            return NotFound();
+        return QueueResult(result.Dispatch, result.WorkflowId, result.State, () => Ok(result.Detail));
     }
 
     /// <summary>

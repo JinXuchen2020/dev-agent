@@ -134,6 +134,8 @@ jobs:
     "PostgreSQL": "Host=localhost;Database=agent_platform;Username=agent;Password=agent_dev"
   },
   "Redis": { "Connection": "localhost:6379" },
+  // F37 队列化执行：QueueEnabled=false 默认单实例直跑；生产多实例置 true + RedisStream/RabbitMQ
+  "DurableExecution": { "QueueEnabled": false, "QueueBackend": "InMemory", "QueueMaxAttempts": 3 },
   "Jwt": { "Secret": "dev-secret-do-not-use-in-production" }
 }
 
@@ -161,7 +163,7 @@ jobs:
 | 模型调用排队 | vLLM GPU | GPU 节点增加 → vLLM 接入 Nginx 上游组 → 路由层做负载均衡 |
 | 数据库查询慢 | PostgreSQL | 主从分离：写走主库、读走从库；加 pgvector 索引优化向量检索 |
 | 缓存命中低 | Redis | Redis Cluster 分片扩容；增加本地 MemoryCache 作为 L1 缓存 |
-| 工作流并发高 | Agent 执行队列 | 队列从内存改为 Redis Stream，Workflow 实例水平扩展消费 |
+| 工作流并发高 | Agent 执行队列 | ✅ F37 已实现：`DurableExecution:QueueEnabled=true` + `QueueBackend=RedisStream`（或 RabbitMQ），多 `ExecutionWorker` 实例经消费组 + F30 租约水平扩展消费；无中间件时 InMemory 后端单实例回退 |
 
 ### H.6 前端发布
 

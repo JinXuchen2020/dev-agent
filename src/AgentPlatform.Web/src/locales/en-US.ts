@@ -261,6 +261,7 @@ export const enUS: Resources = {
       draftSaved: 'Draft saved',
       saveFailed: 'Failed to save (check that the DAG is valid)',
       savedAndRun: 'Saved and running',
+      queuedRun: 'Queued for execution — follow progress in the live panel or execution logs',
       createdDag: 'Created and saved DAG',
       saveRunFailed: 'Failed to save or run (check that the DAG is valid)',
       saveFirstDebug: 'Save the workflow before debugging a single node',

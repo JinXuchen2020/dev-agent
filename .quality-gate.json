@@ -1,9 +1,9 @@
 {
-  "phase": "f36-agent-context-isolation",
-  "reviewer": "ddd-code-reviewer PASSED (P0/P1/P2=0 open；修复 4 项：P1 唯一过滤索引 IX_Conversations_TenantId_WorkflowId_AgentId 防并发双建会话；P2 OCE 不吞用例锁定；P2 getAgents AbortSignal；P2 新建兜底刷新带筛选)",
-  "structureGate": "ddd-phase-quality-gate PASS (P0=0 P1=0 P2=0；P3 2 waiver：SetInPartition/GetFromPartition 预留 API、截断字面量；checklist 已嵌入 features/f36-agent-context-isolation.md §Quality Gate Checklist)",
-  "codebaseOptimizer": "codebase-optimizer PASSED (Round F36-01, 0 open; P1 best-effort 持久化失败 Detach 隔离已修+测试锁定；3×P3 已修：doc 注释归位/if 合并/冗余单列索引移除；沿用结构门 2 项 P3 waiver)",
+  "phase": "f37-queued-execution",
+  "reviewer": "ddd-code-reviewer PASSED (P0=0 P1=0 P2=0 open；修复 1×P0 重复投递二次执行(终态→Duplicate 不 Reset)、4×P1(轮询 AsNoTracking GetByIdFreshAsync / 死信成败回报防丢任务 / Redis 连接单例双检+Dispose / Rabbit channel epoch 防跨代误 ack)、3×P2(NOGROUP 自愈/nil 守卫/InMemory dead-letter 如实记 error))",
+  "structureGate": "ddd-phase-quality-gate PASS (P0=P1=P2=0；P3×2 修复：Redis MAXLEN 常量化、EnqueuedAt 接线；checklist 已嵌入 features/f37-queued-execution.md §Quality Gate Checklist)",
+  "codebaseOptimizer": "codebase-optimizer PASSED (Round F37-01, 0 open; P3×1 修复 未知 QueueBackend 静默降级加 LogWarning 告警；2×P3 waiver：RequestingUserId v1 未透传、InMemory 无持久 dead-letter；桩代码维度 100% 三后端均真实实现)",
   "cleared": true,
-  "reportRef": "docs/quality/f36-agent-context-isolation-gate.md",
-  "notes": "F36 Agent 上下文隔离全栈闭环：Blackboard 软分区视图（agent:{agentId}: 键约定 + GetPartitionView/GetGlobalView，F30/F25/RunningExecution 持久化格式零变更）+ Conversation.AgentId（迁移 AddConversationAgentId + 唯一过滤索引）+ AgentCallStepExecutor 自动创建/复用 per-agent per-workflow 会话（best-effort + Detach 隔离）+ agent 回复显式回写 agent:{agentId}:output + 会话列表 agentId 过滤 + 前端 agent 筛选/标签 + BDD 场景。决策 D1=A/D2=A/D3=A/D4=A 用户锁定。模型一致性 camelCase 对齐，tsc 0 error。测试：build 0/0；App 253/Infra 162+6skip/Api 35/Arch 9/SpecFlow 115/116(既有豁免)/Integration 5；新增 18 测试 + 1 BDD 场景。文档同步：CHANGELOG v2.35、BLUEPRINT、appendices、backlog F36 done。"
+  "reportRef": "docs/quality/f37-queued-execution-gate.md",
+  "notes": "F37 队列化执行与水平扩展全栈闭环：IExecutionQueue 抽象 + ExecutionJob/QueueDelivery/EnqueueResult + 三后端(InMemory Channel 有界 / Redis Stream 消费组+XAUTOCLAIM 崩溃接管+死信流 / RabbitMQ durable+BasicGet pull+epoch 防跨代 ack+死信队列) + ExecutionWorker(恒注册+QueueEnabled 运行时门控，失败按 Attempt 重投、超限死信、仅接管成功才 ack) + ExecuteQueuedWorkflowCommand(消费 scope 复现租户/工作空间 Override、跨租户拒跑、终态重复投递→Duplicate 不 Reset 重跑、租约冲突→Duplicate、触发 FromQueue 防回环) + QueuedRunSupport(入队+AsNoTracking 轮询等待) + run 端点三态(200/202 queued/503 拒投) + 触发器队列模式投递 + 前端 QueuedRunResponse union/isQueuedRunResponse/queued 提示 + i18n。决策 D1=B/D2=B/D3=A(复用 5min 租约，校正 backlog 30s)/D4=A(门禁保持直跑) 用户锁定。默认 QueueEnabled=false 既有直跑路径零变化(全套既有测试零回归)。模型一致性 200 聚合/202 {queued,workflowId,state}/503 ProblemDetails 与前端 union 对齐，tsc 0 error。测试：build 0/0；vuln 0；App 268/Infra 171+8skip(broker门控)/Api 37/Arch 9/Integration 5(需 OPENAI__Key)/SpecFlow 115/116(既有豁免)；新增 App 队列 15+Infra queue/worker 9+Api E2E 2；前端 tsc 0+vitest(既有豁免×2)+vite build。文档同步：CHANGELOG v2.36、BLUEPRINT、appendices(api-spec I.3.1 队列模式 / deployment-devops H.4 配置+H.5 扩容已实现)、backlog F37 done。"
 }

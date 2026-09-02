@@ -1,5 +1,24 @@
 # 变更日志
 
+## v2.36 (2026-09-02)
+
+### F37 · 队列化执行与水平扩展（Redis Stream / RabbitMQ / InMemory 三后端）—— 分支 `feat/f37-queued-execution`（基于 f36）
+
+**决策（features/f37-queued-execution.md §5，2026-09-01 用户锁定）**：D1=B 三后端全做 / D2=B run 端点透明「入队 + 等待终态」/ D3=A 复用 F30 5min 租约作接管窗口（校正 backlog 原文「30s」）/ D4=A 评估门禁保持同步直跑。
+
+**后端**：
+- Application：`IExecutionQueue` 抽象 + `ExecutionJob`（载荷自带 TenantId/WorkspaceId/Preset/Trigger/Payload/Attempt）+ `QueueDelivery`/`EnqueueResult`；`QueuedRunSupport`（入队 + AsNoTracking 轮询等待终态，默认 110s<前端超时）；`ExecuteQueuedWorkflowCommand`（消费 scope 复现租户/工作空间 Override、跨租户拒跑、终态重复投递→Duplicate 绝不 Reset 重跑、F30 租约冲突→Duplicate、触发投递 FromQueue=true 防再入队回环）；`WorkflowRunResult`/`ExistingWorkflowRunResult`（NotQueued/Completed/Queued/Rejected）。
+- Infrastructure：三后端 `InProcessExecutionQueue`（Channel 有界 256，满则显式拒投）/ `RedisStreamExecutionQueue`（XADD MAXLEN + XREADGROUP 消费组 ap-workers + XAUTOCLAIM 空闲=租约 TTL 崩溃接管 + XACK + 死信流；自建 multiplexer 单例双检+Dispose；NOGROUP 自愈）/ `RabbitMqExecutionQueue`（RabbitMQ.Client 7.1.2：durable 队列 + persistent 发布 + BasicGet pull autoAck=false + prefetch=1 + 断线 unacked 重投 + channel epoch 防跨代误 ack + 死信队列）；`ExecutionWorker`（BackgroundService，恒注册 + QueueEnabled 运行时门控；失败按 Attempt 重投、超限死信、仅接管成功才 ack，杜绝「死信失败仍 ack」丢任务）；触发处理器队列模式投递 + 入队失败降级直跑（记 warning）。`DurableExecutionSettings` 扩展 12 队列配置项，未知 QueueBackend 告警回退。
+- Api：`WorkflowsController` run/run-existing 三态映射（200 完成聚合 / 202 `{queued,workflowId,state}` / 503 拒投）；默认 QueueEnabled=false 直跑路径零变化。
+
+**前端**：`types` 加 `QueuedRunResponse` + `isQueuedRunResponse` 守卫；`api.ts` run 返回 union；WorkflowCanvasPage/WorkflowsPage 处理 queued 分支（进度经 SSE/详情）；i18n 中英对称。
+
+**测试/CI**：新增 Application 队列 15 + Infrastructure queue/worker 9 + Api 队列模式 E2E 2（真 HTTP→InMemory 队列→worker→F30 租约→编排终态）；Redis/Rabbit 投递闭环 SkippableFact（本地跳过、CI redis+rabbitmq services 下真跑）。
+
+**质量门**：三道门全 PASS（`.quality-gate.json` 推进 `f37-queued-execution`，`cleared:true`）。ddd-code-reviewer 修 **P0**（重复投递二次执行）+ **P1×4**（轮询读到陈旧实体致必超时、死信失败仍 ack 丢任务、Redis 连接无界泄漏、Rabbit 跨 channel 误 ack）+ P2×3 + P3；结构门 0 open（P3×2 修）；optimizer Round F37-01 0 open（P3×1 修 + 2 waiver）。验证：build 0/0；Application **268** / Infrastructure **171+8跳** / Api **37** / Architecture 9 / Integration 5（需 `OPENAI__Key`）/ SpecFlow **115/116**（唯一失败=master 既有 LLM 用例）；前端 tsc 0 error + vitest（既有豁免×2）+ vite build。文档同步：CHANGELOG v2.36、BLUEPRINT、appendices（api-spec I.3.1 队列模式 / deployment-devops H.4 配置 + H.5 扩容「已实现」）、backlog F37 done。质量报告 `docs/quality/f37-queued-execution-gate.md`。
+
+**已知残留（非阻断）**：RabbitMQ/Redis 真 broker 投递闭环仅在 CI services 覆盖（本地无 broker 跳过）；InMemory 后端进程重启丢未 ack 作业（单实例回退，多实例生产须 Redis/Rabbit）；触发投递重跑会重放载荷（at-least-once 语义，不做 exactly-once）。
+
 ## v2.35 (2026-09-01)
 
 ### F36 · Agent 上下文隔离（Blackboard 分区 + 独立对话历史）—— 分支 `feat/f36-agent-context-isolation`（基于 f35 分支）

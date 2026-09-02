@@ -11,10 +11,37 @@ env:
   OPENAI_API_KEY: ${{ vars.OPENAI_API_KEY }}
   OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL }}
   OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+  # F37 SkippableFact 门控：RabbitMQ guest 用户默认仅允许 loopback 登录，而 runner 经发布端口
+  # 的连接从 docker 网桥进入（非 loopback）会被 broker 拒绝 → 队列测试在 CI 恒静默跳过。
+  # 故 service 用非 guest 默认用户，测试侧经本环境变量取同凭据。
+  ConnectionStrings__RabbitMQ: amqp://apci:apci@localhost:5672
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    # F37 队列后端集成测试（SkippableFact）依赖真实中间件：无服务时自动跳过，有则跑投递闭环。
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+      rabbitmq:
+        image: rabbitmq:3.13-management-alpine
+        ports:
+          - 5672:5672
+        env:
+          RABBITMQ_DEFAULT_USER: apci
+          RABBITMQ_DEFAULT_PASS: apci
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 

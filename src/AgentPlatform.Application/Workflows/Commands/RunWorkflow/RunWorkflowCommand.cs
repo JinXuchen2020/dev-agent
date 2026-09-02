@@ -15,10 +15,12 @@ namespace AgentPlatform.Application.Workflows.Commands.RunWorkflow;
 /// <param name="TenantId">The unique identifier of the tenant that owns the workflow.</param>
 /// <param name="Steps">Optional list of step names to create in the workflow.</param>
 /// <param name="Preset">The orchestration preset to use (sequential = fast path, negotiation = critic loop).</param>
+/// <param name="RequestingUserId">F37：发起用户（审计归属，可空；队列模式随作业载荷传递）。</param>
 public record RunWorkflowCommand(
     [Required] string Name,
     [Required] string InitialContext,
     Guid TenantId,
     IReadOnlyList<string>? Steps = null,
-    OrchestrationPreset Preset = OrchestrationPreset.Sequential
-) : IRequest<Workflow>;
+    OrchestrationPreset Preset = OrchestrationPreset.Sequential,
+    Guid? RequestingUserId = null
+) : IRequest<WorkflowRunResult>;  // F37 D2=B：统一直跑/队列结果

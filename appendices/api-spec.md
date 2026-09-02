@@ -116,6 +116,18 @@
 }
 ```
 
+### I.3.1 工作流运行与队列模式（F37）
+
+运行端点 `POST /api/v1/workflows`（创建并运行）与 `POST /api/v1/workflows/{id}/run`（重跑）在两种模式下响应不同：
+
+- **直跑模式（`DurableExecution:QueueEnabled=false`，默认）**：请求内同步跑完编排，返回完整工作流聚合（200）。
+- **队列模式（=true）**：请求先入队 → 服务端在等待窗口（`QueueWaitTimeoutSeconds`，默认 110s < 前端超时）内轮询终态。三态：
+  - **200**：等待窗口内到达终态/暂停，body = 工作流聚合（与直跑同构）。
+  - **202**：`{queued:true, workflowId, state}` —— 未及终态，执行仍由 worker 继续，进度经 SSE/详情查看。
+  - **503**：入队被拒（队列满 / 后端不可用），**绝不静默丢任务**。
+- 三后端（`QueueBackend`）：`InMemory`（默认，进程内 Channel 有界）/ `RedisStream`（消费组 + XAUTOCLAIM 崩溃接管）/ `RabbitMQ`（durable 队列 + BasicGet pull + 断线重投）。至少一次投递，重复消费由 F30 `RunningExecution` 租约互斥兜底。
+- 触发器（Webhook/Schedule）在队列模式下改投递队列由 worker 执行；入队失败降级直跑（记 warning）。评估门禁 F34 保持同步直跑（决策 D4）。
+
 ### I.3.2 发布工作流外部调用 API（F22）
 
 > 由 `POST /api/v1/workflows/{id}/publish` 生成的对外能力。鉴权复用现有 **API Key** 体系（`[Authorize(AuthenticationSchemes="ApiKey")]` + `PerApiKey` 令牌桶限流，非 JWT/cookie），租户由密钥 `tenant_id` 声明自动解析，`key_id` 声明用于调用审计归属。

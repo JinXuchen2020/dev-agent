@@ -69,6 +69,7 @@ import type {
   UpdateWorkspaceRequest,
   AddWorkspaceMemberRequest,
   SwitchWorkspaceResponse,
+  QueuedRunResponse,
 } from '../types';
 
 const api = axios.create({
@@ -308,8 +309,9 @@ export const getWorkflows = (opts?: {
 };
 export const getWorkflow = (id: string) =>
   api.get<WorkflowDetail>(`/workflows/${id}`).then((r) => r.data);
+// F37：队列模式下可能返回 202 QueuedRunResponse（等待超时），调用方须用 isQueuedRunResponse 判别。
 export const runWorkflow = (data: { name: string; initialContext: string; steps?: string[] }) =>
-  api.post<Workflow>('/workflows', data).then((r) => r.data);
+  api.post<Workflow | QueuedRunResponse>('/workflows', data).then((r) => r.data);
 export const updateWorkflow = (
   id: string,
   data: {
@@ -329,7 +331,8 @@ export const runExistingWorkflow = (id: string, mode?: OrchestrationPresetMode) 
   let body: Record<string, unknown> = {};
   if (mode === 'sequential') body = { preset: 0 };
   else if (mode === 'negotiation') body = { preset: 1 };
-  return api.post<WorkflowDetail>(`/workflows/${id}/run`, body).then((r) => r.data);
+  // F37：队列模式下可能返回 202 QueuedRunResponse（等待超时）。
+  return api.post<WorkflowDetail | QueuedRunResponse>(`/workflows/${id}/run`, body).then((r) => r.data);
 };
 
 // F20 S3 — HITL 人工审批门：列出某工作流全部审批记录（含待处理），解析（批准/拒绝）单个审批门。

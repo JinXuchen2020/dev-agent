@@ -24,6 +24,7 @@
     <PackageReference Include="PdfPig" Version="0.1.15" />
     <PackageReference Include="Pgvector" Version="0.3.0" />
     <PackageReference Include="Polly.Core" Version="8.5.0" />
+    <PackageReference Include="RabbitMQ.Client" Version="7.1.2" />
     <PackageReference Include="StackExchange.Redis" Version="2.8.0" />
     <PackageReference Include="YamlDotNet" Version="18.1.0" />
     <PackageReference Include="Jint" Version="4.1.0" />

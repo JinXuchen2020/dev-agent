@@ -13,11 +13,13 @@ namespace AgentPlatform.Application.WorkflowTriggers;
 /// <param name="TenantId">工作流所属租户（调用方需先行鉴权，handler 内再次校验归属）。</param>
 /// <param name="TriggerType">触发器类型（Webhook / Schedule / Chat）。</param>
 /// <param name="PayloadJson">触发器载荷 JSON（Webhook 请求体 / Chat 消息 / 调度元数据）；可为 null。</param>
+/// <param name="FromQueue">F37：true = 本命令由队列 worker 发起（直接执行，绝不再入队，防回环）。</param>
 public record TriggerWorkflowCommand(
     Guid WorkflowId,
     Guid TenantId,
     TriggerType TriggerType,
-    string? PayloadJson = null
+    string? PayloadJson = null,
+    bool FromQueue = false
 ) : IRequest<TriggerRunResult?>;
 
 /// <summary>触发器运行结果（供匿名 Webhook 端点返回最小信息）。</summary>

@@ -35,6 +35,7 @@ import {
   getApiKeys,
   diffWorkflow,
 } from '../services/api';
+import { isQueuedRunResponse } from '../types';
 import { useAppStore } from '../stores/appStore';
 import { mapWorkflowStatus, WORKFLOW_STATUS_FILTER_OPTIONS } from '../status';
 import { useTranslation } from 'react-i18next';
@@ -120,8 +121,10 @@ const WorkflowsPage: React.FC = () => {
     }
     setRunning(true);
     try {
-      await runWorkflow({ name: wfName.trim(), initialContext: '{}' });
-      message.success(t('pages.workflows.created'));
+      const created = await runWorkflow({ name: wfName.trim(), initialContext: '{}' });
+      // F37 队列模式：等待窗口内未到终态 → 202 queued（进度经 SSE/详情查看）。
+      message[isQueuedRunResponse(created) ? 'info' : 'success'](
+        isQueuedRunResponse(created) ? t('pages.workflows.queuedRun') : t('pages.workflows.created'));
       setModalOpen(false);
       setWfName('');
       setPage(1);

@@ -17,6 +17,17 @@ public interface IWorkflowRepository
     Task<Workflow?> GetByIdAsync(Guid id, CancellationToken ct = default);
 
     /// <summary>
+    /// 绕过变更追踪器的工作流新鲜读取（F37 队列等待轮询专用）。
+    /// <see cref="GetByIdAsync"/> 经 FindAsync 命中同 scope 本地追踪器时会直接返回内存实例，
+    /// 永远看不到 worker 在独立 DI scope 提交的最新状态；轮询方必须用本方法（AsNoTracking）读库。
+    /// 租户/工作空间全局过滤器照常生效。
+    /// </summary>
+    /// <param name="id">The unique identifier of the workflow.</param>
+    /// <param name="ct">A cancellation token to cancel the asynchronous operation.</param>
+    /// <returns>The workflow as persisted at query time if found; otherwise <c>null</c>.</returns>
+    Task<Workflow?> GetByIdFreshAsync(Guid id, CancellationToken ct = default);
+
+    /// <summary>
     /// 触发器路径专用查询（F35）：仅按租户定位工作流，不受当前工作空间查询过滤器约束。
     /// 后台调度 / 匿名 Webhook scope 的工作空间上下文恒解析为租户默认工作空间，
     /// 若沿用工作空间过滤，非默认工作空间的工作流会被静默跳过（永不触发）。

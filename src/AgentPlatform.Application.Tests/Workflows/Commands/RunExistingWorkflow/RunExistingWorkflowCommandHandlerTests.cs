@@ -53,8 +53,14 @@ public sealed class RunExistingWorkflowCommandHandlerTests
             .Returns(wf); // mock returns same instance; does not mutate state
 
         var audit = Substitute.For<IAuditLogRepository>();
+        var unitOfWork = Substitute.For<IUnitOfWork>();
+        var queue = Substitute.For<IExecutionQueue>();
+        var workspaceProvider = Substitute.For<IWorkspaceProvider>();
+        var settings = Microsoft.Extensions.Options.Options.Create(new DurableExecutionSettings());
+        var logger = Substitute.For<Microsoft.Extensions.Logging.ILogger<RunExistingWorkflowCommandHandler>>();
 
-        return new RunExistingWorkflowCommandHandler(repo, primitive, audit);
+        return new RunExistingWorkflowCommandHandler(
+            repo, primitive, audit, unitOfWork, queue, workspaceProvider, settings, logger);
     }
 
     [Theory]
@@ -71,6 +77,7 @@ public sealed class RunExistingWorkflowCommandHandlerTests
             new RunExistingWorkflowCommand(wf.Id, TenantId: wf.TenantId), CancellationToken.None);
 
         Assert.NotNull(result);
+        Assert.NotNull(result!.Detail);
         // Reset() cleared the prior result and returned the aggregate to Pending.
         Assert.Equal(WorkflowState.Pending, wf.CurrentState);
         Assert.Equal(WorkflowState.Pending, wf.Nodes.ElementAt(1).State);

@@ -369,6 +369,8 @@ Scenario Outline: 主模型超时后降级到备用模型
 - [x] **多工作空间隔离（Workspace）**：`Workspace`/`WorkspaceMember` 聚合（租户内第二层隔离维度）+ 18 个业务聚合加 `WorkspaceId` 并叠加组合 query filter（tenant AND workspace）+ `IWorkspaceProvider` 三级解析链（JWT `workspace_id` claim → `X-Workspace-Id` header（非 Admin 由 `WorkspaceHeaderGuardMiddleware` 剥离不可见头）→ 租户默认工作空间目录）+ `POST /{id}/switch` 重签 JWT + 顶栏 WorkspaceSwitcher（F35 实现，质量报告 `docs/quality/f35-workspace-isolation-gate.md`）
 - [x] **Agent 上下文隔离**：Blackboard 软分区视图（`agent:{agentId}:*` 键约定 + `GetPartitionView`，agent 步骤 prompt 只见全局区+自己分区；F30 检查点/F25 调试器持久化格式零变更）+ `Conversation.AgentId`（AgentCallStepExecutor 自动创建/复用 per-agent per-workflow 会话并写入 prompt/回复，唯一过滤索引防并发分裂；持久化失败 Detach 隔离不阻断编排）+ agent 回复显式回写 `agent:{agentId}:output` + 会话列表 agentId 过滤与前端 agent 筛选/标签（F36 实现，质量报告 `docs/quality/f36-agent-context-isolation-gate.md`）
 
+- [x] **队列化执行与水平扩展**：`IExecutionQueue` 抽象 + 三后端（InMemory Channel 有界 / Redis Stream 消费组 + XAUTOCLAIM 崩溃接管 / RabbitMQ durable 队列 pull + 断线重投）+ `ExecutionWorker`（BackgroundService，`QueueEnabled` 门控）+ run 端点队列模式三态（200 完成 / 202 queued / 503 拒投）+ 载荷复现租户/工作空间上下文 + F30 租约互斥实现至少一次投递幂等 + 死信通道与重试上限 + CI redis/rabbitmq services 门控 SkippableFact（F37 实现，质量报告 `docs/quality/f37-queued-execution-gate.md`）
+
 **阶段三验收**：平台具备配置管理、可视化编排、监控大盘、<strong>自定义 Agent 角色</strong>。
 
 ### 阶段四 · 前沿特性与收尾

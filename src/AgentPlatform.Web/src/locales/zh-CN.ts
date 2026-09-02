@@ -257,6 +257,7 @@ export const zhCN = {
       draftSaved: '已保存草稿',
       saveFailed: '保存失败（请检查 DAG 是否合法）',
       savedAndRun: '已保存并运行',
+      queuedRun: '已入队执行，进度请查看实时面板或执行日志',
       createdDag: '已创建并保存 DAG',
       saveRunFailed: '保存或运行失败（请检查 DAG 是否合法）',
       saveFirstDebug: '请先保存工作流再单步调试',

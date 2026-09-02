@@ -175,6 +175,21 @@ export interface ConfigurationAgentTemplate {
   sourceVersion: string;
 }
 
+// F37 队列模式：run 端点等待窗口内未到终态时返回 202 queued（显式不假成功）。
+export interface QueuedRunResponse {
+  queued: true;
+  workflowId: string;
+  state?: string;
+}
+
+export function isQueuedRunResponse(value: unknown): value is QueuedRunResponse {
+  return (
+    typeof value === 'object'
+    && value !== null
+    && (value as { queued?: unknown }).queued === true
+  );
+}
+
 export interface Workflow {
   id: string;
   name: string;
