@@ -500,7 +500,8 @@
 - 风险：🟢 纯增量，不触后端。但需与 F34 端点保持接口一致（API schema 变更须同步更新模板）。
 - **完成记录（2026-09-02）**：交付 GitHub Actions + GitLab CI 可复制门禁模板（`ci/` 目录，非自动生效）+ 中文接入指南。以 HTTP 码为唯一阻断契约（200 放行 / 422·400·401·403·404·000·其它 exit 1），认证走 httpOnly cookie jar（无 Bearer 反模式），curl 用 `-s -o -w %{http_code}` 而非 `-f`。关键校正：F41 已删 QuickStart→本地验证改「真实实例 / Stub Test 冒烟」；端点越界 minPassRate 实返 500 非 400（服务端无 handler，Program.cs 仅 6 handler）。对抗式评审修 3×高（set -e 抢杀 curl/登录与阈值 JSON 注入/外部 PR ref_name 脚本注入）+2×中，两模板 yaml.safe_load + bash -n 通过、HTTP 码分支 mock 桩冒烟 200/422/000=rc 0/1/1。三道质量门 PASS（结构门/optimizer scope=F38-only，0 open；waiver：真实平台端到端需接入方环境）。
 
-### F39 · 监控告警聚合  [P2]  open  🟡中风险（OpenTelemetry 指标 + 告警规则 + Dashboard 配置）
+### F39 · 监控告警聚合  [P2]  done  ✅（2026-09-02，分支 `feat/f39-observability-alerting` 基于 f38；设计文档 features/f39-observability-alerting.md §5 决策 D1–D4 已锁定 + §8 审查修复记录 + §9 Quality Gate Checklist + 质量报告 docs/quality/f39-observability-alerting-gate.md）🟡中风险（OpenTelemetry 指标 + 告警规则 + Dashboard 配置）
+- 设计文档：`features/f39-observability-alerting.md`（已建，§5 决策 D1–D4 待用户锁定；§2 关键校正：无 `result="failed"` 标签（失败⇒rolledback）、门禁阻断率可由 422 派生、队列指标须走 redis_exporter/RabbitMQ 插件、既有 Grafana provisioning 挂载路径无效）
 - 来源：F34 评估门禁 · 延后项
 - 设计依据：`features/f34-online-eval-gate.md` §延后项
 - 目标：将当前裸 OpenTelemetry `/metrics` 端点升级为可用的可观测性栈——Prometheus 抓取配置 + Grafana Dashboard 模板 + 告警规则（执行失败率、门禁阻断率、队列积压、模型调用延迟），实现「平台运行状态一目了然 + 异常自动通知」。
@@ -516,6 +517,7 @@
   - 告警规则阈值合理（参考实际测试数据：App 226 测试 / Infra 154 通过率）。
   - 指南文档完整：一键部署 / 告警对接 / 自定义。
 - 风险：🟡 Grafana Dashboard JSON 维护成本（版本升级可能断面板）；缓解：文档注明版本要求。
+- **完成记录（2026-09-02）**：feature-builder 全栈实跑落地。决策（用户锁定）：D1=**B**（补后端埋点，原建议 A 被否，InMemory 亦可观测）/ D2=A（Alertmanager + Slack/PagerDuty）/ D3=A（修 Grafana provisioning 布局 + 12 面板 + 锁版本）/ D4=A（失败率用 `rolledback` 口径 + API 错误率独立告警）。**关键校正（相对 backlog 原文）**：① 代码里不存在 `result="failed"`（失败⇒回滚 `rolledback`），按直觉写 failed 会得到**永不触发的假告警**；② 门禁阻断率优先用新埋点 `evaluation_gate_total{passed}`、HTTP 422 派生作交叉验证；③ 队列积压由应用自身 `execution_queue_depth{backend}` 上报（**Redis 侧 XACK 不减 XLEN，故 ack 后同步 XDEL**，否则「积压」单调增长 = 假告警）；④ 既有 compose 把裸 dashboard JSON 挂进 provisioning 目录**根本不会加载**，已改为 provider YAML + JSON 目录分离并给数据源显式 `uid: prometheus`（否则 12 面板全报 data source not found）；⑤ 镜像 `latest` 改为全部锁版本。交付：prometheus.yml / alert-rules.yml（9 条告警）/ alertmanager.yml / grafana provisioning + 12 面板 dashboard / docker-compose.monitoring.yml / docs/observability-guide.md；后端埋点 `IExecutionQueue.QueueDepth`（三后端真实读数）+ `WorkflowMetrics.EvaluationGateCounter` + `QueueDepthGauge`。三道质量门全 PASS：对抗审查修 P1×2（Redis 积压语义、Grafana 数据源 uid）+P2×3+P3×5；结构门 0 新增（3×P3 waiver）；optimizer Round F39-01 0 新增（修 3×P2 文档同步 + 2×P3 waiver）。验证：build 0/0；Application **269/269**、Infrastructure **174+8跳**、Api **39/39**、Architecture 9、SpecFlow 115/116（唯一失败=既有豁免）；新增 MeterListener 真断言测试 2 文件（守「埋点确实可观测」）；6 个监控 YAML + dashboard JSON 结构校验通过（脚本核验所有面板/告警只引用已核实指标）。文档同步：CHANGELOG v2.38、deployment-devops 附录（监控栈小节）、backlog F39 done。已知残留：promtool/amtool/Grafana 导入本机无 Docker 未实跑（结构校验兜底 + 指南留校验命令）；`workflow_id`/`path` 高基数标签治理与 RabbitMQ 深度 ≤5s 缓存为独立技术债。
 
 ### F40 · 异常回放诊断入口  [P2]  open  🟡中风险（执行日志回放引擎 + 前端诊断视图）
 - 来源：F34 评估门禁 · 延后项

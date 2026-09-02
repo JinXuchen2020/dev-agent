@@ -1,19 +1,83 @@
-version: '3.8'
+# F39 · AgentPlatform 可观测性栈（Prometheus + Alertmanager + Grafana + redis_exporter）
+#
+# 一键起：docker compose -f deploy/docker-compose.monitoring.yml up -d
+#   Prometheus   http://localhost:9090
+#   Alertmanager http://localhost:9093
+#   Grafana      http://localhost:3000（匿名查看；面板来自 provisioning，打开即见）
+#
+# 抓取目标为宿主机上的平台实例（host.docker.internal:5000），Linux 下由 extra_hosts 提供映射。
+# 版本全部固定（Grafana Dashboard JSON 与 major 版本耦合，升 Grafana 需回归面板，见指南 §7）。
+#
+# 告警凭据：monitoring/alertmanager.yml 内为 REPLACE_ME 占位，接入时由部署侧渲染真实值（勿提交密钥）。
+
 services:
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.54.1
+    container_name: ap_prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'          # 支持 POST /-/reload 热加载规则
     ports:
       - "9090:9090"
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: ap_alertmanager
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9093/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.2.0
+    container_name: ap_grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    environment:
+      # 开箱即用为只读匿名查看；生产请关闭匿名并改密码/接 SSO。
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
     ports:
       - "3000:3000"
-    environment:
-      - GF_AUTH_ANONYMOUS_ENABLED=true
     volumes:
-      - ./monitoring/grafana-dashboard.json:/etc/grafana/provisioning/dashboards/dashboard.json
+      # 正确布局：provisioning 目录放 provider/datasource YAML，dashboard JSON 放被指向的 folder。
+      - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+  # 可选：仅在使用 F37 RedisStream 队列且想额外看 Redis 自身指标时启用。
+  # 队列积压告警不依赖它（应用已上报 execution_queue_depth）。
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.64.0
+    container_name: ap_redis_exporter
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: "redis://host.docker.internal:6379"
+    ports:
+      - "9121:9121"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    profiles: ["redis"]

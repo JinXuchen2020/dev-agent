@@ -251,6 +251,9 @@ public sealed class ScriptedApiExecutionQueue : IExecutionQueue
         _acceptEnqueue = acceptEnqueue;
     }
 
+    /// <summary>脚本替身不模拟真实积压，恒 0（满足 F39 深度仪表契约）。</summary>
+    public long QueueDepth => 0;
+
     /// <summary>记录被拒的入队尝试，供测试断言任务显式到达了队列接缝（而非中途丢失）。</summary>
     public List<ExecutionJob> EnqueueAttempts { get; } = [];
 

@@ -33,6 +33,11 @@ internal sealed class RabbitMqExecutionQueue : IExecutionQueue, IAsyncDisposable
     /// <summary>channel 世代号：每次重建 channel 递增，用于界定 deliveryTag 的有效性。</summary>
     private long _epoch;
 
+    /// <summary>缓存的队列深度（F39）：由后台刷新循环经 passive declare 更新，scrape 回调只读缓存。</summary>
+    private long _depth;
+    private readonly CancellationTokenSource _depthCts = new();
+    private readonly Task _depthRefreshTask;
+
     public RabbitMqExecutionQueue(
         IOptions<DurableExecutionSettings> settings,
         IConfiguration configuration,
@@ -43,6 +48,53 @@ internal sealed class RabbitMqExecutionQueue : IExecutionQueue, IAsyncDisposable
         // 配置链：DurableExecution:RabbitMqUrl → ConnectionStrings:RabbitMQ → amqp://localhost。
         // 空串/空白视同未配置（与 RabbitMqUrl 文档语义「空则回退」一致；空串进 new Uri 会永久失败）。
         _url = FirstNonEmpty(settings.Value.RabbitMqUrl, configuration["ConnectionStrings:RabbitMQ"]) ?? "amqp://localhost";
+        QueueDepthGauge.Register(this);
+        // 深度刷新循环独立于 worker（QueueEnabled=false 时也要能观测积压）；异常只降级不致命。
+        _depthRefreshTask = Task.Run(() => RefreshDepthLoopAsync(_depthCts.Token));
+    }
+
+    /// <summary>队列深度刷新循环（5s 周期；broker 不可达时保留上一次值并 debug 记录）。</summary>
+    private async Task RefreshDepthLoopAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                await RefreshDepthAsync(ct);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // 正常停机。
+        }
+    }
+
+    private async Task RefreshDepthAsync(CancellationToken ct)
+    {
+        try
+        {
+            await _gate.WaitAsync(ct);
+            try
+            {
+                var channel = await EnsureChannelCoreAsync(ct);
+                if (channel is null)
+                {
+                    return;
+                }
+
+                var ok = await channel.QueueDeclarePassiveAsync(_settings.RabbitQueueName, ct);
+                Volatile.Write(ref _depth, (long)ok.MessageCount);
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogDebug(ex, "RabbitMQ queue depth refresh failed (keeping last known value)");
+        }
     }
 
     private static string? FirstNonEmpty(params string?[] candidates) =>
@@ -50,6 +102,10 @@ internal sealed class RabbitMqExecutionQueue : IExecutionQueue, IAsyncDisposable
 
     /// <inheritdoc />
     public string Backend => "RabbitMQ";
+
+    /// <inheritdoc />
+    // RabbitMQ 管理调用全为异步，ObservableGauge 回调不可 await → 返回后台刷新的缓存值（≤5s 陈旧）。
+    public long QueueDepth => Volatile.Read(ref _depth);
 
     /// <inheritdoc />
     public async Task<bool> ProbeAsync(CancellationToken ct = default)
@@ -291,6 +347,19 @@ internal sealed class RabbitMqExecutionQueue : IExecutionQueue, IAsyncDisposable
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
+        // 先停深度刷新循环并等待其退出，再释放 _gate（否则循环可能撞上已释放的闸）。
+        _depthCts.Cancel();
+        try
+        {
+            await Task.WhenAny(_depthRefreshTask, Task.Delay(TimeSpan.FromSeconds(2)));
+        }
+        catch (Exception)
+        {
+            // 刷新循环自身已吞异常；此处仅防御性兜底。
+        }
+
+        _depthCts.Dispose();
+
         await _gate.WaitAsync();
         try
         {

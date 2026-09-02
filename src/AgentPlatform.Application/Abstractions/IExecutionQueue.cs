@@ -59,6 +59,15 @@ public interface IExecutionQueue
     /// <summary>后端名（日志/诊断）："InMemory" | "RedisStream" | "RabbitMQ"。</summary>
     string Backend { get; }
 
+    /// <summary>
+    /// 当前待消费作业数（F39 观测用；Prometheus 侧 <c>execution_queue_depth{backend=...}</c>）。
+    /// 必须是同步廉价读且绝不抛出（不可用返回 0），以免拖垮 scrape：
+    /// InMemory = 通道内待消费数（精确，不含已取出在飞）；RedisStream = Stream 长度
+    /// （ack 即 XDEL，故 = 未投递 + 在飞，真实积压）；
+    /// RabbitMQ = 后台周期刷新的近似值（默认 ≤5s 陈旧窗口，其管理调用无同步廉价形式）。
+    /// </summary>
+    long QueueDepth { get; }
+
     /// <summary>可用性探测（启动一次；失败即告警，不影响注册——运行期 Enqueue 仍会显式报不可用）。</summary>
     Task<bool> ProbeAsync(CancellationToken ct = default);
 

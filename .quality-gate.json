@@ -1,9 +1,9 @@
 {
-  "phase": "f38-ci-eval-gate",
-  "reviewer": "ddd-code-reviewer PASSED (0 open；3×高修复:curl传输失败被set -e抢杀→||true、登录body与阈值JSON注入→json_escape+本地[0,1]校验、外部PR ref_name脚本注入→内置env；2×中:越界400→500文档更正、X-Workspace-Id优先级说明更正)",
-  "structureGate": "ddd-phase-quality-gate PASS (checklist 嵌入 features/f38-ci-eval-gate.md；本 feature 不触 src/，DI/EF/分层类目 N/A，契约/配置/安全子集全绿)",
-  "codebaseOptimizer": "codebase-optimizer PASSED (Round F38-01, 0 open; 桩代码维度 N/A，工程化/生产就绪 VERIFIED；waiver：真实平台端到端需接入方环境)",
+  "phase": "f39-observability-alerting",
+  "reviewer": "ddd-code-reviewer PASSED (P0/P1/P2=0 open；修复 P1×2: Redis XLEN 积压语义名不副实→ack 后 XDEL、Grafana 数据源缺 uid 致 12 面板全失效；P2×3: inhibit 死配置/空向量永不触发/注释如实化；P3×5: humanizeDuration、legendFormat 标签、absent 文案、active_steps 事实、failed 口径注释)",
+  "structureGate": "ddd-phase-quality-gate PASS (P0=P1=P2=0，P3×3 waiver：Rabbit 5s 字面量、Redis scrape 同步 StreamLength、Rabbit 刷新 Task 未观察异常；checklist 已嵌入 features/f39-observability-alerting.md §9)",
+  "codebaseOptimizer": "codebase-optimizer PASSED (Round F39-01, scope=F39-only, 0 open; 七维度全跑，修 3×P2 文档同步[CHANGELOG v2.38 / 部署附录 / 设计文档 D1=B 校正]，2×P3 waiver[redis-exporter profile 未启、辅助告警命名漂移]；桩代码维度：三后端 QueueDepth 均真实落地无新桩)",
   "cleared": true,
-  "reportRef": "docs/quality/f38-ci-eval-gate-gate.md",
-  "notes": "F38 CI YAML 评估门禁样例（纯模板+文档，不触 src/）：ci/eval-gate-github.yml + ci/eval-gate-gitlab.yml（复制即用，位于 ci/ 非自动生效）+ docs/ci-eval-gate-guide.md。接入 F34 门禁 POST /api/v1/evaluation-datasets/{id}/gate/{workflowId}，认证走 httpOnly cookie jar（无 Bearer 反模式），以 HTTP 码为唯一阻断契约（200 放行 / 422·400·401·403·404·000·其它 exit 1），curl 用 -s -o -w %{http_code} 而非 -f。校正 backlog：F41 已删 QuickStart→本地验证改真实实例/Stub 冒烟；越界 minPassRate 实返 500 非 400（Program.cs 仅 6 handler）。验证：两模板 yaml.safe_load + gh 内嵌脚本 bash -n 通过；HTTP 码分支 mock 桩冒烟 200/422/000=rc 0/1/1；契约逐字段对齐控制器。文档同步：CHANGELOG v2.37、deployment-devops H.3、backlog F38 done。三道质量门 PASS。"
+  "reportRef": "docs/quality/f39-observability-alerting-gate.md",
+  "notes": "F39 可观测性栈闭环：Prometheus 抓取 + 9 条告警规则 + Alertmanager(Slack/PagerDuty 占位) + Grafana provisioning 正确布局 + 12 面板 + 监控 compose 锁版本 + docs/observability-guide.md。后端埋点(D1=B)：IExecutionQueue.QueueDepth 契约（InMemory 精确 / Redis StreamLength+ack 后 XDEL / RabbitMQ 后台 5s 刷新缓存）、evaluation_gate_total{passed} 计数、execution_queue_depth{backend} ObservableGauge（静态 Meter 注册、闭包捕获实例无静态可变状态）。关键校正：不存在 result=failed(失败⇒rolledback)、门禁阻断率优先用埋点+422 交叉验证、队列深度改应用自报、Grafana 旧挂载不生效、latest→锁版本。决策 D1=B/D2=A/D3=A/D4=A 用户锁定。验证：build 0/0；App 269/Infra 174+8skip/Api 39/Arch 9/SpecFlow 115/116(既有豁免)；新增 MeterListener 真断言测试；监控 YAML/JSON 全结构校验且脚本核验面板与告警仅引用已核实指标。文档同步：CHANGELOG v2.38、deployment-devops、backlog F39 done。"
 }

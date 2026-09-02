@@ -12,7 +12,7 @@ namespace AgentPlatform.Infrastructure.Queues;
 /// · 投递 = XADD（MAXLEN ~ 有界修剪）；消费 = XREADGROUP（消费组 <c>ap-workers</c>，Block 2s，count 1）。
 /// · 接管 = XAUTOCLAIM：pending 空闲超过 <c>LeaseTtlMinutes</c>（决策 D3=A，与 F30 租约窗口一致）的
 ///   未 ack 消息被存活 worker 认领重放；重复投递由 F30 <c>TryAcquireLease</c> 互斥兜底。
-/// · 完成 = XACK；超限 = 转入 dead-letter Stream。
+/// · 完成 = XACK + XDEL（F39：删除已 ack 条目，保证 StreamLength 即真实积压）；超限 = 转入 dead-letter Stream。
 /// · 连接失败 → 显式 <see cref="EnqueueResult.RejectedBackendUnavailable"/>（不静默丢任务）。
 /// 自建 <see cref="ConnectionMultiplexer"/>（AbortOnConnectFail=false），不依赖 Cache:Provider 配置。
 /// </summary>
@@ -42,6 +42,7 @@ internal sealed class RedisStreamExecutionQueue : IExecutionQueue, IAsyncDisposa
         RedisConnectionString = configuration["ConnectionStrings:Redis"]
             ?? configuration["Redis:ConnectionString"]
             ?? "localhost:6379";
+        QueueDepthGauge.Register(this);
     }
 
     /// <summary>Redis 连接串（复用既有配置键，与 Cache 路径同解析链）。</summary>
@@ -49,6 +50,32 @@ internal sealed class RedisStreamExecutionQueue : IExecutionQueue, IAsyncDisposa
 
     /// <inheritdoc />
     public string Backend => "RedisStream";
+
+    /// <inheritdoc />
+    // 只读已建立的连接（绝不在 scrape 路径触发建连/阻塞）；未连接或异常一律返回 0。
+    // Stream 长度为 Redis O(1) 命令；ack 时同步 XDEL（见 CompleteAsync），故 XLEN =
+    // 未投递 + PEL 在飞条目 = 真实积压（不含已完成的历史条目）。
+    public long QueueDepth
+    {
+        get
+        {
+            var connection = _connection;
+            if (connection is not { IsConnected: true })
+            {
+                return 0;
+            }
+
+            try
+            {
+                return connection.GetDatabase().StreamLength(_settings.RedisStreamKey);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Redis queue depth read failed");
+                return 0;
+            }
+        }
+    }
 
     /// <inheritdoc />
     public async Task<bool> ProbeAsync(CancellationToken ct = default)
@@ -145,7 +172,20 @@ internal sealed class RedisStreamExecutionQueue : IExecutionQueue, IAsyncDisposa
             return;
         }
 
-        await mux.GetDatabase().StreamAcknowledgeAsync(_settings.RedisStreamKey, GroupName, [receipt]);
+        var db = mux.GetDatabase();
+        await db.StreamAcknowledgeAsync(_settings.RedisStreamKey, GroupName, [receipt]);
+
+        // F39 修复（积压语义名不副实）：XACK 不会从 Stream 删除条目，XLEN 只随 MAXLEN 修剪——
+        // 若不清理，QueueDepth 会随历史流量单调增长（全部消费完仍显示积压），QueueBacklogHigh 假告警。
+        // 本 Stream 仅一个消费组（ap-workers），ack 后 XDEL 安全；先 ack 后删，删除失败只会虚增积压，绝不丢任务。
+        try
+        {
+            await db.StreamDeleteAsync(_settings.RedisStreamKey, [receipt]);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogDebug(ex, "Redis XDEL after ack failed for {Receipt} (backlog may overcount)", receipt);
+        }
     }
 
     /// <inheritdoc />

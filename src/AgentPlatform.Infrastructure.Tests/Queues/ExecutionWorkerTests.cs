@@ -25,6 +25,9 @@ public sealed class ExecutionWorkerTests
 
         public string Backend => "Scripted";
 
+        /// <summary>待消费投递数（F39 深度契约）。</summary>
+        public long QueueDepth => _deliveries.Count;
+
         public List<ExecutionJob> ReEnqueued { get; } = [];
         public List<(ExecutionJob Job, string Reason)> DeadLettered { get; } = [];
         public List<string> Acked { get; } = [];

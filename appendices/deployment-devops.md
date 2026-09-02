@@ -127,6 +127,8 @@ jobs:
       # → 推送镜像到容器仓库...
 ```
 
+> **可观测性栈接入模板（F39）**：`deploy/docker-compose.monitoring.yml` 起 Prometheus（v2.54.1）+ Alertmanager（v0.27.0）+ Grafana（11.2.0）+ 可选 redis-exporter（v1.64.0），版本全部锁定。抓取平台 `/metrics`（OTel→Prometheus），告警规则 `deploy/monitoring/alert-rules.yml`（执行失败率/门禁阻断率/队列积压/模型延迟 等 9 条），通知路由 `deploy/monitoring/alertmanager.yml`（Slack/PagerDuty 密钥占位 `REPLACE_ME`，勿提交真实值，部署侧渲染）。Grafana 采用 provisioning 正确布局（provider YAML + JSON 目录分离 + 数据源 `uid: prometheus`）。指标名/标签与阈值调参、故障排查、Dashboard 版本兼容要求见 `docs/observability-guide.md`。
+
 ### H.4 环境配置管理
 
 ```csharp

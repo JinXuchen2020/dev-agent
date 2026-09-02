@@ -1,9 +1,56 @@
+# F39 · Prometheus 主配置（AgentPlatform 可观测性栈）
+#
+# 一键启动：docker compose -f deploy/docker-compose.monitoring.yml up -d
+# 校验：promtool check config deploy/monitoring/prometheus.yml
+#       promtool check rules  deploy/monitoring/alert-rules.yml
+#
+# 真实指标清单（告警与面板只引用这些，勿臆造；来源已核）：
+#   api_requests_total{path,method,status_code}            Api/Middleware/MetricsMiddleware.cs:41-44
+#   api_errors_total{path,status_code}                     MetricsMiddleware.cs:52-54
+#   api_request_duration_ms_bucket{path,method}            MetricsMiddleware.cs:46-48
+#   workflow_completed_total{result,workflow_id}           WorkflowCompletedEventHandler / WorkflowRolledBackEventHandler
+#                                                          —— result 仅 "success" | "rolledback"（不存在 "failed"）
+#   workflow_step_duration_ms_bucket{step_name,workflow_id} StepCompletedEventHandler.cs:94
+#   model_call_total{provider,model}                       SemanticKernelModelClient.cs:326
+#   model_call_duration_ms_bucket{provider,model}          SemanticKernelModelClient.cs:330
+#   evaluation_gate_total{passed}                          F39 埋点（RunEvaluationGateCommand，passed="true"|"false"）
+#   execution_queue_depth{backend}                         F39 埋点（QueueDepthGauge，backend=InMemory|RedisStream|RabbitMQ）
+#
+# 注意：workflow_active_steps 有写入方（Sequential/Negotiation 编排器 Record(1/0)），但作为 Histogram 记 1/0
+# 无法如实聚合为「活跃步数」（失败/异常路径不记 0，比率失真），故不设告警/面板（避免假绿误导）。
+
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
+  external_labels:
+    monitor: agent-platform
+
+rule_files:
+  - /etc/prometheus/alert-rules.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
 
 scrape_configs:
   - job_name: 'agent-platform-api'
+    metrics_path: '/metrics'
     static_configs:
       - targets: ['host.docker.internal:5000']
-    metrics_path: '/metrics'
+        labels:
+          service: agent-platform-api
+    relabel_configs:
+      # 固定 instance 标签，避免容器重启后 IP 漂移导致面板/告警序列割裂。
+      - target_label: instance
+        replacement: agent-platform-api
+
+  # 可选：仅在部署了 redis_exporter 时有意义（队列深度已由应用自身 execution_queue_depth 上报，
+  # 因此本 target 缺席不影响 F39 告警）。未启动时该 target 为 down 属预期。
+  - job_name: 'redis-exporter'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

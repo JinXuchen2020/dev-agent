@@ -1,5 +1,26 @@
 # 变更日志
 
+## v2.38 (2026-09-02)
+
+### F39 · 监控告警聚合（可观测性栈）—— 分支 `feat/f39-observability-alerting`（基于 f38）
+
+把裸 `/metrics` + 半成品监控栈升级为可用可观测性栈：Prometheus 抓取 + 告警规则 + 可导入 Grafana 仪表盘 + Alertmanager（Slack/PagerDuty）+ 一键部署与指南。
+
+**交付**：
+- `deploy/monitoring/prometheus.yml`（改造）：抓取目标参数化 + `rule_files` + `alerting.alertmanagers` + relabel 固定 `instance`。
+- `deploy/monitoring/alert-rules.yml`（新）：9 条告警（执行失败率>10%、门禁阻断率>5%、队列积压>100、模型 P99>30s + TargetDown/ApiError/Stalled 辅助），全部只引用真实存在的指标与标签值。
+- `deploy/monitoring/alertmanager.yml`（新）：route + Slack/PagerDuty 占位接收器 + inhibit 规则（密钥占位 `REPLACE_ME`，模板不含真实凭据）。
+- `deploy/monitoring/grafana/provisioning/{datasources,dashboards}/*.yml` + `grafana/dashboards/agent-platform.json`（12 面板）：修正既有「裸 JSON 挂进 provisioning 不加载」缺陷，数据源显式 `uid: prometheus` 供面板引用。
+- `deploy/docker-compose.monitoring.yml`（改造）：镜像锁版本（prometheus v2.54.1 / grafana 11.2.0 / alertmanager v0.27.0 / redis_exporter v1.64.0）+ alertmanager/redis-exporter 服务 + 健康检查。
+- `docs/observability-guide.md`（新）：一键部署 / 指标清单 / 阈值调参 / 告警对接 / 故障排查 / 版本要求 / 高基数技术债。
+- **后端埋点（D1=B）**：`IExecutionQueue.QueueDepth` 契约 + `WorkflowMetrics.EvaluationGateCounter`（`evaluation.gate.total{passed}`）+ `execution.queue.depth{backend}` ObservableGauge（`QueueDepthGauge`）；三后端真实读数（InMemory 精确 / Redis XLEN / RabbitMQ 后台 5s 刷新缓存）。
+
+**关键校正（相对 backlog 原文）**：不存在 `result="failed"`（失败⇒`rolledback`，否则告警永不触发）；门禁阻断率优先用 F39 埋点、HTTP 422 派生作交叉验证；队列深度改由应用自身上报（Redis ack 后同步 XDEL 修正积压名不副实）；Grafana provisioning 挂载布局修正。原设计 §3/§5 倾向「不触 src/（D1=A）」，最终采 **D1=B**：补后端原生 QueueDepth/门禁计数埋点，InMemory 亦可观测（详见设计文档实施校正）。
+
+**质量门**：对抗式审查修 P1×2（Redis XLEN/XDEL 语义、Grafana 数据源 uid）+ P2×3 + P3×5；结构门 0 新增（3×P3 waiver）。三道质量门 PASS（`.quality-gate.json` 推进 `f39-observability-alerting`）。质量报告 `docs/quality/f39-observability-alerting-gate.md`。`dotnet build` 0/0；Application.Tests 269/269、Infrastructure.Tests 174 通过/8 跳过、Api.Tests 39/39；monitoring 全部 YAML/JSON `yaml.safe_load`/`json.load` 结构校验通过。
+
+**已知残留（非阻断）**：promtool/amtool/镜像 tag/Grafana 导入本机无 Docker 无法实跑，以结构校验兜底、指南给可复现命令；`workflow_id`/`path`（含 GUID）高基数标签治理与 RabbitMQ 深度 ≤5s 缓存为独立技术债（指南 §9 标注）。
+
 ## v2.37 (2026-09-02)
 
 ### F38 · CI YAML 接入评估门禁样例 —— 分支 `feat/f38-ci-eval-gate`（基于 f37）

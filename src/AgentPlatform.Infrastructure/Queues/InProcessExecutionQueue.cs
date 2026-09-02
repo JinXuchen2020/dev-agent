@@ -24,10 +24,15 @@ internal sealed class InProcessExecutionQueue : IExecutionQueue, IDisposable
         {
             FullMode = BoundedChannelFullMode.Wait
         });
+        QueueDepthGauge.Register(this);
     }
 
     /// <inheritdoc />
     public string Backend => "InMemory";
+
+    /// <inheritdoc />
+    // 有界通道 Reader.Count 为精确同步读（本实现恒为 bounded，不会抛 NotSupported）。
+    public long QueueDepth => _channel.Reader.Count;
 
     /// <inheritdoc />
     public Task<bool> ProbeAsync(CancellationToken ct = default) => Task.FromResult(true);

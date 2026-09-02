@@ -1,0 +1,13 @@
+# F39 · Grafana 数据源自动配置（挂到 /etc/grafana/provisioning/datasources/）
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus   # 面板 JSON 以 datasource.uid="prometheus" 引用，必须显式固定，否则自动生成的 uid 会让全部面板报 data source not found
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      timeInterval: 15s
