@@ -1,5 +1,23 @@
 # 变更日志
 
+## v2.37 (2026-09-02)
+
+### F38 · CI YAML 接入评估门禁样例 —— 分支 `feat/f38-ci-eval-gate`（基于 f37）
+
+**纯 CI 模板 + 文档，不触 `src/`**：把 F34 在线评估门禁端点接入 CI/CD，实现「模型/prompt/编排变更前跑数据集回归、未达通过率阈值阻断合并」。
+
+**交付**：
+- `ci/eval-gate-github.yml` — GitHub Actions 可复制模板：PR（限定 prompt/模型/编排 paths）+ workflow_dispatch 触发 → `curl -c` 登录取 httpOnly cookie → `curl -b` 调 `POST /evaluation-datasets/{id}/gate/{workflowId}` → 以 HTTP 码为唯一阻断契约（200 放行 / 422·其它·000 exit 1 阻断）→ 可选 Slack 失败通知；concurrency 串行、`timeout-minutes: 15`。
+- `ci/eval-gate-gitlab.yml` — GitLab CI 模板：`workflow.rules merge_request_event` + `eval-gate` job（before_script 登录 cookie、script 门禁 + 退出码阻断、`allow_failure:false`）+ `artifacts on_failure` 落响应 + `.post` 失败通知 job；支持 `include: local` 或复制 job 两种接法。
+- `docs/ci-eval-gate-guide.md` — 中文接入指南：端点契约表、环境变量/secrets、GitHub/GitLab 接入步骤、阈值优先级（请求体 `minPassRate` > 服务端 `GateMinPassRate` 默认 0.8）、空集恒不通过、超时与 `MaxCases`（默认 10）、失败通知、故障排查表、安全（凭据走 secrets、不打印 cookie/token）、与 F35/F36/F37 关系。
+- 设计文档 `features/f38-ci-eval-gate.md`（含 Quality Gate Checklist + optimizer 记录 + 审查修复记录）。
+
+**关键校正（相对 backlog 原文）**：F41 已删 QuickStart，验收「本地 QuickStart 跑通」不可行 → 改为「指向已配置真实 Key 的实例 / Stub Test 环境冒烟」两路径；端点越界 `minPassRate` 实返 **500 非 400**（服务端无对应 handler，已核 `Program.cs:37-42` 仅 6 个 handler）。模板放置 `ci/`（非 `.github/workflows/`）以免在本仓库自动触发连不存在实例。
+
+**质量门**：对抗式评审修 3×高（curl 传输失败被 `set -e` 抢杀→`|| true`、登录密码/阈值 JSON 注入→json_escape+本地数字校验、外部 PR `ref_name` 脚本注入→内置 env）+ 2×中（400→500 文档、workspace 优先级说明）；两模板 `yaml.safe_load` + 内嵌脚本 `bash -n` 通过；HTTP 码分支本地 mock 桩冒烟 200/422/000 实测 rc=0/1/1。三道门全 PASS（`.quality-gate.json` 推进 `f38-ci-eval-gate`）。质量报告 `docs/quality/f38-ci-eval-gate-gate.md`。
+
+**已知残留（非阻断）**：真实平台端到端跑（含数据集/服务账号/staging）需接入方环境，超出本地沙箱，指南给可复现命令；actionlint/GitLab lint 本机不可用，以 `python yaml.safe_load` 结构校验替代，正式接入由目标 CI 兜底校验。
+
 ## v2.36 (2026-09-02)
 
 ### F37 · 队列化执行与水平扩展（Redis Stream / RabbitMQ / InMemory 三后端）—— 分支 `feat/f37-queued-execution`（基于 f36）

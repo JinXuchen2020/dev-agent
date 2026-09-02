@@ -483,7 +483,7 @@
 - 风险：🔴 分布式一致性（租约竞态、消息去重、幂等）+ 运维复杂度（Redis/RabbitMQ 部署）。建议分两阶段：① Redis Stream 最小闭环 ② RabbitMQ 企业级（独立排期）。
 - **完成记录（2026-09-02）**：feature-builder 全栈实跑落地。决策（用户锁定）：D1=B 三后端全做 / D2=B run 端点透明「入队+等待」（既有 run/run-existing 契约在 QueueEnabled 下返回 200 完成 / 202 queued / 503 拒投，默认 QueueEnabled=false 直跑零变化）/ D3=A 复用 F30 5min 租约作接管窗口（**校正 backlog 原文「30s」**：现网租约 LeaseTtlMinutes=5，缩至 30s 会改 F30 崩溃恢复窗口，未选）/ D4=A 评估门禁保持同步直跑。**设计偏差（诚实记录）**：① 复用既有 `IDistributedLockProvider`（Redis 实现本就是 SET NX PX 语义）而非新建 `DistributedLeaseProvider`；② 队列投递在 run 命令处理器内透明完成（`QueuedRunSupport.EnqueueAndWaitAsync`），未新增公开 `EnqueueWorkflowRunCommand`；③ Redis/Rabbit 不可用时 run 端点显式 503（不运行时静默切 InMemory，避免多实例脑裂），InMemory 为注册期选定的后端而非运行期降级。落地：`IExecutionQueue`+`ExecutionJob`/`QueueDelivery`/`EnqueueResult`（Application）；三后端 Infrastructure（InMemory Channel 有界 / Redis Stream XADD+XREADGROUP+XAUTOCLAIM+XACK+死信流 / RabbitMQ durable+BasicGet pull+epoch 防跨代 ack+死信队列）；`ExecutionWorker`（BackgroundService，恒注册+QueueEnabled 运行时门控，失败按 Attempt 重投、超限死信、仅接管成功才 ack）；`ExecuteQueuedWorkflowCommand`（消费 scope 复现租户/工作空间 Override、跨租户拒跑、终态重复投递→Duplicate 不重跑、租约冲突→Duplicate、触发投递 FromQueue 防回环）；触发处理器队列模式投递。前端 runWorkflow/runExistingWorkflow union + isQueuedRunResponse 守卫 + queued 提示。三道质量门全 PASS：reviewer 修 P0（重复投递二次执行）+P1×4（轮询 AsNoTracking、死信成败回报防丢任务、Redis 连接泄漏、Rabbit epoch）；结构门 0 open（P3×2 修）；optimizer Round F37-01 0 open（P3×1 修：未知 QueueBackend 静默降级告警；2 waiver）。验证：build 0/0；App 268 / Infra 171+8跳 / Api 37 / Arch 9 / Integration 5 / SpecFlow 115/116（唯一失败=既有豁免）；新增 Application 队列 15 + Infra queue/worker 9 + Api 队列 E2E 2；前端 tsc 0 + vitest（既有豁免×2）+ vite build。文档同步：CHANGELOG v2.36、BLUEPRINT 平台化清单、appendices（api-spec I.3.1 队列模式 / deployment-devops H.4/H.5）、backlog F37 done。遗留：RabbitMQ 真实 broker 投递闭环在 CI services 覆盖（本地跳过）；InMemory 重启丢未 ack 作业（单实例回退设计接受）。
 
-### F38 · CI YAML 接入评估门禁样例  [P2]  open  🟢低风险（文档 + 模板，不触后端代码）
+### F38 · CI YAML 接入评估门禁样例  [P2]  done  ✅（2026-09-02，分支 `feat/f38-ci-eval-gate` 基于 f37；交付 ci/eval-gate-github.yml + ci/eval-gate-gitlab.yml + docs/ci-eval-gate-guide.md，设计文档 features/f38-ci-eval-gate.md + 质量报告 docs/quality/f38-ci-eval-gate-gate.md）🟢低风险（文档 + 模板，不触后端代码）
 - 来源：F34 评估门禁 · 延后项
 - 设计依据：`features/f34-online-eval-gate.md` §延后项
 - 目标：提供可直接复制使用的 CI/CD 流水线模板，将评估门禁端点接入 GitHub Actions / GitLab CI，实现「模型/prompt 变更前自动回归，未达阈值阻断合并」。
@@ -498,6 +498,7 @@
   - 接口示例 `curl` 可在本地 QuickStart 模式下跑通（200/422 路径各覆盖）。
   - 指南文档完整：环境变量 / 阈值 / 失败处理 / 故障排查。
 - 风险：🟢 纯增量，不触后端。但需与 F34 端点保持接口一致（API schema 变更须同步更新模板）。
+- **完成记录（2026-09-02）**：交付 GitHub Actions + GitLab CI 可复制门禁模板（`ci/` 目录，非自动生效）+ 中文接入指南。以 HTTP 码为唯一阻断契约（200 放行 / 422·400·401·403·404·000·其它 exit 1），认证走 httpOnly cookie jar（无 Bearer 反模式），curl 用 `-s -o -w %{http_code}` 而非 `-f`。关键校正：F41 已删 QuickStart→本地验证改「真实实例 / Stub Test 冒烟」；端点越界 minPassRate 实返 500 非 400（服务端无 handler，Program.cs 仅 6 handler）。对抗式评审修 3×高（set -e 抢杀 curl/登录与阈值 JSON 注入/外部 PR ref_name 脚本注入）+2×中，两模板 yaml.safe_load + bash -n 通过、HTTP 码分支 mock 桩冒烟 200/422/000=rc 0/1/1。三道质量门 PASS（结构门/optimizer scope=F38-only，0 open；waiver：真实平台端到端需接入方环境）。
 
 ### F39 · 监控告警聚合  [P2]  open  🟡中风险（OpenTelemetry 指标 + 告警规则 + Dashboard 配置）
 - 来源：F34 评估门禁 · 延后项

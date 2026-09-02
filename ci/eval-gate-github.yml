@@ -1,0 +1,159 @@
+# F38 · 评估门禁 GitHub Actions 接入模板（复制即用）
+#
+# 用途：模型 / prompt / 编排配置变更前，对目标环境跑评估数据集回归；未达通过率阈值
+#       即令流水线失败（阻断合并）。基于 F34 在线评估门禁端点。
+#
+# ⚠️ 本文件位于仓库 `ci/` 目录，是**模板/样例**，不会被本仓库自动执行（避免连不存在的目标实例）。
+#    接入方式：复制本文件到目标项目的 `.github/workflows/eval-gate.yml`，按下文配置 secrets/vars。
+#    契约校验：本文件可被 `python -c "import yaml,sys;yaml.safe_load(open(sys.argv[1]))"` 解析；
+#    正式接入后由 GitHub 的 actionlint（或本仓库 CI）校验工作流语法。
+#
+# 所需 GitHub Secrets（Settings → Secrets and variables → Actions）：
+#   EVAL_GATE_BASE_URL    目标实例根地址，如 https://staging.example.com（无需尾斜杠）
+#   EVAL_GATE_EMAIL       具备 Admin/Operator 角色的服务账号邮箱
+#   EVAL_GATE_PASSWORD    服务账号密码（JWT 经 httpOnly cookie ap_access_token 承载，见下）
+#   （可选）SLACK_WEBHOOK_URL  配则门禁失败时发通知
+# 可选 GitHub Vars：
+#   EVAL_GATE_DATASET_ID / EVAL_GATE_WORKFLOW_ID  默认要评估的数据集 / 工作流 GUID
+#   EVAL_GATE_MIN_PASS_RATE                        默认阈值（不传则用服务端 GateMinPassRate=0.8）
+#
+# F41 现状：无 QuickStart/无 Stub 兜底——EVAL_GATE_BASE_URL 必须指向已配置真实 LLM Key 的环境，
+#          否则评估步骤会因模型不可用而失败（属预期的门禁不通过，非 500 绕过）。
+
+name: Eval Gate (template)
+
+on:
+  # 仅在可能影响模型/提示/编排行为的变更上自动触发；可按仓库实际路径调整。
+  pull_request:
+    paths:
+      - 'src/AgentPlatform.Application/**'
+      - 'src/AgentPlatform.Infrastructure/Models/**'
+      - 'src/AgentPlatform.Infrastructure/Workflows/**'
+      - '**/*.prompt.*'
+      - 'prompts/**'
+  # 允许在 Actions 页手动触发，输入覆盖默认目标。
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: '目标实例根地址（留空用 secret）'
+        required: false
+        default: ''
+      dataset_id:
+        description: '评估数据集 GUID（留空用 var）'
+        required: false
+        default: ''
+      workflow_id:
+        description: '被回归的工作流 GUID（留空用 var）'
+        required: false
+        default: ''
+      min_pass_rate:
+        description: '通过率阈值 0-1（留空用服务端默认 0.8）'
+        required: false
+        default: ''
+
+# 同分支门禁串行，避免并发评估互相干扰。
+concurrency:
+  group: eval-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  eval-gate:
+    runs-on: ubuntu-latest
+    # 评估是请求内同步跑完整个数据集（≤ MaxCases，默认 10），给足超时但别无限挂。
+    timeout-minutes: 15
+    steps:
+      - name: Run evaluation gate
+        env:
+          BASE_URL: ${{ github.event.inputs.base_url || secrets.EVAL_GATE_BASE_URL }}
+          EMAIL: ${{ secrets.EVAL_GATE_EMAIL }}
+          PASSWORD: ${{ secrets.EVAL_GATE_PASSWORD }}
+          DATASET_ID: ${{ github.event.inputs.dataset_id || vars.EVAL_GATE_DATASET_ID }}
+          WORKFLOW_ID: ${{ github.event.inputs.workflow_id || vars.EVAL_GATE_WORKFLOW_ID }}
+          MIN_PASS_RATE: ${{ github.event.inputs.min_pass_rate || vars.EVAL_GATE_MIN_PASS_RATE }}
+        run: |
+          set -euo pipefail
+          : "${BASE_URL:?EVAL_GATE_BASE_URL is required}"
+          : "${EMAIL:?EVAL_GATE_EMAIL is required}"
+          : "${PASSWORD:?EVAL_GATE_PASSWORD is required}"
+          : "${DATASET_ID:?dataset id required (set vars.EVAL_GATE_DATASET_ID or pass input)}"
+          : "${WORKFLOW_ID:?workflow id required (set vars.EVAL_GATE_WORKFLOW_ID or pass input)}"
+          BASE_URL="${BASE_URL%/}"
+          COOKIE_JAR="$(mktemp)"
+
+          # 密码/邮箱可含 " 或 \：直接拼进 JSON 会破坏载荷甚至注入额外字段，先做 JSON 转义。
+          json_escape() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }
+          LOGIN_BODY="{\"email\":\"$(json_escape "$EMAIL")\",\"password\":\"$(json_escape "$PASSWORD")\"}"
+
+          # 1) 登录取 httpOnly cookie（ap_access_token）。-w 取码，绝不 -f（-f 会把 401 变静默失败）。
+          # `|| true`：curl 传输层失败（DNS/连接拒绝）退出码非 0，set -e 会抢在 000 分支前杀脚本；
+          # `-w` 仍会输出 000，交给自己写的分支处理。
+          login_code="$(curl -s -o /dev/null -w '%{http_code}' \
+            -c "$COOKIE_JAR" -H 'Content-Type: application/json' \
+            -d "$LOGIN_BODY" \
+            "${BASE_URL}/api/v1/auth/login")" || true
+          if [ "$login_code" != "200" ]; then
+            echo "::error::login failed (HTTP ${login_code}) — 检查凭据/角色/EVAL_GATE_BASE_URL"
+            rm -f "$COOKIE_JAR"; exit 1
+          fi
+
+          # 2) 构造请求体：阈值必须是 [0,1] 数字（服务端对越界值是未映射的 500，本地先行 fail-fast），
+          #    有阈值则传 minPassRate，否则交给服务端默认（0.8）。
+          if [ -n "${MIN_PASS_RATE:-}" ] && ! printf '%s' "$MIN_PASS_RATE" | grep -Eq '^(0*\.[0-9]+|[01](\.[0-9]+)?)$'; then
+            echo "::error::min_pass_rate/EVAL_GATE_MIN_PASS_RATE must be a number in [0,1], got '${MIN_PASS_RATE}'"
+            rm -f "$COOKIE_JAR"; exit 1
+          fi
+          if [ -n "${MIN_PASS_RATE:-}" ]; then
+            REQ_BODY="{\"minPassRate\":${MIN_PASS_RATE}}"
+          else
+            REQ_BODY='{}'
+          fi
+
+          # 3) 调门禁端点，捕获响应体与 HTTP 码（200=通过 / 422=未通过或空集 / 其它=异常）。
+          #    `|| true` 同登录步：传输层失败时 -w 输出 000，走 000 分支而非被 set -e 提前杀死。
+          resp_body="$(mktemp)"
+          gate_code="$(curl -s -o "$resp_body" -w '%{http_code}' -b "$COOKIE_JAR" \
+            -H 'Content-Type: application/json' -X POST -d "$REQ_BODY" \
+            "${BASE_URL}/api/v1/evaluation-datasets/${DATASET_ID}/gate/${WORKFLOW_ID}")" || true
+          rm -f "$COOKIE_JAR"
+
+          echo "gate HTTP ${gate_code}"; cat "$resp_body"; echo
+
+          case "$gate_code" in
+            200)
+              echo "✅ 评估门禁通过"; rm -f "$resp_body" ;;
+            422)
+              echo "❌ 评估门禁未通过（通过率低于阈值，或数据集为空）"
+              # 落盘到 Runner 临时目录供排查（当前通知步骤不消费此文件）；显式置失败退出码。
+              cp "$resp_body" "${RUNNER_TEMP:-.}/gate-fail.json" 2>/dev/null || true
+              rm -f "$resp_body"; exit 1 ;;
+            401|403)
+              echo "::error::鉴权失败（${gate_code}）— 服务账号需 Admin/Operator 角色"
+              rm -f "$resp_body"; exit 1 ;;
+            404)
+              echo "::error::数据集或工作流不存在（${gate_code}）"
+              rm -f "$resp_body"; exit 1 ;;
+            000)
+              echo "::error::无法连接目标实例（curl 000）— 检查 EVAL_GATE_BASE_URL/网络"
+              rm -f "$resp_body"; exit 1 ;;
+            *)
+              echo "::error::门禁端点返回非预期码 ${gate_code}"
+              rm -f "$resp_body"; exit 1 ;;
+          esac
+
+      - name: Notify Slack on failure
+        if: ${{ failure() }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          # 仅在配置了 webhook 时通知；通知失败不改变前序失败结论（本步非门禁判定）。
+          # 安全：绝不把 ${{ github.* }}（尤其 ref_name=分支名，可被 PR 作者控制）内联进 shell，
+          # 一律用 runner 内置环境变量（经 env 传入，不进脚本文本，杜绝脚本注入）。
+          if [ -z "${SLACK_WEBHOOK_URL:-}" ]; then
+            echo "SLACK_WEBHOOK_URL not set — skip notify"; exit 0
+          fi
+          curl -s -X POST -H 'Content-Type: application/json' \
+            -d "{\"text\":\"❌ Eval gate blocked on $GITHUB_REPOSITORY @ $GITHUB_REF_NAME — $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\"}" \
+            "$SLACK_WEBHOOK_URL" || echo "Slack notify failed (non-fatal)"

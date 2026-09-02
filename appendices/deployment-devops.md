@@ -85,6 +85,8 @@ volumes:
 
 ### H.3 CI/CD 流水线（GitHub Actions）【阶段二实现】
 
+> **评估门禁接入模板（F38）**：`ci/eval-gate-github.yml`（GitHub Actions）与 `ci/eval-gate-gitlab.yml`（GitLab CI）是「复制即用」样例，接入 F34 在线评估门禁（`POST /api/v1/evaluation-datasets/{id}/gate/{workflowId}`，200 放行 / 422 阻断）。位于 `ci/` 目录，**不在本仓库自动执行**（需指向已配真实 Key 的目标实例）。配置与故障排查见 `docs/ci-eval-gate-guide.md`。
+
 ```yaml
 # .github/workflows/ci.yml
 name: Agent Platform CI
