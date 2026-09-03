@@ -17,6 +17,25 @@ public interface IExecutionLogRepository
     Task<ExecutionLog?> GetByIdAsync(Guid id, CancellationToken ct = default);
 
     /// <summary>
+    /// 按租户取执行日志（含条目）。<see cref="ExecutionLog"/> 不实现 ITenantScoped（无全局
+    /// query filter），<see cref="GetByIdAsync"/> 亦不校验租户，故凡按 id 直读的用户态端点
+    /// （详情 / steps / F40 回放）必须走本方法，否则跨租户持 GUID 即可读他租户日志。
+    /// 找不到或不属于该租户一律返回 null（由调用方映射 404，不暴露存在性）。
+    /// </summary>
+    /// <param name="id">The execution log identifier.</param>
+    /// <param name="tenantId">The tenant that must own the log.</param>
+    /// <param name="ct">A cancellation token.</param>
+    Task<ExecutionLog?> GetByIdForTenantAsync(Guid id, Guid tenantId, CancellationToken ct = default);
+
+    /// <summary>
+    /// 仅判定归属（不加载条目），供分页/子集合查询在使用前先做租户收口。
+    /// </summary>
+    /// <param name="id">The execution log identifier.</param>
+    /// <param name="tenantId">The tenant that must own the log.</param>
+    /// <param name="ct">A cancellation token.</param>
+    Task<bool> IsOwnedByTenantAsync(Guid id, Guid tenantId, CancellationToken ct = default);
+
+    /// <summary>
     /// Retrieves all execution logs for a given workflow.
     /// </summary>
     /// <param name="workflowId">The workflow identifier.</param>

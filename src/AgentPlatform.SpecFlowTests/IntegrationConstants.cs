@@ -39,6 +39,12 @@ public static class IntegrationConstants
     /// <summary>F36 agent 归属会话种子（归属 F29DemoAgentId，挂 SampleWorkflowId）。</summary>
     public static readonly Guid AgentConversationId = Guid.Parse("55555555-5555-5555-5555-555555555501");
 
+    /// <summary>F40 回放诊断种子：一条含失败节点的执行日志（归属 SampleWorkflowId）。</summary>
+    public static readonly Guid FailedExecutionLogId = Guid.Parse("66666666-6666-6666-6666-666666666601");
+
+    /// <summary>失败日志中出错节点名（BDD/E2E 断言用，须与种子一致）。</summary>
+    public const string FailedExecutionStepName = "BDD Failing Step";
+
     /// <summary>固定密钥 Id，便于 Steps 在发布时引用（绑定 Key 场景）。</summary>
     public static readonly Guid T1ApiKeyId = Guid.Parse("22222222-2222-2222-2222-222222222222");
 

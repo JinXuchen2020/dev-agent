@@ -33,13 +33,16 @@ public sealed record ExecutionLogDetailResponse(
     IReadOnlyList<ExecutionLogStepEntry> Entries);
 
 internal sealed class GetExecutionLogDetailQueryHandler(
-    Domain.Repositories.IExecutionLogRepository repository)
+    Domain.Repositories.IExecutionLogRepository repository,
+    Abstractions.ITenantProvider tenantProvider)
     : IRequestHandler<GetExecutionLogDetailQuery, ExecutionLogDetailResponse?>
 {
     public async Task<ExecutionLogDetailResponse?> Handle(
         GetExecutionLogDetailQuery request, CancellationToken ct)
     {
-        var log = await repository.GetByIdAsync(request.Id, ct);
+        // F40 安全收口：ExecutionLog 不实现 ITenantScoped（无全局 query filter），按 id 直读
+        // 必须校验归属，否则任意租户 Admin/Operator 持 GUID 即可读他租户日志。
+        var log = await repository.GetByIdForTenantAsync(request.Id, tenantProvider.GetTenantId(), ct);
         if (log == null)
             return null;
 

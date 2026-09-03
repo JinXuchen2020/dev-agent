@@ -1,5 +1,29 @@
 # 变更日志
 
+## v2.39 (2026-09-03)
+
+### F40 · 异常回放诊断入口 —— 分支 `feat/f40-replay-diagnostics`（基于 f39）
+
+从执行日志**只读重建**失败工作流的异常路径（不重新执行、不写任何状态），复用 F24 Trace 字段与 F30 检查点数据。
+
+**后端**：
+- `POST /api/v1/execution-logs/{id}/replay`（`[Authorize(Roles=Admin,Operator)]`，与同级端点一致）→ `ReplayReport`：节点序列（状态/耗时/输出/错误/token）、`failurePath`（首个失败序号 + 失败节点名 + 计数）、`contextSnapshot`（末次 Blackboard 快照）、`recordedStepCount`/`missingStepCount`、`dataGaps`。
+- `ReplayExecutionCommand` 用 `IRequest` 而非 `ICommand`：只读诊断不应经 `UnitOfWorkBehavior` 触发 SaveChanges。
+- 8 个稳定数据缺口码：`input-snapshot-unavailable` / `node-type-missing-legacy-rows` / `tokens-not-reported` / `context-snapshot-unavailable` / `context-snapshot-unparsable` / `steps-missing-truncated-execution` / `total-steps-unregistered` / `report-nodes-capped`。
+- **安全收口（同批）**：`ExecutionLog` 不实现 `ITenantScoped` 且仓储 `GetByIdAsync` 无租户谓词 → 既有**详情/steps 端点存在「持 GUID 读他租户日志」窗口**（非 F40 引入，按用户决策一并修）。新增 `GetByIdForTenantAsync`/`IsOwnedByTenantAsync`，三个读端点统一租户作用域（跨租户与不存在同为 404）；EF 级测试实证无过滤路径可跨租户取数以防回归。
+
+**前端**：`ExecutionLogDetailPage` 改为 Tabs（步骤明细 + 回放诊断，按需加载）；新 `ReplayPanel` 作**失败/无失败/信息不完整三态判定**（避免「无数据」被渲染成绿色健康）、数据缺口告警、时间线 + 可折叠节点详情、上下文快照边界说明；SSE 进度推进时失效已加载报告按需重取；类型/`api.ts`/i18n 中英对称。
+
+**诚实性校正**：① 平台无每节点真实入参 → `input` 标 `inputInferred=true`，首节点直接 null（不用 Workflow 当前值冒充历史）；② F30 仅末次检查点，不声称 per-step 可回放；③ 建档时 `TotalSteps` 未知恒 0（审查抓出的假健康）→ 用 `total-steps-unregistered` 显式声明不可判，而非让 `missingStepCount` 恒 0 冒充无缺失。
+
+**测试/BDD**：后端 Reqnroll 新增 2 场景（失败日志→内容级断言：失败计数/首个失败序号/错误详情/推断输入/上下文快照/缺口披露；成功日志→无失败）+ 集成种子新增确定失败日志（`FailedExecutionLogId` 含检查点）；前端新增 playwright-bdd `execution-log-replay.feature` + `executionLog.steps.ts`（CI 运行）；单测：Replay handler 14 例（只读性、跨租户、损坏检查点降级、截断代理对安全、响应封顶）+ 租户收口 handler 测试 + EF 收口测试 + `ReplayPanel` 8 例。
+
+**三道质量门全 PASS**（`.quality-gate.json` 推进 `f40-replay-diagnostics`）：对抗审查修 P1×4（`Guid.Empty` 兜底无回归锁、响应无上限、`TotalSteps=0` 假健康、既有端点收口无 handler 级测试）+ P2×2（前端「无失败即健康」误导、SSE 后报告陈旧）+ P3；结构门修 P2×1（循环同序致 Collapse key 冲突）+2 waiver；optimizer 修 P3×1（截断撕裂 UTF-16 代理对→U+FFFD 篡改诊断文本）+2 waiver。质量报告 `docs/quality/f40-replay-diagnostics-gate.md`。
+
+**验证**：build 0/0；Application **285**、Infrastructure **175+8 跳**、Api **39**、Architecture **9**、Integration **5**（需 `OPENAI__Key`）、SpecFlow **117/118**（唯一失败=master 既有 LLM 用例）；前端 tsc 0 error、vitest **50 通过**（既有豁免 2 处）、`vite build` 通过、`bddgen` exit 0。文档同步：CHANGELOG v2.39、`appendices/api-spec.md`（I.10.3 回放契约 + 租户收口，并修正 I.10.1 过期注释）、backlog F40 done。
+
+**已知残留（非阻断）**：Entries 全量 `Include` 读放大（响应已封顶，物化成本未消除）；节点封顶后失败节点可能落在展示区外（已由缺口码披露）；`errorTruncated`/节点时间戳等契约字段暂未在 UI 呈现；e2e 硬编码种子 GUID 靠注释与 `IntegrationConstants` 锚定。
+
 ## v2.38 (2026-09-02)
 
 ### F39 · 监控告警聚合（可观测性栈）—— 分支 `feat/f39-observability-alerting`（基于 f38）

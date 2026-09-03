@@ -70,6 +70,7 @@ import type {
   AddWorkspaceMemberRequest,
   SwitchWorkspaceResponse,
   QueuedRunResponse,
+  ReplayReport,
 } from '../types';
 
 const api = axios.create({
@@ -514,6 +515,10 @@ export const getExecutionLogs = (opts?: {
 };
 export const getExecutionLogDetail = (id: string) =>
   api.get<ExecutionLogDetail>(`/execution-logs/${id}`).then((r) => r.data);
+// F40 异常回放诊断：后端从执行日志只读重建路径（不重新执行、不写状态）。
+export const replayExecutionLog = (id: string) =>
+  api.post<ReplayReport>(`/execution-logs/${id}/replay`).then((r) => r.data);
+
 export const getExecutionLogSteps = (id: string, params?: { status?: string; skip?: number; take?: number }) =>
   api.get<{ items: ExecutionLogDetail['entries']; totalCount: number }>(`/execution-logs/${id}/steps`, { params }).then((r) => r.data);
 

@@ -2,6 +2,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Domain.Aggregates.Conversations;
+using AgentPlatform.Domain.Aggregates.ExecutionLogs;
 using AgentPlatform.Domain.Aggregates.ApiKeys;
 using AgentPlatform.Domain.Enums;
 using AgentPlatform.Domain.Aggregates.Users;
@@ -98,6 +99,36 @@ public static class IntegrationSeeder
                 conv.AddMessage(new Message(Guid.NewGuid(), MessageRole.User, "BDD agent 对话种子消息"));
                 conv.AddMessage(new Message(Guid.NewGuid(), MessageRole.Agent, "BDD agent 对话种子回复"));
                 db.Conversations.Add(conv);
+            }
+
+            // ── T1 失败执行日志（F40 回放诊断 BDD/E2E 用）──
+            // 两个已完成节点 + 一个失败节点（带 ErrorDetail）+ 末次检查点（上下文快照可解析）。
+            if (await db.Set<ExecutionLog>().IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(l => l.Id == IntegrationConstants.FailedExecutionLogId, ct) is null)
+            {
+                var log = new ExecutionLog(
+                    IntegrationConstants.FailedExecutionLogId,
+                    IntegrationConstants.SampleWorkflowId,
+                    "BDD Failing Workflow",
+                    IntegrationConstants.Tenant1Id,
+                    totalSteps: 3);
+                log.AddEntry(new ExecutionLogEntry(
+                    Guid.NewGuid(), "BDD Start Step", 0, WorkflowState.Completed,
+                    TimeSpan.FromMilliseconds(45), "kickoff", null, 12, 4, StepType.Start));
+                log.AddEntry(new ExecutionLogEntry(
+                    Guid.NewGuid(), "BDD Generate Step", 1, WorkflowState.Completed,
+                    TimeSpan.FromMilliseconds(1200), "generated draft", null, 220, 96, StepType.LLM));
+                log.AddEntry(new ExecutionLogEntry(
+                    Guid.NewGuid(), IntegrationConstants.FailedExecutionStepName, 2, WorkflowState.Failed,
+                    TimeSpan.FromMilliseconds(80), null, "模型返回超限：expected 1, got 0", 0, 0, StepType.Critic));
+                log.Fail();
+                log.UpdateCheckpoint(
+                    "{\"SchemaVersion\":1,\"CheckpointVersion\":2,\"Blackboard\":{\"loop.x\":\"1\",\"trigger\":\"{}\"},"
+                    + "\"ExecutionOrderIndex\":2,\"LoopBodyIndices\":{},\"SkipSet\":[],\"StepStates\":[],"
+                    + "\"TenantId\":\"00000000-0000-0000-0000-000000000001\","
+                    + "\"WorkflowId\":\"11111111-1111-1111-1111-111111111102\","
+                    + "\"CapturedAt\":\"2026-09-01T00:00:00.000000Z\"}");
+                db.Set<ExecutionLog>().Add(log);
             }
 
             await db.SaveChangesAsync(ct);

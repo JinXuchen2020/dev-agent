@@ -402,7 +402,47 @@ data: {}
 }
 ```
 
-> 注：`ExecutionLog` 保持非 `ITenantScoped`（手动过滤，不破坏既有）；**节点级 Input（入参）v1 不采集**（已知残留，需编排器额外 plumbing）。
+> 注：`ExecutionLog` 不实现 `ITenantScoped`，故租户隔离必须由查询侧显式施加（见 I.10.3 租户收口）；
+> **节点级 Input（入参）不落库**（平台无该字段，回放面板的「输入」为前序输出推断值，见 I.10.3）。
+
+#### I.10.3 异常回放诊断与租户收口（F40）
+
+| 方法 | 路径 | 说明 | 权限 |
+| :--- | :--- | :--- | :--- |
+| POST | `/api/v1/execution-logs/{id:guid}/replay` | **只读**从执行日志条目重建异常路径：节点序列 + 失败判定 + 前后上下文 + 末次 Blackboard 快照 + `dataGaps`。不重新执行任何步骤、不写任何状态 | Admin,Operator |
+
+```jsonc
+// POST /api/v1/execution-logs/{id}/replay → 200 ReplayReport（节选）
+{
+  "overallStatus": 4,                     // WorkflowState 数值（无 JsonStringEnumConverter）
+  "nodes": [ {
+      "stepOrder": 2, "stepName": "Review Step", "status": 4, "nodeType": 4, "isFailure": true,
+      "input": "draft output", "inputInferred": true,   // 真实入参未落库 → 推断值必须显式标注
+      "output": null, "outputLength": 0, "outputTruncated": false,
+      "errorDetail": "模型返回超限", "errorTruncated": false,
+      "tokensIn": 0, "tokensOut": 0, "tokensReported": false } ],
+  "failurePath": { "firstFailedStepOrder": 2, "failedStepNames": ["Review Step"], "failedCount": 1 },
+  "contextSnapshot": {
+      "available": true, "source": "F30-final-checkpoint",
+      "variables": { "loop.x": "1" }, "checkpointVersion": 2, "executionOrderIndex": 2,
+      "stepStateCount": 0,
+      "note": "末次检查点快照（F30 覆盖写，非 per-step 历史）…" },
+  "recordedStepCount": 3, "missingStepCount": 0,
+  "dataGaps": ["input-snapshot-unavailable", "total-steps-unregistered", "tokens-not-reported"]
+}
+```
+
+`dataGaps` 稳定码（前端据此灰显并提示，避免把「信息缺失」读成「没有问题」）：
+`input-snapshot-unavailable`（真实入参未落库）、`node-type-missing-legacy-rows`（F24 前旧行无 NodeType）、
+`tokens-not-reported`、`context-snapshot-unavailable`、`context-snapshot-unparsable`（检查点损坏/格式演进）、
+`steps-missing-truncated-execution`、`total-steps-unregistered`（建档时 `TotalSteps` 未知恒 0 → 缺步数不可判）、
+`report-nodes-capped`（响应封顶 `MaxNodesInReport=500`）。
+
+能力边界与防护：① F30 只保留**末次**检查点，不声称可回放每一步上下文（`contextSnapshot.note` 明示）；
+② 长文本截断 4000 字符且**代理对安全**（撕裂会产生 U+FFFD 篡改诊断文本），原始长度经 `outputLength` 回传；
+③ 不存在或跨租户 → 404（不暴露存在性）。
+
+> **租户收口（同批安全修复）**：仓储 `GetByIdAsync` 不带租户谓词，而 `ExecutionLog` 又不在全局 query filter 覆盖范围内 —— 既有 `GET /{id}`、`GET /{id}/steps` 存在「持 GUID 即可读他租户日志」的窗口（**F40 之前就存在**）。现三个读端点统一改用 `GetByIdForTenantAsync` / `IsOwnedByTenantAsync`（跨租户与不存在同为 404），并有 EF 级测试实证无过滤路径可跨租户取数以防回归。
 
 #### I.10.2 评估数据集 API
 

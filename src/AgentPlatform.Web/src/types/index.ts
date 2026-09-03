@@ -567,6 +567,65 @@ export interface ExecutionLogStepEntry {
   nodeType: number | null;
 }
 
+// ── F40 异常回放诊断（只读重建，不重新执行）──
+// 注意：平台未注册 JsonStringEnumConverter，枚举按 **数值** 序列化 ——
+// WorkflowState: 0 Pending / 1 Running / 2 Paused / 3 Completed / 4 Failed / 5 RolledBack；
+// StepType 见 pages.executionLogs.stepType.* 的 i18n 数值键。
+export interface ReplayNodeView {
+  stepOrder: number;
+  stepName: string;
+  status: number;
+  nodeType: number | null;
+  isFailure: boolean;
+  startedAt: string;
+  completedAt: string | null;
+  durationMs: number;
+  /** 推断输入（= 前序节点输出）；平台未落库真实入参，见 inputInferred。 */
+  input: string | null;
+  inputInferred: boolean;
+  output: string | null;
+  outputLength: number;
+  outputTruncated: boolean;
+  errorDetail: string | null;
+  errorTruncated: boolean;
+  tokensIn: number;
+  tokensOut: number;
+  tokensReported: boolean;
+}
+
+export interface ReplayFailurePath {
+  firstFailedStepOrder: number | null;
+  failedStepNames: string[];
+  failedCount: number;
+}
+
+export interface ReplayContextSnapshot {
+  available: boolean;
+  source: string | null;
+  variables: Record<string, string>;
+  checkpointVersion: number | null;
+  executionOrderIndex: number | null;
+  stepStateCount: number;
+  note: string;
+}
+
+export interface ReplayReport {
+  executionLogId: string;
+  workflowId: string;
+  workflowName: string;
+  overallStatus: number;
+  startedAt: string;
+  completedAt: string | null;
+  totalSteps: number;
+  nodes: ReplayNodeView[];
+  failurePath: ReplayFailurePath;
+  contextSnapshot: ReplayContextSnapshot;
+  recordedStepCount: number;
+  missingStepCount: number;
+  /** 数据缺口码：前端据此灰显提示，避免把「信息缺失」读成「没有失败」。 */
+  dataGaps: string[];
+}
+
 // ── 评估数据集 / 回归评估（F24）──
 export type EvaluationMatchMode = 0 | 1; // 0=Exact, 1=Contains
 

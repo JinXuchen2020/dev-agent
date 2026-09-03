@@ -1,3 +1,5 @@
+using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Application.ExecutionLogs.Commands.ReplayExecution;
 using AgentPlatform.Application.ExecutionLogs.Queries.GetExecutionLogDetail;
 using AgentPlatform.Application.ExecutionLogs.Queries.GetExecutionLogs;
 using AgentPlatform.Application.ExecutionLogs.Queries.GetExecutionLogSteps;
@@ -19,14 +21,17 @@ namespace AgentPlatform.Api.Controllers;
 public sealed class ExecutionLogsController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly ITenantProvider _tenant;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ExecutionLogsController"/> class.
     /// </summary>
     /// <param name="mediator">The MediatR mediator used to dispatch queries.</param>
-    public ExecutionLogsController(IMediator mediator)
+    /// <param name="tenant">The tenant provider supplying the current tenant scope (F40 回放归属校验).</param>
+    public ExecutionLogsController(IMediator mediator, ITenantProvider tenant)
     {
         _mediator = mediator;
+        _tenant = tenant;
     }
 
     /// <summary>
@@ -112,6 +117,28 @@ public sealed class ExecutionLogsController : ControllerBase
             return NotFound();
 
         return Ok(result);
+    }
+
+    /// <summary>
+    /// F40 异常回放诊断：从执行日志<b>只读重建</b>失败工作流的节点路径、失败上下文与末次
+    /// Blackboard 快照（不重新执行任何步骤、不写任何状态）。
+    /// 日志不存在或不属于当前租户 → 404（不暴露存在性）。
+    /// </summary>
+    /// <remarks>
+    /// 能力边界（详见 features/f40-replay-diagnostics.md §3）：每节点真实入参未落库（报告以
+    /// <c>inputInferred=true</c> 标注推断值）；F30 检查点仅保留<b>末次</b>快照，故不声称可回放
+    /// 每一步的上下文。旧数据（F24 之前）缺 NodeType/tokens 时以 <c>dataGaps</c> 如实标注，
+    /// 前端据此灰显，避免把「信息缺失」误读为「没有失败」。
+    /// </remarks>
+    /// <param name="id">执行日志标识。</param>
+    /// <param name="ct">取消令牌。</param>
+    /// <returns>回放报告（<c>ReplayReport</c>）。</returns>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpPost("{id:guid}/replay")]
+    public async Task<IActionResult> ReplayExecution(Guid id, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new ReplayExecutionCommand(id, _tenant.GetTenantId()), ct);
+        return result == null ? NotFound() : Ok(result);
     }
 }
 
