@@ -1,6 +1,6 @@
 # F39 · 监控告警聚合（可观测性栈）设计文档
 
-> 来源：F34 评估门禁 · 延后项。
+> 来源：F43 评估门禁 · 延后项。
 > 风险等级：🟡 中风险（Grafana Dashboard JSON 维护成本；告警阈值合理性）。
 > 分支：`feat/f39-observability-alerting`（2026-09-02 自 `feat/f38-ci-eval-gate` 新建——用户指定基线）。
 

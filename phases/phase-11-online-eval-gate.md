@@ -26,7 +26,7 @@
 
 ### 实现任务
 
-- [x] **生产前 Eval 门禁**（F34 v1，2026-08-25）：`RunEvaluationGateCommand` 阈值解析链（显式 > 配置默认 0.8）+ 空数据集恒拦守卫；端点 `POST /evaluation-datasets/{id}/gate/{workflowId}` 通过 200 / 未达 **422 阻断**；审计 `AuditActionType.EvaluationGate`。详见 features/f34-online-eval-gate.md §5。🔍 强制 `ddd-code-reviewer`：核对门禁**真实阻断**（非仅报告）、阈值来自数据集定义、失败路径真实生效。
+- [x] **生产前 Eval 门禁**（F43 v1，原编号 F34，2026-08-25）：`RunEvaluationGateCommand` 阈值解析链（显式 > 配置默认 0.8）+ 空数据集恒拦守卫；端点 `POST /evaluation-datasets/{id}/gate/{workflowId}` 通过 200 / 未达 **422 阻断**；审计 `AuditActionType.EvaluationGate`。详见 features/f43-online-eval-gate.md §5。🔍 强制 `ddd-code-reviewer`：核对门禁**真实阻断**（非仅报告）、阈值来自数据集定义、失败路径真实生效。
 - [ ] **影子流量回归**：对生产流量做影子副本跑新版本，与基线比对输出差异，异常才拦截；不污染生产状态。🔍 强制 `ddd-code-reviewer`：核对影子流量隔离（不写生产、不影响在线）、差异判定真实生效。
 - [ ] **在线监控告警**：基于 `ExecutionLogEntry` 的 token / cost / latency 实时聚合，成本归因到 agent / tenant；超阈值告警通道（阶段五 `AuditLog` / 通知）。🔍 强制 `ddd-phase-quality-gate`：核对指标聚合真实、告警通道真实存在、阈值可配。
 - [ ] **CI 自动回归**：eval 门禁挂 CI 流水线，PR / 部署前自动跑，失败阻断。🔍 强制 `ddd-phase-quality-gate`：核对 CI 配置真实接入、失败阻断逻辑生效。

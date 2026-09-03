@@ -1,4 +1,5 @@
-# F34 · 在线评估门禁 设计文档（v1）
+# F43 · 在线评估门禁 + 部署闭环 设计文档（v1）
+> **编号说明（2026-09-03 校正）**：本史诗原记 **F34**，与先到者「F34 · 沙箱双层隔离」（2026-08-07）撞号，现重编号为 **F43**。历史标识不变：分支名 `feat/f34-online-eval-gate` 与该次 `.quality-gate.json` 的 phase 仍为 f34-online-eval-gate。
 
 > **关联**：`phases/phase-11-online-eval-gate.md`、`features/backlog.md` F34（v1 仅验收①）
 > **状态**：`doing`（2026-08-25，分支 `feat/f34-online-eval-gate`，基于 f33）

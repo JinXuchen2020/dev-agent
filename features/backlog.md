@@ -23,7 +23,7 @@
 >
 > 合并链为 `master → f35 → f36 → f37 → f38 → f39 → f40`（线性，共 6 个 feature commit），合并 f40 即一次带入 F35–F40 全部实现。
 >
-> **编号撞车（历史遗留，保留不重编号以免打断 CHANGELOG/设计文档引用）**：**F34 被用了两次** —— ① 顶部 `F34 · 沙箱双层隔离`（Tier-1，已合并）② 第二期组内 `F34 · 在线评估门禁 + 部署闭环`（对应 `features/f34-online-eval-gate.md`）。引用时请以**文档路径**为准；F27/F28 之后第二期顺延为 F29–F34 时未察觉冲突。下一可用编号 = **F42**（F41 = 移除 QuickStart，已合并）。
+> **编号撞车已于 2026-09-03 解除**：曾有两个 **F34** —— 「F34 · 沙箱双层隔离」与「F34 · 在线评估门禁 + 部署闭环」。按**先到先得**原则处理（沙箱双层 2026-08-07 早于评估门禁 2026-08-25），保留沙箱双层为 **F34**，将在线评估门禁重编号为 **F43**（其设计文档已 `git mv` 为 `features/f43-online-eval-gate.md`，backlog / F37–F40 来源引用 / phase-11 / CHANGELOG 标题同步更新）。**历史标识不改写**：分支名 `feat/f34-online-eval-gate`、当时的 `.quality-gate.json` phase 值、以及 CHANGELOG 该版正文内容保持原样（仅在标题加校正注），旧 journal（`.workbuddy/memory/*.md`）不回改。
 
 
 > **代码基现状（2026-09-03 实测刷新，替代 2026-07-22 走查结论）**
@@ -442,8 +442,8 @@
   - **③** 自动 compaction（超限上下文压缩，替代明文 MaxSummaryTokens 截断；并为 F29 长程 agent 提供上下文压缩）。
 - 优先级：P1。
 
-### F34 · 在线评估门禁 + 部署闭环  [P2]  done  🟢低风险（复用 F24 数据集）
-- 设计依据：`phases/phase-11-online-eval-gate.md` + `docs/agent-harness-blueprint.md` §Phase 11；设计文档 `features/f34-online-eval-gate.md`（v1 仅验收①，§3 设计+§5 完成记录）
+### F43 · 在线评估门禁 + 部署闭环  [P2]  done  ⟲原编号 F34（2026-09-03 校正撞号）  🟢低风险（复用 F24 数据集）
+- 设计依据：`phases/phase-11-online-eval-gate.md` + `docs/agent-harness-blueprint.md` §Phase 11；设计文档 `features/f43-online-eval-gate.md`（v1 仅验收①，§3 设计+§5 完成记录）
 - 验收子项：
   - **①** 在线 eval 门禁 → ✅ `RunEvaluationGateCommand`：阈值解析链（请求显式 > `EvaluationSettings.GateMinPassRate`=0.8）；执行委托 RunEvaluation（一次性克隆=影子隔离零生产写入）；Passed=false 端点返回 **HTTP 422 阻断语义**；空数据集显式守卫恒不通过；审计新增 `AuditActionType.EvaluationGate`
   - **延后项** → CI YAML 接入样例、队列化执行/水平扩展、监控告警聚合、异常回放诊断——均独立排期（与 backlog 延后声明一致）
@@ -457,7 +457,7 @@
 
 ## 延后项（独立排期，从已 done 史诗中拆出）—— **F35–F40 六项已全部实现完毕（2026-08-31 → 2026-09-03），但六条分支尚未并入 master**
 
-> 以下条目均来自 F26/F30/F31/F32/F34 设计文档中显式标注的「延后项」——v1 边界明确排除、依赖未就绪或破坏性过大，需独立 feature 闭环。
+> 以下条目均来自 F26/F30/F31/F32/F43 设计文档中显式标注的「延后项」——v1 边界明确排除、依赖未就绪或破坏性过大，需独立 feature 闭环。
 > 现状：六项均为 `done⚠️未合并` 性质的「已实现待合并」——实现完整、各自三道质量门全绿（详见各条完成记录与 `docs/quality/f3[5-9]-*-gate.md`、`docs/quality/f40-*-gate.md`），但按 feature-builder 约定不主动 merge。
 > 分支链线性：`master → feat/f35 → f36 → f37 → f38 → f39 → f40`，**只需一次合并（f40）即可全部带入**；若希望逐条 review，则按 f35→f40 顺序依次合并。
 > 该链**不含** F10（F10 在另一条未合并分支上，见 F10 校正条目）。
@@ -500,8 +500,8 @@
 
 ### F37 · 队列化执行与水平扩展  [P1]  done⚠️未合并  ✅（2026-09-02，分支 `feat/f37-queued-execution` 基于 f36；设计文档 features/f37-queued-execution.md §5 决策 D1–D4 已锁定 + §8 审查修复记录 + 质量报告 docs/quality/f37-queued-execution-gate.md）🔴高风险（分布式消息中间件 + 多 worker 协调；基于 feat/f36-agent-context-isolation 分支）
 - 设计文档：`features/f37-queued-execution.md`（已建，§5 决策 D1–D4 已锁定 2026-09-01；现实校正：现租约 LeaseTtlMinutes=5 非 30s、既有 run 端点为请求内同步契约）
-- 来源：F30 执行持久化 · 延后项；F34 评估门禁 · 延后项
-- 设计依据：`features/f30-durable-execution.md` + `features/f34-online-eval-gate.md` §延后项
+- 来源：F30 执行持久化 · 延后项；F43 评估门禁 · 延后项
+- 设计依据：`features/f30-durable-execution.md` + `features/f43-online-eval-gate.md` §延后项
 - 目标：将当前进程内 BackgroundService 轮询升级为基于消息队列的分布式任务分发——多 worker 实例可水平消费执行任务，无状态执行引擎横向扩展。复用 F30 租约机制（RunningExecution）防多 worker 重复驱动。
 - 核心改造：
   - Infrastructure：`IExecutionQueue` 抽象 + Redis Stream / RabbitMQ 实现（进程内 Channel 替代方案回退保留）；`DistributedLeaseProvider`（Redis `SET NX EX` 替代内存 `SemaphoreSlim`）。
@@ -518,8 +518,8 @@
 - **完成记录（2026-09-02）**：feature-builder 全栈实跑落地。决策（用户锁定）：D1=B 三后端全做 / D2=B run 端点透明「入队+等待」（既有 run/run-existing 契约在 QueueEnabled 下返回 200 完成 / 202 queued / 503 拒投，默认 QueueEnabled=false 直跑零变化）/ D3=A 复用 F30 5min 租约作接管窗口（**校正 backlog 原文「30s」**：现网租约 LeaseTtlMinutes=5，缩至 30s 会改 F30 崩溃恢复窗口，未选）/ D4=A 评估门禁保持同步直跑。**设计偏差（诚实记录）**：① 复用既有 `IDistributedLockProvider`（Redis 实现本就是 SET NX PX 语义）而非新建 `DistributedLeaseProvider`；② 队列投递在 run 命令处理器内透明完成（`QueuedRunSupport.EnqueueAndWaitAsync`），未新增公开 `EnqueueWorkflowRunCommand`；③ Redis/Rabbit 不可用时 run 端点显式 503（不运行时静默切 InMemory，避免多实例脑裂），InMemory 为注册期选定的后端而非运行期降级。落地：`IExecutionQueue`+`ExecutionJob`/`QueueDelivery`/`EnqueueResult`（Application）；三后端 Infrastructure（InMemory Channel 有界 / Redis Stream XADD+XREADGROUP+XAUTOCLAIM+XACK+死信流 / RabbitMQ durable+BasicGet pull+epoch 防跨代 ack+死信队列）；`ExecutionWorker`（BackgroundService，恒注册+QueueEnabled 运行时门控，失败按 Attempt 重投、超限死信、仅接管成功才 ack）；`ExecuteQueuedWorkflowCommand`（消费 scope 复现租户/工作空间 Override、跨租户拒跑、终态重复投递→Duplicate 不重跑、租约冲突→Duplicate、触发投递 FromQueue 防回环）；触发处理器队列模式投递。前端 runWorkflow/runExistingWorkflow union + isQueuedRunResponse 守卫 + queued 提示。三道质量门全 PASS：reviewer 修 P0（重复投递二次执行）+P1×4（轮询 AsNoTracking、死信成败回报防丢任务、Redis 连接泄漏、Rabbit epoch）；结构门 0 open（P3×2 修）；optimizer Round F37-01 0 open（P3×1 修：未知 QueueBackend 静默降级告警；2 waiver）。验证：build 0/0；App 268 / Infra 171+8跳 / Api 37 / Arch 9 / Integration 5 / SpecFlow 115/116（唯一失败=既有豁免）；新增 Application 队列 15 + Infra queue/worker 9 + Api 队列 E2E 2；前端 tsc 0 + vitest（既有豁免×2）+ vite build。文档同步：CHANGELOG v2.36、BLUEPRINT 平台化清单、appendices（api-spec I.3.1 队列模式 / deployment-devops H.4/H.5）、backlog F37 done。遗留：RabbitMQ 真实 broker 投递闭环在 CI services 覆盖（本地跳过）；InMemory 重启丢未 ack 作业（单实例回退设计接受）。
 
 ### F38 · CI YAML 接入评估门禁样例  [P2]  done⚠️未合并  ✅（2026-09-02，分支 `feat/f38-ci-eval-gate` 基于 f37；交付 ci/eval-gate-github.yml + ci/eval-gate-gitlab.yml + docs/ci-eval-gate-guide.md，设计文档 features/f38-ci-eval-gate.md + 质量报告 docs/quality/f38-ci-eval-gate-gate.md）🟢低风险（文档 + 模板，不触后端代码）
-- 来源：F34 评估门禁 · 延后项
-- 设计依据：`features/f34-online-eval-gate.md` §延后项
+- 来源：F43 评估门禁 · 延后项
+- 设计依据：`features/f43-online-eval-gate.md` §延后项
 - 目标：提供可直接复制使用的 CI/CD 流水线模板，将评估门禁端点接入 GitHub Actions / GitLab CI，实现「模型/prompt 变更前自动回归，未达阈值阻断合并」。
 - 核心改造：
   - `ci/eval-gate-github.yml`：GitHub Actions workflow — 触发 PR + 手动 dispatch → 启动 API → 运行 eval gate → 422 则 `exit 1` 阻断。
@@ -536,8 +536,8 @@
 
 ### F39 · 监控告警聚合  [P2]  done⚠️未合并  ✅（2026-09-02，分支 `feat/f39-observability-alerting` 基于 f38；设计文档 features/f39-observability-alerting.md §5 决策 D1–D4 已锁定 + §8 审查修复记录 + §9 Quality Gate Checklist + 质量报告 docs/quality/f39-observability-alerting-gate.md）🟡中风险（OpenTelemetry 指标 + 告警规则 + Dashboard 配置）
 - 设计文档：`features/f39-observability-alerting.md`（已建，§5 决策 D1–D4 已锁定 2026-09-02；§2 关键校正：无 `result="failed"` 标签（失败⇒rolledback）、门禁阻断率可由 422 派生、队列指标须走 redis_exporter/RabbitMQ 插件、既有 Grafana provisioning 挂载路径无效）
-- 来源：F34 评估门禁 · 延后项
-- 设计依据：`features/f34-online-eval-gate.md` §延后项
+- 来源：F43 评估门禁 · 延后项
+- 设计依据：`features/f43-online-eval-gate.md` §延后项
 - 目标：将当前裸 OpenTelemetry `/metrics` 端点升级为可用的可观测性栈——Prometheus 抓取配置 + Grafana Dashboard 模板 + 告警规则（执行失败率、门禁阻断率、队列积压、模型调用延迟），实现「平台运行状态一目了然 + 异常自动通知」。
 - 核心改造：
   - `deploy/prometheus.yml`：Prometheus 配置（scrape interval / relabel / 告警规则引用）。
@@ -554,8 +554,8 @@
 - **完成记录（2026-09-02）**：feature-builder 全栈实跑落地。决策（用户锁定）：D1=**B**（补后端埋点，原建议 A 被否，InMemory 亦可观测）/ D2=A（Alertmanager + Slack/PagerDuty）/ D3=A（修 Grafana provisioning 布局 + 12 面板 + 锁版本）/ D4=A（失败率用 `rolledback` 口径 + API 错误率独立告警）。**关键校正（相对 backlog 原文）**：① 代码里不存在 `result="failed"`（失败⇒回滚 `rolledback`），按直觉写 failed 会得到**永不触发的假告警**；② 门禁阻断率优先用新埋点 `evaluation_gate_total{passed}`、HTTP 422 派生作交叉验证；③ 队列积压由应用自身 `execution_queue_depth{backend}` 上报（**Redis 侧 XACK 不减 XLEN，故 ack 后同步 XDEL**，否则「积压」单调增长 = 假告警）；④ 既有 compose 把裸 dashboard JSON 挂进 provisioning 目录**根本不会加载**，已改为 provider YAML + JSON 目录分离并给数据源显式 `uid: prometheus`（否则 12 面板全报 data source not found）；⑤ 镜像 `latest` 改为全部锁版本。交付：prometheus.yml / alert-rules.yml（9 条告警）/ alertmanager.yml / grafana provisioning + 12 面板 dashboard / docker-compose.monitoring.yml / docs/observability-guide.md；后端埋点 `IExecutionQueue.QueueDepth`（三后端真实读数）+ `WorkflowMetrics.EvaluationGateCounter` + `QueueDepthGauge`。三道质量门全 PASS：对抗审查修 P1×2（Redis 积压语义、Grafana 数据源 uid）+P2×3+P3×5；结构门 0 新增（3×P3 waiver）；optimizer Round F39-01 0 新增（修 3×P2 文档同步 + 2×P3 waiver）。验证：build 0/0；Application **269/269**、Infrastructure **174+8跳**、Api **39/39**、Architecture 9、SpecFlow 115/116（唯一失败=既有豁免）；新增 MeterListener 真断言测试 2 文件（守「埋点确实可观测」）；6 个监控 YAML + dashboard JSON 结构校验通过（脚本核验所有面板/告警只引用已核实指标）。文档同步：CHANGELOG v2.38、deployment-devops 附录（监控栈小节）、backlog F39 done。已知残留：promtool/amtool/Grafana 导入本机无 Docker 未实跑（结构校验兜底 + 指南留校验命令）；`workflow_id`/`path` 高基数标签治理与 RabbitMQ 深度 ≤5s 缓存为独立技术债。
 
 ### F40 · 异常回放诊断入口  [P2]  done⚠️未合并  ✅（2026-09-03，分支 `feat/f40-replay-diagnostics` 基于 f39；设计文档 features/f40-replay-diagnostics.md（§3 能力边界、§6b 决策、§8 审查修复记录、Quality Gate Checklist）+ 质量报告 docs/quality/f40-replay-diagnostics-gate.md）🟡中风险（执行日志回放引擎 + 前端诊断视图）
-- 来源：F34 评估门禁 · 延后项
-- 设计依据：`features/f34-online-eval-gate.md` §延后项
+- 来源：F43 评估门禁 · 延后项
+- 设计依据：`features/f43-online-eval-gate.md` §延后项
 - 目标：从执行日志重建失败工作流的异常路径——定位失败节点、回放输入输出、展示上下文快照（Blackboard/变量/模型响应），辅助快速定位根因。复用 F24 Trace + F25 调试器能力。
 - 核心改造：
   - Application：`ReplayExecutionCommand`（接收 ExecutionLogId）—— 从 `ExecutionLog.Entries` 重建执行路径，标记失败节点，返回 `ReplayReport`（路径序列 + 每节点 IO/耗时/错误信息 + Blackboard 快照）。
@@ -641,7 +641,7 @@
 
 ## 未立项候选（**登记性质，非承诺**；立项前须用户确认，代理不自创需求）
 
-> 来源仅限各 feature 完成记录 / 质量报告 / 本文件残留项的既有记载，不引入新设想。**F42 已由上方「新立项」节占用**（Skill+MCP 执行器真实化，状态 open、本轮按用户指示只登记不实现），下一可用编号 = **F43**。
+> 来源仅限各 feature 完成记录 / 质量报告 / 本文件残留项的既有记载，不引入新设想。**F42 已由上方「新立项」节占用**（Skill+MCP 执行器真实化，状态 open、本轮按用户指示只登记不实现）；编号撞车解除时新占用的 **F43** = 在线评估门禁（原 F34）。下一可用编号 = **F44**。
 
 | 候选 | 来源（已记录处） | 性质 |
 | :--- | :--- | :--- |

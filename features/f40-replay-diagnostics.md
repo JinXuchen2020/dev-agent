@@ -1,6 +1,6 @@
 # F40 · 异常回放诊断入口 设计文档
 
-> 来源：F34 评估门禁 · 延后项。风险：🟡 中风险（回放依赖 ExecutionLog 数据完整性）。
+> 来源：F43 评估门禁 · 延后项。风险：🟡 中风险（回放依赖 ExecutionLog 数据完整性）。
 > 分支：`feat/f40-replay-diagnostics`（2026-09-02 自 `feat/f39-observability-alerting` 新建——用户指定基线）。
 > 性质：纯新增**只读**分析端点 + 前端诊断视图，不改既有端点契约/鉴权/路由结构，无破坏性后端改动、不删数据 → 按 feature-builder 护栏可直接实现；因触及 UI，按硬约束 #7 配套 playwright-bdd E2E（CI 运行）。
 

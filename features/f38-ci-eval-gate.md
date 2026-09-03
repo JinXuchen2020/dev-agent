@@ -1,6 +1,6 @@
 # F38 · CI YAML 接入评估门禁样例 设计文档
 
-> 来源：F34 评估门禁 · 延后项（`features/f34-online-eval-gate.md` §延后项）。
+> 来源：F43 评估门禁 · 延后项（`features/f43-online-eval-gate.md` §延后项）。
 > 风险等级：🟢 低风险（纯文档 + CI 模板，不触后端/前端源码）。
 > 分支：`feat/f38-ci-eval-gate`（2026-09-02 自 `feat/f37-queued-execution` 新建——用户指定基线；F38 交付物与 F34/F37 代码无关，但保持线性可追）。
 

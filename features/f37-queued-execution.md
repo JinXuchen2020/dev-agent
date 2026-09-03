@@ -1,6 +1,6 @@
 # F37 · 队列化执行与水平扩展（Redis Stream 最小闭环）设计文档
 
-> 来源：F30 执行持久化 · 延后项；F34 评估门禁 · 延后项。
+> 来源：F30 执行持久化 · 延后项；F43 评估门禁 · 延后项。
 > 风险等级：🔴 高风险（执行分发范式变更 + 多 worker 协调 + 消息可靠性）。
 > 分支：`feat/f37-queued-execution`（2026-09-01 自 `feat/f36-agent-context-isolation` 新建——用户指定基线，F37 消费 F35 的 WorkspaceId 上下文与 F36 的 agent 会话隔离语义）。
 
