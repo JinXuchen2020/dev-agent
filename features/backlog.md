@@ -10,29 +10,13 @@
 
 状态图例：`open`(待做) · `doing`(进行中) · `done`(已完成，已在当前基线) · `done⚠️未合并`(实现完整但停在未合并分支，**当前基线不可用**) · `blocked`(阻塞等待依赖)
 
-> **状态口径（2026-09-03 按代码实测校正）**：`done` 此前混用了「代码已并入 master」与「做完但在未合并分支上」两种含义。现显式区分：
-> `done`＝已在当前基线；`done⚠️未合并`＝实现存在于分支但未并入 master，**当前基线里功能不可用**。
+> **完成度统计（2026-08-30 二次整理）**：Tier 1 史诗 40 条 + 延后项 6 条 = **46 条**；其中 **done 36 / open 10**。
+> 当前 open 清单（按建议执行顺序）：`F38`(CI YAML 门禁样例) → `F45`(发布端点完整 URL 展示) → `F44`(ApiKeys 租户自助端点，**阻断 F22 生产可用**) → `F42`(工作流数据流) → `F39`(监控告警聚合) → `F46`(生产部署编排) → `F37`(队列化执行与水平扩展) → `F40`(异常回放诊断) → `F36`(Agent 上下文隔离) → `F35`(多工作空间隔离)。
 >
-> **实测：未并入 master 的分支**（`git branch --no-merged master`）
->
-> | 分支 | 对应史诗 | 基线实际状态 |
-> | :--- | :--- | :--- |
-> | `feat/f10-executor-realization` | F10 | ❌ **基线未真实化**（详见 F10 条目校正） |
-> | `feat/f20-node-bundle` | —— | ⚠️ 过期重复分支（真正的 F20 为 `feat/f20-node-types`，已合并；当前基线 `StepType` 已到 `Agentic=15`） |
-> | `feat/f35-workspace-isolation` … `feat/f40-replay-diagnostics` | F35–F40 | ✅ 实现完整、测试全绿，但**六条分支链尚未合并 master**（feature-builder 约定：不主动 merge，待人工 review） |
->
-> 合并链为 `master → f35 → f36 → f37 → f38 → f39 → f40`（线性，共 6 个 feature commit），合并 f40 即一次带入 F35–F40 全部实现。
->
-> **编号撞车已于 2026-09-03 解除**：曾有两个 **F34** —— 「F34 · 沙箱双层隔离」与「F34 · 在线评估门禁 + 部署闭环」。按**先到先得**原则处理（沙箱双层 2026-08-07 早于评估门禁 2026-08-25），保留沙箱双层为 **F34**，将在线评估门禁重编号为 **F43**（其设计文档已 `git mv` 为 `features/f43-online-eval-gate.md`，backlog / F37–F40 来源引用 / phase-11 / CHANGELOG 标题同步更新）。**历史标识不改写**：分支名 `feat/f34-online-eval-gate`、当时的 `.quality-gate.json` phase 值、以及 CHANGELOG 该版正文内容保持原样（仅在标题加校正注），旧 journal（`.workbuddy/memory/*.md`）不回改。
+> **编号冲突已修正（2026-08-30）**：原存在两个 `F34`（沙箱双层隔离 / 在线评估门禁）。后者现改号为 **F43**（旧号仅作历史别名保留），详情见 `### F43` 条目备注。
+> **2026-08-30 走查新增 3 项**：`F44`（ApiKeys 生命周期闭环，P1）、`F45`（发布端点完整 URL 展示，P3）、`F46`（生产部署编排，P2）——均来自 ApiKeysPage / F22 链路代码走查，缺口定性见各条目；原「待立题」分组已清空（ApiKeys 项升级为 F44）。
 
-
-> **代码基现状（2026-09-03 实测刷新，替代 2026-07-22 走查结论）**
->
-> - 栈：.NET 9 + EF Core 9（SQLite 开发 / PostgreSQL 生产双栈）+ MediatR + Semantic Kernel 1.30；前端 React 19 + Vite + TS(strict) + Antd 5 + @xyflow/react + zustand + playwright-bdd。
-> - 规模（当前基线）：设计文档 48 篇（`features/*.md`）；API HTTP 端点 105 个；Reqnroll 场景 104 条（执行 118 例）；前端 BDD E2E feature 17 个；迁移 `Infrastructure/Migrations` 57 文件 + **遗留孤儿目录** `Infrastructure/Persistence/Migrations` 6 文件（F30–F32 时代产物，同程序集内不冲突，勿混用新迁移输出目录）。
-> - 闸门现状：`dotnet build` 0 警告 0 错误（`TreatWarningsAsErrors`）；Application 285 / Infrastructure 175+8 跳 / Api 39 / Architecture 9 / Integration 5（需 `OPENAI__Key`）/ SpecFlow 117 通过 + 1 失败（**master 既有** LLM 用例「Admin 创建会话后向其发送消息得到回复」）；前端 tsc 0 error、vitest 50 通过（2 处既有豁免）。
-> - 与 07-22 结论的差异：**「0 TODO/FIXME」已不成立**——现存 2 处，均为 `Tools/McpClient.cs:27` 与 `Tools/SkillPackageExecutor.cs:27` 的 `TODO(Phase6)` 桩注释（见 F10 校正）。「后端行动层空心」判断已过时：NativeToolExecutor/进程与容器沙箱/SK 技能链/RAG/调研 Agent/自主 Agentic 循环均已真实落地，唯 Skill+MCP 两个执行器因分支未合并仍为桩。
-> - 环境注意：集成与 E2E 测试需 `OPENAI_API_KEY`（真实 Key，F41 起 fail-fast）；`.env`/CI 变量映射为 `OpenAI__Key` 双下划线。
+代码基现状（2026-07-22 全量走查）：React 19 + Vite 8 + TS（strict）+ Antd 5 + @xyflow/react + zustand；`typecheck/lint/build/unit/e2e` 五道闸门当前全绿。优点：严格 TS、0 处 `any`、0 TODO/FIXME、lint 净。问题集中于「前端数据真实性 / 鉴权态 / 错误兜底 / 工程化」与「后端行动层（工具·代码·调研）空心」两类。
 
 > **测试约定（2026-08-04 确立，feature-builder 硬约束 #7）**：**前端 E2E 必须 BDD 驱动**——凡触及 UI 的 feature，须配套 `playwright-bdd` 风格的 Gherkin E2E（`src/AgentPlatform.Web/e2e/features/*.feature` + `e2e/steps/*.steps.ts`，`createBdd(test)` 的 `test` 须 `extend` 自 `playwright-bdd` 自带 `test`），运行链路 `bddgen && playwright test`。禁止写裸 `@playwright/test` `.spec.ts` 作 feature E2E（既有 `smoke.*.spec.ts` 属冒烟基线，除外）。F27 已落地示范：`e2e/features/publish-workflow.feature`。
 
@@ -41,6 +25,40 @@
 ## Feature 史诗（Tier 1 —— feature-builder 消费单元）
 
 > 每个史诗含：目标 + 验收子项（原 B/O/P 归并，保留 `文件:行号` 锚点）+ 优先级 + 风险 + 设计文档链接。验收子项里的前端细项可由 `feature-dev` 直接取做。
+
+### F44 · ApiKeys 租户自助端点 + 前端接线（API Key 生命周期闭环）  [P1]  open  ⚠️设计文档待产出（实现前必须先建 `features/f44-*.md`）🔴升级理由：阻断 F22「发布工作流为 API/MCP」生产可用
+- 来源：F1 史诗子项 `B8`（2026-08-30 走查升级立项；原「待立题」分组收容，现正式进入 Tier 1）
+- 缺口定性（2026-08-30 代码走查）：
+  - **前端**：`pages/ApiKeysPage.tsx`（97 行）是不可达孤儿页——`App.tsx` 无路由（`git log -S` 零提交）、`AppLayout` 导航无入口、全仓无 import；rotate/revoke 按钮是 `rotateTodo/revokeTodo` 占位 toast；`services/api.ts:528` 仅封装 `GET /api-keys` 且 `WorkflowsPage.tsx:248` 调用处 `.catch(() => setApiKeys([]))` 静默吞错 → **发布抽屉密钥下拉永远为空**。
+  - **后端**：ApiKey 校验基建齐全（`Domain.Aggregates.ApiKeys.ApiKey` + `ApiKeyConfiguration` + `ApiKeyAuthenticationHandler`(scheme="ApiKey") + `ApiKeyEncryptionService`(AES-256-GCM) + `KeyRotationService` + `ApiKeyExpiryJob`），但 `IApiKeyRepository` 仅被校验/轮换/过期消费，**无创建 Command、无管理 Controller**。全局唯一 key = `DatabaseInitializer` 在 Integration 播种的 `integration-fixture-key-0001`（明文 dev-only）。
+  - **影响面**：`PublishedWorkflowsController`(`api/v1/published-workflows`) 与 `McpController`(`api/v1/mcp`) 均为 `[Authorize(AuthenticationSchemes="ApiKey")]` + `PerApiKey` 限流 → 除集成测试外无法自助签发调用凭证。
+- 立项范围（设计文档须覆盖）：
+  - 后端 `GET/POST/DELETE /api/v1/api-keys`（+ 可选 `POST /{id}/rotate`）；创建/轮换**一次性明文返回**（落库后不可再读）；AES-256-GCM 存储 + tenant 隔离 + RBAC（Admin/Operator），**禁止明文落库**。
+  - 前端：`ApiKeysPage` 接真实 CRUD + 错误兜底（补 catch）；接入 `App.tsx` 路由 + `AppLayout` 导航；`WorkflowsPage` 发布抽屉密钥下拉消费真实数据。
+  - E2E：playwright-bdd 场景（创建 key → 发布工作流绑定 → 外部带 `X-API-Key` 调通）。
+- 依赖：无（Phase 5 加密/鉴权基建已就绪，可独立开工）。
+- 风险：🟡 中（密钥生命周期管理 + 一次性明文展示安全性）。
+
+### F45 · 发布端点完整 URL 展示 + 一键复制  [P3]  open  🟢低风险（纯前端小项，可由 feature-dev 直接取做；设计文档可并入 F44 或独立轻量）
+- 来源：2026-08-30 F22 链路走查——发布抽屉仅显示相对路径 `POST /api/v1/published-workflows/{slug}`（`WorkflowsPage.tsx:563`），不带 host，外部调用方需自行拼 Base URL。
+- 落地：发布抽屉展示完整端点 URL（`window.location.origin` + 相对路径）；REST 与 MCP 两种模式分别展示（MCP 为 `POST {origin}/api/v1/mcp`）；完整 URL 一键复制（现仅复制 slug）。
+- 验收：抽屉内可见完整可调用 URL；复制按钮产出完整 URL；typecheck/build/E2E 全绿。
+- 风险：🟢 纯前端展示层，无契约变更。
+
+### F46 · 生产部署编排（docker-compose 补齐 API 服务）  [P2]  open  🟡中风险（首次容器化 + USE_POSTGRESQL 条件编译验证）
+- 来源：2026-08-30 走查——`docker-compose.yml` 当前**只有 postgres 服务**，无 api 服务；API 仅能 `dotnet run` 裸跑，无容器化生产拓扑。
+- 落地：
+  - 多阶段 `Dockerfile`（build + runtime）；`docker-compose.yml` 增加 `api` 服务（`USE_POSTGRESQL` 编译/配置切换 + 连接串 + `OPENAI__Key` 等环境变量映射 + healthcheck）。
+  - 可选预留 `redis` 服务（为 F37 队列化铺路）；`deploy/docker-compose.monitoring.yml`（F39 产物）与主 compose 对齐网络。
+  - 前端产物静态托管方案（nginx 容器或 api 静态文件中间件）二选一并写入文档。
+  - `docs/` 补部署指南（环境变量清单 / 升级流程 / 备份）。
+- 验收：`docker compose up` 一键起完整栈；健康检查通过；真实 LLM Key 注入后对话/工作流可跑通；build 0/0。
+- 风险：🟡 条件编译切换 SQLite→PostgreSQL 的迁移与初始化路径需实测；镜像体积与密钥注入方式需评审。
+
+### F42 · 工作流数据流：节点显式输入映射 + 显式终端输出  [P1]  open  ⚠️中风险（执行器契约 + 节点 schema + API 契约；向后兼容设计，存量工作流回退黑板模式）
+- 设计文档：`features/f42-workflow-dataflow.md`
+- 动机：数据不走边（`SequentialOrchestrator.BuildWorkflowContext` 拍平全量 artifacts），边只承载控制流；节点输出裸字符串无契约；无显式最终输出，触发方拿不到结构化返回值。
+- 落地：`configJson.inputs` 引用表达式（`{{nodes.<name>.output}}` / `{{trigger.<path>}}` / `{{blackboard.<key>}}`）+ `IInputResolver` fail-fast 解析；新增 `StepType.Output` 终端节点 + API 运行响应 `outputs` 字段；保存期校验（引用存在性/环引用/trigger 路径白名单）；前端输入映射编辑器。Non-goals：类型化 schema（另立题）、上下文隔离（F36）。
 
 ### F41 · 移除 QuickStart 模式、强制真实 Key 与环境变量配置  [P1]  done  ✅（2026-08-26，commit `a11a6c6`；BREAKING CHANGE：运行环境无真实 LLM Key 启动即 fail-fast；平台模型配置 DB 化 `62ede44`；设计文档 features/f41-remove-quickstart-enforce-real-keys.md）
 - 设计文档：`features/f41-remove-quickstart-enforce-real-keys.md`（本文件即为设计文档，验收标准 §4）
@@ -67,11 +85,11 @@
 - 目标：UI 展示真实登录身份、失败有兜底，消灭静默吞错与无 404 白屏。纯前端、低风险，无后端契约变更。
 - 验收子项：
   - **B7** Dashboard 假数据 —— ✅ **done（漂移校正）**：现走真实 `getAgents/getWorkflows/getExecutionLogs`，原行号已失效。
-  - **B8 / ApiKeys 页真实化** —— 🔒 **blocked（2026-09-03 复核实测仍成立，且比原描述更严重）**：① 全仓 grep 无任何 `api-keys` 路由（后端确实无 GET/POST/DELETE /api-keys 与复制密钥端点；现有 ApiKey 设施只有**认证处理器** `ApiKeyAuthenticationHandler` + `PerApiKey` 限流 + `IApiKeyRepository`/加密服务，无 CRUD 端点）。② 前端 `src/AgentPlatform.Web/src/pages/ApiKeysPage.tsx`（97 行）**已在调用** `getApiKeys() → /api-keys`，但该页**既未挂 `App.tsx` 路由也未进 `AppLayout` 菜单** —— 属不可达死代码，一旦挂载即 404。→ 立项时需同时做「后端 CRUD 端点 + 前端挂载」，并明确 RBAC（建议 Admin）与密钥只在创建响应一次性返回（复用 `IApiKeyEncryptionService`，永不回读明文）。
-  - **O4** 真实用户身份上顶栏（从 JWT 解码 email/role；dev-login 令牌无 tenant_id 声明，故不展示 tenant）→ open（本次实现）。
-  - **O5** 静默吞错 → 统一错误 Alert + 重试（受改：`DashboardPage`、`ExecutionLogDetailPage:50`）→ open（本次实现；复用 `useApiState` + `ErrorState`）。
+  - **B8 / ApiKeys 页真实化** —— 🔒 **blocked（2026-08-30 复核仍然成立）**：`pages/ApiKeysPage.tsx` 前端页已存在，但 `services/api.ts:528` 仅封装 `GET /api-keys`，后端 `src/**/*.cs` 全文检索**无任何 api-keys 路由/控制器**（无 `ApiKeysController`）——即该端点为 404，页面 rotate/revoke 按钮仍是 `rotateTodo/revokeTodo` 占位 toast。已从本史诗移出至文末「待立题」分组，待后端端点立题后闭环。
+  - **O4** 真实用户身份上顶栏 —— ✅ **done（2026-08-30 归档校正）**：`layouts/AppLayout.tsx:30` 从 `useAppStore` 取 `userEmail`/`userRole`，`:145` 顶栏展示；RBAC 判定 `:40/:44`。
+  - **O5** 静默吞错 → 统一错误 Alert + 重试 —— ✅ **done（2026-08-30 归档校正）**：`DashboardPage.tsx:106` 与 `ExecutionLogDetailPage.tsx:80` 均走 `ErrorState` + `onRetry`。
   - **O1** 顶层 ErrorBoundary —— ✅ **done（漂移校正）**：`components/ErrorBoundary.tsx` 已在 `App.tsx:32` 挂载包裹全部路由。
-  - **O11** 404 兜底（新增 `NotFoundPage` + `App.tsx` `*` catch-all）→ open（本次实现）。文档链接原引用已失效（前端无硬编码文档链接），聚焦 404。
+  - **O11** 404 兜底 —— ✅ **done（2026-08-30 归档校正）**：`App.tsx:39` 懒加载 `NotFoundPage`，`:132` 注册 `<Route path="*" element={<NotFoundPage />} />`。
 
 ### F2 · 登录与鉴权态一致性  [P1]  done  ✅（2026-07-23，分支 `feat/f2-login-auth-state`，commit 19af124）
 - 设计文档：`features/auth-ux.md`（已建）
@@ -92,7 +110,7 @@
   - **B9** AgentConfigurations 的 YAML 从不展示（`AgentConfigurationsPage.tsx:11-17`）→ 详情抽屉展示 `yamlContent`（语法高亮可选）。
   - **B10** 状态筛选枚举可能大小写不匹配后端（`ExecutionLogsPage.tsx:56-61`）→ 前端建状态映射表，不裸传字面量。
   - **B11** Workflows「快速运行」无错误处理且可能建空工作流（`WorkflowsPage.tsx:27-33`）→ try/catch + 失败 toast + 空名 `message.warning`。
-  - **Conversations 搜索/状态筛选**（复用 conversations 数据，交互对齐 Agents 页）→ open。
+  - **Conversations 搜索/状态筛选** —— ✅ **done（2026-08-30 归档校正）**：`ConversationsPage.tsx:29-31` 持有 `search`/`appliedQ`/`statusFilter` 状态，`:38` 传参 `getConversations({ status, q, signal })`，`:105-122` 渲染 `Input.Search` + 状态 `Select`（含 AbortController 取消）。
   - **O12** 列表分页与后端 `totalCount` 不一致（`ExecutionLogsPage.tsx:70-77`）→ 接入服务端分页（传 `skip/take` + 用 `totalCount`）。
   - **O13** 无请求取消（AbortController）/ 卸载后 setState 风险 → effect cleanup + `AbortController`。
 
@@ -442,25 +460,18 @@
   - **③** 自动 compaction（超限上下文压缩，替代明文 MaxSummaryTokens 截断；并为 F29 长程 agent 提供上下文压缩）。
 - 优先级：P1。
 
-### F43 · 在线评估门禁 + 部署闭环  [P2]  done  ⟲原编号 F34（2026-09-03 校正撞号）  🟢低风险（复用 F24 数据集）
-- 设计依据：`phases/phase-11-online-eval-gate.md` + `docs/agent-harness-blueprint.md` §Phase 11；设计文档 `features/f43-online-eval-gate.md`（v1 仅验收①，§3 设计+§5 完成记录）
+### F43 · 在线评估门禁 + 部署闭环  [P2]  done  🟢低风险（复用 F24 数据集）
+> **编号变更（2026-08-30 归档整理）**：原编号 `F34` 与「F34 沙箱双层隔离」冲突，现改号 **F43**；旧号仅作历史别名保留——分支 `feat/f34-online-eval-gate`、设计文档 `features/f34-online-eval-gate.md` 文件名均不改（避免断链）。同时清理了本条目下与上方重复的旧片段（重复的设计依据/验收 v1 段）。
+- 目标：将 F24 评估数据集接入生产前 / 影子门禁（队列化水平扩展 → 已独立排期为 `F37`）。
+- 设计依据：`phases/phase-11-online-eval-gate.md` + `docs/agent-harness-blueprint.md` §Phase 11；设计文档 `features/f34-online-eval-gate.md`（v1 仅验收①，§3 设计+§5 完成记录）
 - 验收子项：
   - **①** 在线 eval 门禁 → ✅ `RunEvaluationGateCommand`：阈值解析链（请求显式 > `EvaluationSettings.GateMinPassRate`=0.8）；执行委托 RunEvaluation（一次性克隆=影子隔离零生产写入）；Passed=false 端点返回 **HTTP 422 阻断语义**；空数据集显式守卫恒不通过；审计新增 `AuditActionType.EvaluationGate`
-  - **延后项** → CI YAML 接入样例、队列化执行/水平扩展、监控告警聚合、异常回放诊断——均独立排期（与 backlog 延后声明一致）
+  - **延后项** → CI YAML 接入样例 → `F38`；队列化执行/水平扩展 → `F37`；监控告警聚合 → `F39`；异常回放诊断 → `F40`
 - **完成记录（2026-08-25）**：feature-builder 全栈闭环（分支 `feat/f34-online-eval-gate`，基于 f33）。端点 `POST /api/v1/evaluation-datasets/{id}/gate/{workflowId}`（Admin/Operator）。新增测试 5 例（超阈值通过+审计/低于阈值阻断/显式覆盖配置/空数据集恒拦/越界抛错）；全绿 App226/Infra154+6skip/Api35/Arch9，build 0/0，前端零改动。三道质量门 PASS。**二期 F29–F34 全部收口。**
-- 设计依据：`phases/phase-11-online-eval-gate.md` + `docs/agent-harness-blueprint.md` §Phase 11
-- 目标：将 F24 评估数据集接入生产前 / 影子门禁；队列化水平扩展。
-- 验收子项（v1）：
-  - **①** 在线 eval 门禁（F24 数据集 → 生产前 / 影子评估，纯应用层复用）。
-- 延后项（依赖 F30/F32 分布式落点）：队列化部署 / 水平扩展 → 独立排期。
-- 优先级：P2。
 
 ## 延后项（独立排期，从已 done 史诗中拆出）—— **F35–F40 六项已全部实现完毕（2026-08-31 → 2026-09-03），但六条分支尚未并入 master**
 
-> 以下条目均来自 F26/F30/F31/F32/F43 设计文档中显式标注的「延后项」——v1 边界明确排除、依赖未就绪或破坏性过大，需独立 feature 闭环。
-> 现状：六项均为 `done⚠️未合并` 性质的「已实现待合并」——实现完整、各自三道质量门全绿（详见各条完成记录与 `docs/quality/f3[5-9]-*-gate.md`、`docs/quality/f40-*-gate.md`），但按 feature-builder 约定不主动 merge。
-> 分支链线性：`master → feat/f35 → f36 → f37 → f38 → f39 → f40`，**只需一次合并（f40）即可全部带入**；若希望逐条 review，则按 f35→f40 顺序依次合并。
-> 该链**不含** F10（F10 在另一条未合并分支上，见 F10 校正条目）。
+> 以下条目均来自 F26/F30/F31/F32/F43（原 F34 评估门禁）设计文档中显式标注的「延后项」——v1 边界明确排除、依赖未就绪或破坏性过大，需独立 feature 闭环。
 
 ### F35 · 多工作空间隔离（Workspace）  [P2]  done⚠️未合并  ✅（2026-08-31，分支 `feat/f35-workspace-isolation`；设计文档 features/f35-workspace-isolation.md §6 决策 D1–D5 已锁定 + 质量报告 docs/quality/f35-workspace-isolation-gate.md）🔴高风险（全聚合加 WorkspaceId + query filter + TenantProvider 体系扩展）
 - 来源：F26 企业增强 · S1「Workspace v1 不做，独立排期」
@@ -498,10 +509,9 @@
 - 风险：🟡 Blackboard 值对象变更影响 WorkflowContext 全链路；Conversation 加列为最小迁移。依赖 F31/F32 已合入。
 - **完成记录（2026-09-01）**：feature-builder 全栈实跑落地（基于 feat/f35-workspace-isolation）。决策（用户锁定）：D1=A 软分区视图（`agent:{agentId}:` 键约定 + GetPartitionView/GetGlobalView；F30/F25/RunningExecution 持久化格式零变更）/ D2=A AgentCallStepExecutor 自动创建/复用 per-agent per-workflow 会话（唯一过滤索引防并发双建；持久化失败 Detach 隔离不阻断）/ D3=A 会话页 agent 筛选+标签 / D4=A 回复显式回写 `agent:{agentId}:output`。现实修正（相对 backlog 原文）：Blackboard 实为 Dictionary<string,string>，AgentCall 原不接触 Conversation。三道质量门全 PASS：reviewer 修 P1（唯一过滤索引）+3×P2；结构门 P0-P2=0（2 waiver）；optimizer 修 P1（Detach）+3×P3，0 open。验证：build 0/0；App 253/Infra 162+6skip/Api 35/Arch 9/SpecFlow 115/116（既有豁免）/Integration 5；新增 18 测试 + SpecFlow 1 场景；前端 tsc 0 + vitest（既有豁免×2）+ vite build。文档同步：CHANGELOG v2.35、BLUEPRINT、appendices（Conversation.AgentId + 会话列表 agentId 参数）、backlog F36 done。已知残留：硬分区列 v2；SetInPartition/GetFromPartition 为预留 API（agent 工具链接入）；截断字面量未抽配置。
 
-### F37 · 队列化执行与水平扩展  [P1]  done⚠️未合并  ✅（2026-09-02，分支 `feat/f37-queued-execution` 基于 f36；设计文档 features/f37-queued-execution.md §5 决策 D1–D4 已锁定 + §8 审查修复记录 + 质量报告 docs/quality/f37-queued-execution-gate.md）🔴高风险（分布式消息中间件 + 多 worker 协调；基于 feat/f36-agent-context-isolation 分支）
-- 设计文档：`features/f37-queued-execution.md`（已建，§5 决策 D1–D4 已锁定 2026-09-01；现实校正：现租约 LeaseTtlMinutes=5 非 30s、既有 run 端点为请求内同步契约）
-- 来源：F30 执行持久化 · 延后项；F43 评估门禁 · 延后项
-- 设计依据：`features/f30-durable-execution.md` + `features/f43-online-eval-gate.md` §延后项
+### F37 · 队列化执行与水平扩展  [P1]  open  🔴高风险（分布式消息中间件 + 租约机制重构 + 多 worker 协调）
+- 来源：F30 执行持久化 · 延后项；F43 评估门禁（原 F34）· 延后项
+- 设计依据：`features/f30-durable-execution.md` + `features/f34-online-eval-gate.md` §延后项
 - 目标：将当前进程内 BackgroundService 轮询升级为基于消息队列的分布式任务分发——多 worker 实例可水平消费执行任务，无状态执行引擎横向扩展。复用 F30 租约机制（RunningExecution）防多 worker 重复驱动。
 - 核心改造：
   - Infrastructure：`IExecutionQueue` 抽象 + Redis Stream / RabbitMQ 实现（进程内 Channel 替代方案回退保留）；`DistributedLeaseProvider`（Redis `SET NX EX` 替代内存 `SemaphoreSlim`）。
@@ -517,9 +527,9 @@
 - 风险：🔴 分布式一致性（租约竞态、消息去重、幂等）+ 运维复杂度（Redis/RabbitMQ 部署）。建议分两阶段：① Redis Stream 最小闭环 ② RabbitMQ 企业级（独立排期）。
 - **完成记录（2026-09-02）**：feature-builder 全栈实跑落地。决策（用户锁定）：D1=B 三后端全做 / D2=B run 端点透明「入队+等待」（既有 run/run-existing 契约在 QueueEnabled 下返回 200 完成 / 202 queued / 503 拒投，默认 QueueEnabled=false 直跑零变化）/ D3=A 复用 F30 5min 租约作接管窗口（**校正 backlog 原文「30s」**：现网租约 LeaseTtlMinutes=5，缩至 30s 会改 F30 崩溃恢复窗口，未选）/ D4=A 评估门禁保持同步直跑。**设计偏差（诚实记录）**：① 复用既有 `IDistributedLockProvider`（Redis 实现本就是 SET NX PX 语义）而非新建 `DistributedLeaseProvider`；② 队列投递在 run 命令处理器内透明完成（`QueuedRunSupport.EnqueueAndWaitAsync`），未新增公开 `EnqueueWorkflowRunCommand`；③ Redis/Rabbit 不可用时 run 端点显式 503（不运行时静默切 InMemory，避免多实例脑裂），InMemory 为注册期选定的后端而非运行期降级。落地：`IExecutionQueue`+`ExecutionJob`/`QueueDelivery`/`EnqueueResult`（Application）；三后端 Infrastructure（InMemory Channel 有界 / Redis Stream XADD+XREADGROUP+XAUTOCLAIM+XACK+死信流 / RabbitMQ durable+BasicGet pull+epoch 防跨代 ack+死信队列）；`ExecutionWorker`（BackgroundService，恒注册+QueueEnabled 运行时门控，失败按 Attempt 重投、超限死信、仅接管成功才 ack）；`ExecuteQueuedWorkflowCommand`（消费 scope 复现租户/工作空间 Override、跨租户拒跑、终态重复投递→Duplicate 不重跑、租约冲突→Duplicate、触发投递 FromQueue 防回环）；触发处理器队列模式投递。前端 runWorkflow/runExistingWorkflow union + isQueuedRunResponse 守卫 + queued 提示。三道质量门全 PASS：reviewer 修 P0（重复投递二次执行）+P1×4（轮询 AsNoTracking、死信成败回报防丢任务、Redis 连接泄漏、Rabbit epoch）；结构门 0 open（P3×2 修）；optimizer Round F37-01 0 open（P3×1 修：未知 QueueBackend 静默降级告警；2 waiver）。验证：build 0/0；App 268 / Infra 171+8跳 / Api 37 / Arch 9 / Integration 5 / SpecFlow 115/116（唯一失败=既有豁免）；新增 Application 队列 15 + Infra queue/worker 9 + Api 队列 E2E 2；前端 tsc 0 + vitest（既有豁免×2）+ vite build。文档同步：CHANGELOG v2.36、BLUEPRINT 平台化清单、appendices（api-spec I.3.1 队列模式 / deployment-devops H.4/H.5）、backlog F37 done。遗留：RabbitMQ 真实 broker 投递闭环在 CI services 覆盖（本地跳过）；InMemory 重启丢未 ack 作业（单实例回退设计接受）。
 
-### F38 · CI YAML 接入评估门禁样例  [P2]  done⚠️未合并  ✅（2026-09-02，分支 `feat/f38-ci-eval-gate` 基于 f37；交付 ci/eval-gate-github.yml + ci/eval-gate-gitlab.yml + docs/ci-eval-gate-guide.md，设计文档 features/f38-ci-eval-gate.md + 质量报告 docs/quality/f38-ci-eval-gate-gate.md）🟢低风险（文档 + 模板，不触后端代码）
-- 来源：F43 评估门禁 · 延后项
-- 设计依据：`features/f43-online-eval-gate.md` §延后项
+### F38 · CI YAML 接入评估门禁样例  [P2]  open  🟢低风险（文档 + 模板，不触后端代码）
+- 来源：F43 评估门禁（原 F34）· 延后项
+- 设计依据：`features/f34-online-eval-gate.md` §延后项
 - 目标：提供可直接复制使用的 CI/CD 流水线模板，将评估门禁端点接入 GitHub Actions / GitLab CI，实现「模型/prompt 变更前自动回归，未达阈值阻断合并」。
 - 核心改造：
   - `ci/eval-gate-github.yml`：GitHub Actions workflow — 触发 PR + 手动 dispatch → 启动 API → 运行 eval gate → 422 则 `exit 1` 阻断。
@@ -531,13 +541,11 @@
   - GitLab CI YAML 语法校验通过（`gitlab-ci-lint` 或 `grep` 关键字）。
   - 接口示例 `curl` 可跑通 200/422 两条路径。**（2026-09-02 校正：原文写「本地 QuickStart 模式下跑通」，但 F41 已移除 QuickStart 并强制真实 Key fail-fast，该前提不再成立；实际以「已配置真实 Key 的目标实例」或「Test/Integration 环境 Stub 模型冒烟接线」两条路径验证，详见 `features/f38-ci-eval-gate.md` §2 现状校正。）**
   - 指南文档完整：环境变量 / 阈值 / 失败处理 / 故障排查。
-- 风险：🟢 纯增量，不触后端。但需与 F34 端点保持接口一致（API schema 变更须同步更新模板）。
-- **完成记录（2026-09-02）**：交付 GitHub Actions + GitLab CI 可复制门禁模板（`ci/` 目录，非自动生效）+ 中文接入指南。以 HTTP 码为唯一阻断契约（200 放行 / 422·400·401·403·404·000·其它 exit 1），认证走 httpOnly cookie jar（无 Bearer 反模式），curl 用 `-s -o -w %{http_code}` 而非 `-f`。关键校正：F41 已删 QuickStart→本地验证改「真实实例 / Stub Test 冒烟」；端点越界 minPassRate 实返 500 非 400（服务端无 handler，Program.cs 仅 6 handler）。对抗式评审修 3×高（set -e 抢杀 curl/登录与阈值 JSON 注入/外部 PR ref_name 脚本注入）+2×中，两模板 yaml.safe_load + bash -n 通过、HTTP 码分支 mock 桩冒烟 200/422/000=rc 0/1/1。三道质量门 PASS（结构门/optimizer scope=F38-only，0 open；waiver：真实平台端到端需接入方环境）。
+- 风险：🟢 纯增量，不触后端。但需与 F43（原 F34 评估门禁）端点保持接口一致（API schema 变更须同步更新模板）。
 
-### F39 · 监控告警聚合  [P2]  done⚠️未合并  ✅（2026-09-02，分支 `feat/f39-observability-alerting` 基于 f38；设计文档 features/f39-observability-alerting.md §5 决策 D1–D4 已锁定 + §8 审查修复记录 + §9 Quality Gate Checklist + 质量报告 docs/quality/f39-observability-alerting-gate.md）🟡中风险（OpenTelemetry 指标 + 告警规则 + Dashboard 配置）
-- 设计文档：`features/f39-observability-alerting.md`（已建，§5 决策 D1–D4 已锁定 2026-09-02；§2 关键校正：无 `result="failed"` 标签（失败⇒rolledback）、门禁阻断率可由 422 派生、队列指标须走 redis_exporter/RabbitMQ 插件、既有 Grafana provisioning 挂载路径无效）
-- 来源：F43 评估门禁 · 延后项
-- 设计依据：`features/f43-online-eval-gate.md` §延后项
+### F39 · 监控告警聚合  [P2]  open  🟡中风险（OpenTelemetry 指标 + 告警规则 + Dashboard 配置）
+- 来源：F43 评估门禁（原 F34）· 延后项
+- 设计依据：`features/f34-online-eval-gate.md` §延后项
 - 目标：将当前裸 OpenTelemetry `/metrics` 端点升级为可用的可观测性栈——Prometheus 抓取配置 + Grafana Dashboard 模板 + 告警规则（执行失败率、门禁阻断率、队列积压、模型调用延迟），实现「平台运行状态一目了然 + 异常自动通知」。
 - 核心改造：
   - `deploy/prometheus.yml`：Prometheus 配置（scrape interval / relabel / 告警规则引用）。
@@ -553,9 +561,9 @@
 - 风险：🟡 Grafana Dashboard JSON 维护成本（版本升级可能断面板）；缓解：文档注明版本要求。
 - **完成记录（2026-09-02）**：feature-builder 全栈实跑落地。决策（用户锁定）：D1=**B**（补后端埋点，原建议 A 被否，InMemory 亦可观测）/ D2=A（Alertmanager + Slack/PagerDuty）/ D3=A（修 Grafana provisioning 布局 + 12 面板 + 锁版本）/ D4=A（失败率用 `rolledback` 口径 + API 错误率独立告警）。**关键校正（相对 backlog 原文）**：① 代码里不存在 `result="failed"`（失败⇒回滚 `rolledback`），按直觉写 failed 会得到**永不触发的假告警**；② 门禁阻断率优先用新埋点 `evaluation_gate_total{passed}`、HTTP 422 派生作交叉验证；③ 队列积压由应用自身 `execution_queue_depth{backend}` 上报（**Redis 侧 XACK 不减 XLEN，故 ack 后同步 XDEL**，否则「积压」单调增长 = 假告警）；④ 既有 compose 把裸 dashboard JSON 挂进 provisioning 目录**根本不会加载**，已改为 provider YAML + JSON 目录分离并给数据源显式 `uid: prometheus`（否则 12 面板全报 data source not found）；⑤ 镜像 `latest` 改为全部锁版本。交付：prometheus.yml / alert-rules.yml（9 条告警）/ alertmanager.yml / grafana provisioning + 12 面板 dashboard / docker-compose.monitoring.yml / docs/observability-guide.md；后端埋点 `IExecutionQueue.QueueDepth`（三后端真实读数）+ `WorkflowMetrics.EvaluationGateCounter` + `QueueDepthGauge`。三道质量门全 PASS：对抗审查修 P1×2（Redis 积压语义、Grafana 数据源 uid）+P2×3+P3×5；结构门 0 新增（3×P3 waiver）；optimizer Round F39-01 0 新增（修 3×P2 文档同步 + 2×P3 waiver）。验证：build 0/0；Application **269/269**、Infrastructure **174+8跳**、Api **39/39**、Architecture 9、SpecFlow 115/116（唯一失败=既有豁免）；新增 MeterListener 真断言测试 2 文件（守「埋点确实可观测」）；6 个监控 YAML + dashboard JSON 结构校验通过（脚本核验所有面板/告警只引用已核实指标）。文档同步：CHANGELOG v2.38、deployment-devops 附录（监控栈小节）、backlog F39 done。已知残留：promtool/amtool/Grafana 导入本机无 Docker 未实跑（结构校验兜底 + 指南留校验命令）；`workflow_id`/`path` 高基数标签治理与 RabbitMQ 深度 ≤5s 缓存为独立技术债。
 
-### F40 · 异常回放诊断入口  [P2]  done⚠️未合并  ✅（2026-09-03，分支 `feat/f40-replay-diagnostics` 基于 f39；设计文档 features/f40-replay-diagnostics.md（§3 能力边界、§6b 决策、§8 审查修复记录、Quality Gate Checklist）+ 质量报告 docs/quality/f40-replay-diagnostics-gate.md）🟡中风险（执行日志回放引擎 + 前端诊断视图）
-- 来源：F43 评估门禁 · 延后项
-- 设计依据：`features/f43-online-eval-gate.md` §延后项
+### F40 · 异常回放诊断入口  [P2]  open  🟡中风险（执行日志回放引擎 + 前端诊断视图）
+- 来源：F43 评估门禁（原 F34）· 延后项
+- 设计依据：`features/f34-online-eval-gate.md` §延后项
 - 目标：从执行日志重建失败工作流的异常路径——定位失败节点、回放输入输出、展示上下文快照（Blackboard/变量/模型响应），辅助快速定位根因。复用 F24 Trace + F25 调试器能力。
 - 核心改造：
   - Application：`ReplayExecutionCommand`（接收 ExecutionLogId）—— 从 `ExecutionLog.Entries` 重建执行路径，标记失败节点，返回 `ReplayReport`（路径序列 + 每节点 IO/耗时/错误信息 + Blackboard 快照）。
@@ -614,6 +622,12 @@
 用户 2026-09-03 指示：**「先写个 feature 到 backlog，不实现」**。方案 A/B/C/D 未拍板前不动代码（该改动含新依赖策略与工具调用语义的破坏性变更，属高风险，按 feature-builder 护栏须先锁方案）。
 
 ---
+
+## 待立题（缺设计文档，feature-builder 不取）
+
+> 已识别但尚未正式立项的需求：须先产出 `features/<id>.md` 设计文档，再移入上方「Feature 史诗」分组。本分组仅登记意图，**不参与 feature-builder 取数**。
+>
+> **当前为空**——原收容的 ApiKeys 租户自助端点已于 2026-08-30 升级为正式史诗 **F44**（含其走查证据与缺口定性）。
 
 ## 已完成归档（done）
 
