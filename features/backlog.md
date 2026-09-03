@@ -570,6 +570,51 @@
 - 风险：🟡 回放依赖 ExecutionLog Entries 数据完整性（F20 Trace 节点级数据采集）；历史日志可能缺少 TokensIn/TokensOut/NodeType 列（F24 前迁移的数据）——需降级兼容。
 - **完成记录（2026-09-03）**：feature-builder 全栈实跑落地。交付 `POST /api/v1/execution-logs/{id}/replay`（**只读**重建，不重新执行、不写状态）→ `ReplayReport`（节点序列 + `failurePath` + 末次 `contextSnapshot` + 8 个稳定 `dataGaps` 码）；`ReplayExecutionCommand` 用 `IRequest` 避开 UnitOfWork 提交；前端 `ExecutionLogDetailPage` 改 Tabs + 新 `ReplayPanel`（失败/无失败/**信息不完整**三态判定，杜绝「无数据」渲染成绿色健康；SSE 推进后失效重取）；**同批安全收口**：`ExecutionLog` 不实现 `ITenantScoped` 且 `GetByIdAsync` 无租户谓词，既有详情/steps 端点存在「持 GUID 读他租户日志」窗口（F40 之前既有，用户决策一并修）→ 新增 `GetByIdForTenantAsync`/`IsOwnedByTenantAsync`，三读端点统一租户作用域（跨租户=404）。能力边界诚实化（相对 backlog 原文）：① 平台不落每节点真实入参，`input` 为前序输出推断并标 `inputInferred`；② F30 仅**末次**检查点，不声称 per-step 上下文可回放；③ 建档时 `TotalSteps` 恒 0→ 以 `total-steps-unregistered` 声明「缺步数不可判」，避免 `missingStepCount` 恒 0 冒充无缺失。三道质量门全 PASS：reviewer 修 P1×4（Guid.Empty 兜底无回归锁 / 响应无上限 / TotalSteps=0 假健康 / 既有端点收口无 handler 测试）+P2×2（前端假健康判定、SSE 后报告陈旧）+P3；结构门修 P2×1（循环同序 Collapse key 冲突）+2 waiver；optimizer 修 P3×1（截断撕裂 UTF-16 代理对→U+FFFD 篡改诊断文本）+2 waiver。验证：build 0/0；Application **285** / Infrastructure **175+8跳** / Api **39** / Architecture **9** / Integration **5**（需 `OPENAI__Key`） / SpecFlow **117/118**（唯一失败=既有豁免）；新增 Replay handler 14 + 租户收口 handler + EF 收口 + `ReplayPanel` 组件 8 例，后端 Reqnroll 2 场景（内容级断言）、前端 playwright-bdd `execution-log-replay.feature`（CI 运行）；前端 tsc 0 error、vitest **50 通过**（既有豁免 2）、`vite build` 通过、`bddgen` exit 0。文档同步：CHANGELOG v2.39、`appendices/api-spec.md` I.10.3（并修正 I.10.1 过期注释）、backlog F40 done。已知残留：Entries 全量 Include 读放大、节点封顶后失败节点可能不在展示区（已由缺口码披露）、部分契约字段暂未在 UI 呈现、e2e 硬编码种子 GUID 靠注释锚定。
 
+## 新立项（2026-09-03 实测发现 → 仅登记，**本轮不实现**）
+
+### F42 · Skill + MCP 执行器真实化（取代未合并的 F10）  [P1]  open  🔴高风险（新依赖/协议实现 + 工具调用语义由「静默伪成功」变为「明确失败」，属行为破坏性变更）
+
+- **立项缘由（实测，非推测）**：F10 的真实实现从未进入基线 —— `src/AgentPlatform.Infrastructure/Tools/McpClient.cs` 与 `SkillPackageExecutor.cs` 各仅 30 行、仍 `Task.FromResult(new ToolExecutionResult(true, "Executed via …"))`，且**注册在 DI 活路径**（`Infrastructure/DependencyInjection.cs:510-511`）。即 `ToolSource=SkillPackage|McpServer` 的工具调用当前**必然静默成功**，属数据正确性缺陷（也是全仓仅剩的 2 处 `TODO`）。
+- 来源：F5 残留 ②；F10（`done⚠️未合并`，见其条目校正）；旧分支 `feat/f10-executor-realization`（commit `e76664c`，27 文件 / +2345 行，**不合并、不 cherry-pick**，仅可参考其 `McpServerName`/`McpToolName` 字段与迁移 `AddToolMcpFields` 设计）。
+- 目标：让 SK 技能包与 MCP 工具产生**真实副作用**，补全 Agent 三类动作源（Native / Skill / Workspace 已真实，Skill / MCP 待补）。
+
+#### ⚠ 关键技术约束（2026-09-03 实测，决定方案选型）
+
+1. **官方 SDK `ModelContextProtocol` 在 net9 上不可用**：其 **2.2.0 / 2.1.0 / 2.0.0 / 1.4.1** 全部把 `Microsoft.Extensions.Hosting.Abstractions` 与 `Logging.Abstractions` 下限抬到 **10.0.7–10.0.10**，而本项目 `net9.0` + M.E. `9.0.4` → 直接 `NU1605` 包降级失败（已逐一验证）。
+2. **这正是旧 F10 分支的处置方式带来的警报**：该分支的 csproj diff 把 `Microsoft.Extensions.*` 从 **9.0.4 批量提到 10.0.10** 才编译通过 —— 在 .NET 9 应用里混用 10.x 抽象包属跨大版本混用，疑为其长期未被合并的原因。
+3. **Skill 侧无阻塞**：已引入的 `Microsoft.SemanticKernel` 1.30.0（net8 目标）提供 `KernelPluginFactory.ImportPluginFromPromptDirectory`（无 `ImportPluginFromDirectory`），文件系统技能加载可在此之上做。
+4. MCP 若走自实现：协议面为 JSON-RPC 2.0 客户端子集（`initialize` → `tools/list` 校验 → `tools/call`），两种传输 streamable HTTP/SSE 与 stdio 子进程；stdio 需自带子进程生命周期、超时与输出上限治理。
+
+#### 待用户在启动实现时拍板的方案（本轮已提出，未选）
+
+| 方案 | 内容 | 代价 / 风险 |
+| :--- | :--- | :--- |
+| A（建议） | **自实现最小 MCP 客户端**（HTTP/SSE + stdio），零新增依赖，保持 net9 + 9.0.4；自带 seam 接口便于单测 | 协议子集自维护；stdio 子进程治理工作量 |
+| B | 本 feature 只做 Skill 真实化；MCP 执行器改为**明确返回未实现** + 启动告警，MCP 真实化并入「升级 .NET 10」史诗 | 最小风险，但 MCP 洞延后一个周期 |
+| C | 先做**解决方案升级 net10.0**（独立史诗：CI / Docker / EF Core / Npgsql / ASP.NET 版本面全动），之后直接用官方 SDK | 最正统，但不是一个 feature 的量 |
+| D | 沿用旧分支做法：仅把 Infrastructure 的 M.E.* 抬到 10.0.10 | 跨大版本混用，不推荐 |
+
+#### 核心改造（实现时展开，须先建 `features/f42-skill-mcp-executor-realization.md` 设计文档并锁定上述方案）
+
+- Domain：`ToolDefinition` 增 `McpServerName?` / `McpToolName?` + EF 配置 + 一次迁移（nullable 列，对齐旧分支字段命名）。
+- Infrastructure：`Mcp/` 连接与配置（`McpServers:{Name}` 的 `Transport`=Http|Stdio、`Url` 或 `Command`+`Arguments`+`WorkingDirectory`、超时）；`McpClient : IToolExecutor(Source=McpServer)` 经可注入的连接抽象真实 `tools/call`，工具名回退链 `McpToolName → HandlerName → Name`；`SkillPackageLoader` + `ISkillPackageProvider` + `KernelSkillPackageProvider`（受控根目录 + 路径穿越校验），`SkillPackageExecutor : IToolExecutor(Source=SkillPackage)` 真实 invoke。
+- 语义（**行为破坏性变更，需显式确认**）：未配置 / 连不上 / 插件或函数不存在 / 超时 → 一律 `Success=false` + 中文原因，**不再静默伪成功**；启动时若存在 MCP/Skill 工具而配置缺失 → `LogWarning`（不 fail-fast，避免与 F41 启动守卫语义打架）。
+- 影响面提示：现网/示例中任何挂载了 MCP 或 Skill 工具的工作流，其「成功」结果会在本 feature 后转为真实结果或失败 —— 属预期修正，但需在 CHANGELOG 以 **BREAKING CHANGE（行为）** 标注。
+
+#### 验收（实现时）
+
+1. Skill：给定已加载插件与函数，真实返回；插件/函数缺失 → `Success=false` 且原因明确；路径穿越配置被拒。
+2. MCP：fake 连接 seam 下覆盖成功/错误/超时/未配置四路；工具名回退链有测试；stdio 子进程在取消与 Dispose 后无残留。
+3. 三执行器注册不变（`IToolExecutor` 按 `Source` 分发），`NativeToolExecutor`/`WorkspaceToolExecutor` 零回归。
+4. 全仓 `TODO(Phase6)` 归零；`dotnet build` 0/0；全量测试 0 失败（既有豁免不变）；三道质量门全绿。
+5. 无 UI 改动 → 不需新增 playwright-bdd（工具执行不经 UI）。
+
+#### 为什么本轮不实现
+
+用户 2026-09-03 指示：**「先写个 feature 到 backlog，不实现」**。方案 A/B/C/D 未拍板前不动代码（该改动含新依赖策略与工具调用语义的破坏性变更，属高风险，按 feature-builder 护栏须先锁方案）。
+
+---
+
 ## 已完成归档（done）
 
 > 已交付、留作追溯；不再进入排期。新完成项请从上方史诗移入此处。
@@ -596,11 +641,11 @@
 
 ## 未立项候选（**登记性质，非承诺**；立项前须用户确认，代理不自创需求）
 
-> 来源仅限各 feature 完成记录 / 质量报告 / 本文件残留项的既有记载，不引入新设想。下一可用编号 = **F42**。
+> 来源仅限各 feature 完成记录 / 质量报告 / 本文件残留项的既有记载，不引入新设想。**F42 已由上方「新立项」节占用**（Skill+MCP 执行器真实化，状态 open、本轮按用户指示只登记不实现），下一可用编号 = **F43**。
 
 | 候选 | 来源（已记录处） | 性质 |
 | :--- | :--- | :--- |
-| 合并 `feat/f10-executor-realization` 或重做为 F42 | 本文件 F10 条目（2026-09-03 实测校正） | **基线功能性缺口**：MCP/Skill 工具执行仍返回伪造成功且在 DI 活路径 |
+| ~~F10 处置~~ → **已立项 F42**（见上节；本轮按用户指示只登记不实现） | F10 条目 + F42 新立项节 | **基线功能性缺口**：MCP/Skill 工具执行仍返回伪造成功且在 DI 活路径 |
 | B8 ApiKeys 页真实化（后端 CRUD 端点 + 前端挂载；现为不可达死页调用不存在路由） | F1 验收子项 B8（2026-09-03 复核） | blocked → 需立项 |
 | 指标高基数治理：`workflow_id` 标签与含 GUID 的 `path` 归一化；追踪/日志联动 | `docs/observability-guide.md` §9、F39 质量报告 | 技术债 |
 | F37 阶段②：RabbitMQ 企业级加固 + 门禁/评估走队列（当前门禁恒同步直跑，决策 D4=A） | `features/f37-queued-execution.md` §1/§6、CHANGELOG v2.36 残留 | 明确分期项 |
