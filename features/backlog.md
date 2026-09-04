@@ -8,7 +8,7 @@
 >
 > **红线**：代理**绝不**自己发明需求。只实现这里列出的、或你当轮明确指令的功能。涉及接口契约 / 鉴权 / 路由结构 / 破坏性后端等高风险改动时，代理会停下问人，不自动改。
 
-状态图例：`open`(待做) · `doing`(进行中) · `done`(已完成) · `blocked`(阻塞等待依赖)
+状态图例：`open`(待做) · `doing`(进行中) · `done`(已完成，已在当前基线) · `done⚠️未合并`(实现完整但停在未合并分支，**当前基线不可用**) · `blocked`(阻塞等待依赖)
 
 > **完成度统计（2026-08-30 二次整理）**：Tier 1 史诗 40 条 + 延后项 6 条 = **46 条**；其中 **done 36 / open 10**。
 > 当前 open 清单（按建议执行顺序）：`F38`(CI YAML 门禁样例) → `F45`(发布端点完整 URL 展示) → `F44`(ApiKeys 租户自助端点，**阻断 F22 生产可用**) → `F42`(工作流数据流) → `F39`(监控告警聚合) → `F46`(生产部署编排) → `F37`(队列化执行与水平扩展) → `F40`(异常回放诊断) → `F36`(Agent 上下文隔离) → `F35`(多工作空间隔离)。
@@ -18,6 +18,9 @@
 
 代码基现状（2026-07-22 全量走查）：React 19 + Vite 8 + TS（strict）+ Antd 5 + @xyflow/react + zustand；`typecheck/lint/build/unit/e2e` 五道闸门当前全绿。优点：严格 TS、0 处 `any`、0 TODO/FIXME、lint 净。问题集中于「前端数据真实性 / 鉴权态 / 错误兜底 / 工程化」与「后端行动层（工具·代码·调研）空心」两类。
 
+> **完成度统计（2026-09-04 台账对账后重算）**：史诗条目 47 —— done 42（其中 **done⚠️未合并 7**：实现完整但停在未合并分支，对当前基线不可用）/ 待做 5。
+> 待做清单（按建议顺序）：F44 → F45 → F46 → F42 → F47。
+> **2026-08-30 走查新增 3 项**：`F44`（ApiKeys 生命周期闭环，P1）、`F45`（发布端点完整 URL 展示，P3）、`F46`（生产部署编排，P2）——均来自 ApiKeysPage / F22 链路代码走查，缺口定性见各条目；原「待立题」分组已清空（ApiKeys 项升级为 F44）。
 > **测试约定（2026-08-04 确立，feature-builder 硬约束 #7）**：**前端 E2E 必须 BDD 驱动**——凡触及 UI 的 feature，须配套 `playwright-bdd` 风格的 Gherkin E2E（`src/AgentPlatform.Web/e2e/features/*.feature` + `e2e/steps/*.steps.ts`，`createBdd(test)` 的 `test` 须 `extend` 自 `playwright-bdd` 自带 `test`），运行链路 `bddgen && playwright test`。禁止写裸 `@playwright/test` `.spec.ts` 作 feature E2E（既有 `smoke.*.spec.ts` 属冒烟基线，除外）。F27 已落地示范：`e2e/features/publish-workflow.feature`。
 
 ---
@@ -131,7 +134,7 @@
   - **A1** 工具调用执行层全空心（三个 `IToolExecutor`：`NativeToolExecutor`/`SkillPackageExecutor`/`McpClient` 均直接返回伪造成功）→ ✅ done（`NativeToolExecutor` 接真实 HTTP 执行，单测走真实 `SendAsync` 路径覆盖成功/失败/超时/方法解析；Skill/MCP 执行器保留为 Phase 6 占位，设计文档明确 A1 仅要求 NativeToolExecutor 真实化）。
   - **A2** 代码沙箱为桩（`DockerCodeSandbox.cs:9-56`）→ ✅ done（进程级真实执行：`ProcessCodeSandbox` 用 `System.Diagnostics.Process` 拉起 python/node 真实运行并回传 stdout/stderr/ExitCode/超时杀进程；原 `DockerCodeSandbox` 桩改为显式抛异常消除静默假成功；真实 Docker 容器执行因本沙箱无 Docker 守护进程 + 未引 Docker SDK，列入 Phase 6）。
   - **节点全家桶·Tool/Code/Knowledge Retrieval** → ✅ done（新增 `ToolStepExecutor`/`CodeStepExecutor` 注册为 `StepType.Tool=6`/`Code=7`，经既有 `ResolveExecutor`(`HandlesType`) 真实路由；前端 DAG 画布补 Tool/Code 节点调色板/图标/配置面板；Knowledge Retrieval 已于 RAG 地基层完成）。
-  - **已知残留（非阻断，已拆为独立 feature F9–F12）**：① 真实 Docker 容器隔离（✅ F9 done）；② Skill/MCP 执行器占位（✅ F10 done）；③ 进程模式 OS 层禁网不可强求（以 `NetworkEnabled=false`+语言白名单+超时杀+输出截断缓解；✅ F11 已在 Windows 经 JobObject 资源限额 + AppContainer 真实禁网落地，跨平台 fail-safe 回退）；④ 含 Tool/Code 节点的全链路 e2e 需后端+Web 实例，本沙箱未跑（单元层已覆盖真实执行路径；open=F12）。
+  - **已知残留（非阻断，已拆为独立 feature F9–F12）**：① 真实 Docker 容器隔离（✅ F9 done）；② Skill/MCP 执行器占位（❗ F10 实现仅在未合并分支 `feat/f10-executor-realization`，**基线仍为桩且注册在活路径**，见 F10 条目校正）；③ 进程模式 OS 层禁网不可强求（以 `NetworkEnabled=false`+语言白名单+超时杀+输出截断缓解；✅ F11 已在 Windows 经 JobObject 资源限额 + AppContainer 真实禁网落地，跨平台 fail-safe 回退）；④ 含 Tool/Code 节点的全链路 e2e 需后端+Web 实例，本沙箱未跑（单元层已覆盖真实执行路径；open=F12）。
 
 ### F6 · Research Agent（联网多步调研）  [P1]  done  （2026-07-24，分支 feat/f6-research-agent，设计文档 features/research-agent.md；范围已确认：SerpApi + ResearchPage + SSE 流式 + 全认证用户）  ✅高风险已收口
 - 设计文档：`features/research-agent.md`（已建）
@@ -206,7 +209,7 @@
 - **完成记录（2026-07-29）**：feature-builder 纯前端实跑落地。新增 `components/EntityCardGrid.tsx`（网格 + Skeleton 加载骨架 + Empty 空态 + 响应式列 normal lg=6 / compact lg=8 + onItemClick + rowKey + density）+ `components/__tests__/EntityCardGrid.test.tsx` 7 项单测。9 个列表页改造为卡片（Agents/AgentConfigurations configsTab/Workflows/Conversations/KnowledgeBases/CredentialManager/ApiKeys/ExecutionLogs(compact)/AgentRoles 两网格）；ResearchPage 故意排除（任务流非实体列表）、详情内子表按 D2 保留 Table。与 F15 协同卡片文案全 `t()`。三道质量门 PASS（`.quality-gate.json` 推进 `f16-card-layout`）；前端 `tsc --noEmit` **0 error** + `vitest` **38/38**（含新增 7 + AgentsPage 契约更新）+ `vite build` 通过。审查修复 P0：`EntityCardGrid` 整卡 `onItemClick` 与卡内交互子元素点击冒泡冲突 → 安全默认拦截（closest button/a/input/select/textarea/[role=button]/[data-no-card-click]）。质量报告 `docs/quality/f16-card-layout-gate.md`。注意：`AgentConfigurationsPage` 与 F17、`AgentRolesPage` 与 F19 强耦合，F16 不改其写路径，由 F17/F19 收口。
 
 ### F17 · AgentConfiguration 实例化联动（方案 A 细化）  [P2]  done  🟡中风险（前端 CRUD 补全 + 1 新端点 + RBAC 收敛；不触 EF 迁移）
-- 设计文档：`features/agent-config-instantiation.md`（已建，§5 决策 D1–D4 待锁定）
+- 设计文档：`features/agent-config-instantiation.md`（已建，§5 决策 D1–D4 已于 2026-07-29 锁定）
 - 目标：把"版本化 YAML 定义库孤岛"`AgentConfiguration` 变为真正有用的「Agent 定义/模板库」——前端补完整 CRUD + `AgentsPage`「基于模板新建」从定义实例化 Agent + 消除与「我的凭据」页重复 tab 与 RBAC 不一致。来源：2026-07-27 对 `AgentConfigurationsPage` 的分析结论（方案 A）。
 - 核心改造：
   - 后端新端点 `GET /api/v1/agent-configurations/{id}/template`（`[Authorize(Roles="Admin")]`，tenant-scoped）：解析 `YamlContent`→返回 `ConfigurationAgentTemplate(Name,RoleCode?,ModelProvider?,ModelName?,ModelApiUrl?,SystemPrompt,SourceVersion)`；新增 `Infrastructure/Yaml/AgentConfigurationYamlParser.cs`（复用已引 `YamlDotNet`），容错缺字段→null、非法 YAML→400 中文原因。后端 CRUD(POST/PUT/DELETE/GET) 已就绪，仅差前端 UI 与新 template 端点。
@@ -224,7 +227,7 @@
 - **完成记录（2026-07-29）**：feature-builder 流水线端到端实现并提交（分支 `feat/f17-agent-config-instantiation`）。后端：新增 `GET /api/v1/agent-configurations/{id}/template`（`[Authorize(Roles="Admin")]`，handler 显式比对 `TenantId`→跨租户 404、YAML 解析容错 try/catch→畸形仅返元数据）；`CreateAgentCommand` 加 `Guid? ConfigurationId` 溯源（handler 最佳努力写审计后缀，不阻断创建、无 EF 迁移）。**设计偏差**：设计文档假设新建 `AgentConfigurationYamlParser`，经验证 `IYamlConfigurationParser`(`Application/Abstractions`)+`YamlConfigurationParserService`(`Infrastructure/Configuration`，YamlDotNet+UnderscoredNamingConvention) 已存在 → 直接复用，无新增 parser 类。前端：`AgentConfigurationsPage` 移除重复凭据 tab + 完整 CRUD（新建/编辑/删除模态，agentTypeCode 取自 `getAgentRoles()`，yamlContent TextArea）+ 抽屉详情 `getAgentConfiguration(c.id)` 取 yamlContent；`AgentsPage` 加「基于模板新建」（`getAgentConfigurations()`→选其一→`getAgentConfigurationTemplate(id)` 预填，并对模板 model 注入合成目录项避免静默 provider 丢失，set `pendingConfigurationId`→`createAgent` 传 `configurationId`）；`AppLayout` Configurations 菜单 Admin-only 与后端对齐；`api.ts`+`types/index.ts` 补全 5 接口与 `Create/UpdateAgentConfigurationRequest`/`ConfigurationAgentTemplate` 类型，`AgentConfiguration` 接口漂移修正（`agentType→agentTypeCode`/`isActive→status`/`createdAt→updatedAt`）。i18n 同步 zh-CN/en-US（`configurations` 重写去 credentials/model/search + 增 agents.fromTemplate 等）。三道质量门 PASS（`.quality-gate.json` 推进 `f17-agent-config-instantiation`，`cleared:true`）；后端 `dotnet build` **0/0** + 全方案 `dotnet test` **260/260**（SpecFlow 41 / Architecture 6 / Application 90 / Infrastructure 102 / Api 16 / Integration 5，含 F17 新增 `GetConfigurationTemplateQueryHandlerTests` 5 项 + `CreateAgentCommandHandlerTests` 增 `IAgentConfigurationRepository` 入参）；前端 `tsc --noEmit` **0 error** + `vitest` **38/38**（11 文件，含 i18n 对称 4 项）+ `vite build` 通过。审查修复 P2：`chooseTemplate` 模板 model 未在 `models` 目录时静默丢 provider → 注入合成目录项兜底。**附带修正（非 F17 范围但阻塞全方案绿）**：`AesGcmEncryptorTests.Decrypt_ThrowsOnTamperedCiphertext` 原 hex-flip 在中间字符为 `'a'` 时 `(char)(c^1)` 得到 `` ` ``（非法 hex）→ 偶发抛 `FormatException` 而非预期的 `AuthenticationTagMismatchException`（约 1/16 概率飘红）；改为全 hex 字符确定性映射到合法异值字符，5 次连跑稳定 6/6。质量报告 `docs/quality/f17-agent-config-instantiation-gate.md`。注意：与 F16 强耦合的 `AgentConfigurationsPage` 写路径已由 F17 收口。
 
 ### F18 · Dashboard 图表充实（运行分析看板）  [P1]  done  🟡中风险（新增 analytics 端点 + 前端图表库 + 时间聚合）✅ 2026-07-30 `feat/f18-dashboard-charts`
-- 设计文档：`features/dashboard-charts.md`（已建，§7 决策 D1–D4 待锁定）
+- 设计文档：`features/dashboard-charts.md`（已建，§7 决策 D1–D4 已锁定）
 - 目标：把当前仅 4 个计数卡的 Dashboard 升级为运行分析看板（KPI 卡 + 时间序列/分布图），对标 Dify/LangSmith/Flowise/n8n/Coze。来源：2026-07-27 用户要求"充实 dashboard 图表并分析可形成图表的内容 + 对标竞品"。
 - 现状核验（真实代码）：当前 `DashboardPage.tsx:35-66` 仅 4 个 `<Statistic>` 卡；后端**无 analytics REST 端点**（仅有 OpenTelemetry `/metrics` Prometheus 抓取，非前端消费）。可聚合数据源已确认：`ExecutionLog`(WorkflowId/WorkflowName/TenantId/Status/StartedAt/Entries[].Duration)、`Conversation`(TenantId/TotalTokenUsage/CreatedAt/Status)、`Agent`/`Workflow`(Status/CreatedAt)。成本数据缺口：无模型单价表 → v1 只做 Token 图不做 $ 成本图。
 - 竞品共性高价值图表：① 运行量趋势 ② 成功率 ③ 延迟 ④ Token 消耗 ⑤ 按 Agent/工作流拆分 ⑥ 对话量 ⑦ 时间范围选择器(7/14/30 天)。
@@ -233,7 +236,7 @@
   - 前端：图表库推荐 `@ant-design/plots`（antd 官方 G2 封装，视觉一致），备选 `recharts`；`DashboardPage` 加 7/14/30 天范围选择器 + 6 KPI 卡（扩 Active Agents/Workflows/执行总数/成功率/总 Token/平均延迟）+ 图表网格 C1 执行量趋势(面积堆叠)/C2 成功率(折线)/C3 平均延迟/C4 Token 消耗/C5 对话量/C6 热门工作流 Top8(横向柱状)；`api.ts` 加 `getDashboardSummary(from,to)`；标签用 `t()`（与 F15 协同）。
   - **无 EF 迁移**（纯查询端点）。
 - 验收子项：端点结构正确 + 租户隔离单测；前端 7/14/30 切换同步刷新、空数据空态不崩；KPI 与现有 4 卡口径一致；日桶聚合单测（成功率=completed/total、Token 求和、TopWorkflows 截前 8）；tsc 0 + vitest + vite build 通过。
-- 决策（见 `./dashboard-charts.md` §7，待锁定）：D1 v1 仅 Token 图不做 $ 成本图（缺单价表）/ D2 图表标签用 `t()`（与 F15 协同）/ D3 可见性沿用已认证可读（非仅 Admin）/ D4 图表库默认 `@ant-design/plots`(recharts 备选)。
+- 决策（见 `./dashboard-charts.md` §7，已锁定）：D1 v1 仅 Token 图不做 $ 成本图（缺单价表）/ D2 图表标签用 `t()`（与 F15 协同）/ D3 可见性沿用已认证可读（非仅 Admin）/ D4 图表库默认 `@ant-design/plots`(recharts 备选)。
 - 风险：🟡 中风险（新端点 + 图表库包体 + 应用层时间聚合）；缓解：聚合在应用层、量大再下沉 SQL；recharts 备选降包体；与 F16 不冲突（Dashboard 非表格页）、与 F15 协同即可。
 
 ### F19 · Agent Roles 内建标记 + 页面补全 + 分类合并（统一角色目录，DB 为准）  [P1]  done  🟡中风险（角色分类值对象 + 聚合加列 + EF 迁移 + 新增 PUT 端点 + 前端页重写）
@@ -298,10 +301,10 @@
 - 设计文档：`features/execution-trace-eval.md`（§6 决策 2026-08-05 锁定；v2.18 收口）
 - 目标：节点级 Trace（耗时/token/节点类型/IO，复用 ExecutionLog.Entries）+ 数据集回归评估（对标 LangSmith/Langfuse）。多租户隔离 + 审计。
 - 落地：ExecutionLogEntry 增 TokensIn/TokensOut/NodeType 三列（迁移 ExtendExecutionLogEntry）+ ExecutionLogDetailPage 三列；EvaluationDataset(ITenantScoped) 聚合 + 6 端点 + RunEvaluation（克隆工作流逐 case 跑编排、Exact/Contains 比对、汇总通过率/逐 case 报告）+ 前端 EvaluationDatasetsPage（CRUD+运行+报告）+ i18n 中/en 对称。
-- 已知残留（非阻断）：①节点级 Input 采集 v1 不做；②Token 实际落库依赖编排器对评估克隆工作流产生 ExecutionLog（与 F20 Trace 共用管线，单测 mock 验证求和）；③BDD e2e（评估门控）属增强。
+- 已知残留（非阻断）：①节点级 Input 采集 v1 不做（F40 已把该缺口固化为回放报告的 `input-snapshot-unavailable` 数据缺口码，UI 以「推断值」显式标注，若将来采集入参需同时回收该缺口码）；②Token 实际落库依赖编排器对评估克隆工作流产生 ExecutionLog（与 F20 Trace 共用管线，单测 mock 验证求和）；③BDD e2e（评估门控）属增强。
 
 ### F25 · 工作流调试器（变量监视 + 单步重跑 + 错误分支）  [P1]  done  🟡中风险（变量持久化需新增列+迁移；引擎能力 Pause/Resume/RetryStep/RollbackTo/GetState+RunNode 已存在，零引擎侵入 · 2026-08-06 起 feat/f25-workflow-debugger · 2026-08-06 全栈闭环）
-- 设计文档：`features/workflow-debugger.md`（§6 决策已锁定初稿，待用户确认；实测引擎已具备调试内核）
+- 设计文档：`features/workflow-debugger.md`（§6 决策已锁定并经用户确认；实测引擎已具备调试内核）
 - 目标：调试运行模式——变量监视（跨节点累积 Blackboard 持久化）+ 单节点运行/重跑（override）+ 错误分支恢复 + 状态/变量查看 + 会话重置。复用 F24 Trace。
 - 风险：🟡 变量持久化需 Workflow 新增 `DebugVariablesJson` 列 + 一次 EF 迁移（最小）；API 暴露既有引擎能力，无内核改动。v1 不做引擎级单步全链（列 v2）。
 
@@ -341,8 +344,9 @@
 - 说明：**保留，勿稀释**——Dify/n8n 无此原生原语，是本平台差异化壁垒。
 
 ### F9 · 代码沙箱容器隔离（DockerCodeSandbox 真实化）  [P2]  done  ✅（Phase 6 行动层 / Docker.DotNet 真实容器执行；分支 feat/f9-docker-sandbox，设计文档 features/sandbox-docker.md；质量门 docs/quality/f9-docker-sandbox-gate.md）
-- 设计文档：`features/sandbox-docker.md`（待建）
-- 来源：F5 残留 ①（A2 进程沙箱已真实化；`src/AgentPlatform.Infrastructure/Sandbox/DockerCodeSandbox.cs` 现为显式抛异常占位，需补真实容器执行）。
+- 设计文档：`features/sandbox-docker.md`（已建，见 `docs/quality/f9-docker-sandbox-gate.md`）
+- 来源：F5 残留 ①（A2 进程沙箱已真实化；当时 `DockerCodeSandbox.cs` 为显式抛异常占位）。
+- **已完成（2026-09-03 核实）**：`src/AgentPlatform.Infrastructure/Sandbox/DockerCodeSandbox.cs` 现为 **272 行真实实现**（Docker.DotNet 建容器/挂载/资源限额/超时杀），并经 `DockerProbe` + `DockerSandboxIsolation` 纳入 F34 双层隔离默认强隔离路径；原「现为占位」表述已过期，故本行刷新。
 - 目标：在有 Docker 守护进程的环境，用 `Docker.DotNet` 真实拉起隔离容器执行用户代码，提供比进程沙箱更强的文件系统 / 网络 / 资源边界。
 - 验收子项：
   - 引入 `Docker.DotNet` 依赖；`DockerCodeSandbox` 由抛异常改为真实 `RunCodeAsync`/`RunCommandAsync`：镜像拉取/创建、挂载代码文件、容器内运行、捕获 stdout/stderr/ExitCode、资源限制（cpu/mem）、超时 kill、输出截断至 `SandboxSettings.MaxOutputBytes`。
@@ -350,7 +354,15 @@
   - 真实副作用单测：需在提供 Docker 守护进程的 runner 上跑（本开发沙箱无 Docker，该 feature 门禁须在含 Docker 的 CI 跑，或提供可跳过集成测试标记）。
   - 默认 `Provider=Process` 不变，保证无 Docker 环境仍可运行。
 
-### F10 · A1 残余执行器真实化（Skill + MCP）  [P2]  done  ✅（Phase 6 行动层 / SkillPackageExecutor 经 Semantic Kernel 真实调用 + McpClient 经 ModelContextProtocol 2.1.0 真实连接列举调用；分支 feat/f10-executor-realization，设计文档 features/executor-realization.md；质量门 docs/quality/f10-executor-realization-gate.md）
+### F10 · A1 残余执行器真实化（Skill + MCP）  [P2]  done⚠️未合并  ❗**当前基线仍为桩**（2026-09-03 实测校正）
+- **实测状态**：实现只存在于**未并入 master** 的 `feat/f10-executor-realization`（单 commit `e76664c`，`Tools/McpClient.cs` 203 行真实 SDK 调用）。当前基线里 `src/AgentPlatform.Infrastructure/Tools/McpClient.cs` 与 `SkillPackageExecutor.cs` **各仅 30 行、仍 `Task.FromResult(new ToolExecutionResult(true, "Executed via …"))` 返回伪造成功**，且二者**确实注册在 DI 活路径**（`Infrastructure/DependencyInjection.cs:510-511`），即工具类型为 MCP/Skill 的调用会静默「成功」。
+- **文档也在未合并分支上**：本条目原引用的 `features/executor-realization.md` 与 `docs/quality/f10-executor-realization-gate.md` 在 master/当前基线**不存在**。
+- **依赖也不在**：`AgentPlatform.Infrastructure.csproj` 无 `ModelContextProtocol` 包（原文所称「ModelContextProtocol 2.1.0 真实连接」未进入基线）。
+- **待用户定夺（代理不自行合并）**：① 把 `feat/f10-executor-realization` rebase 到当前链并合并（快，但需过 F35 加列/F36 隔离/F37 队列带来的冲突与质量门）；② 视为未做，重新走 feature-builder 立项为 **F42**。
+- 原条目内容（保留备查）：
+  - 来源：F5 残留 ②（F5 仅真实化 `NativeToolExecutor`；两执行器保留 `// TODO(Phase6)` 占位）。
+  - 目标：让 SK 技能包与 MCP 工具真正执行，补全 Agent 三类动作源（Native / Skill / MCP）的真实副作用。
+  - 验收：`SkillPackageExecutor` 经 SK runtime 按 `ToolDefinition.SkillPluginName` 真实调用插件函数；`McpClient` 经 MCP client（SSE/stdio）真实连接列举调用，含连接失败/超时精准回打；契约不变（`IToolExecutor`/`ToolExecutionResult`）；单测覆盖成功与失败两路。
 - 来源：F5 残留 ②（F5 仅真实化 `NativeToolExecutor`；`src/AgentPlatform.Infrastructure/Tools/SkillPackageExecutor.cs` 与 `McpClient.cs` 保留 `// TODO(Phase6)` 占位，仍伪造成功）。
 - 目标：让 SK 技能包与 MCP 工具真正执行，补全 Agent 三类动作源（Native / Skill / MCP）的真实副作用。
 - 验收子项：
@@ -460,11 +472,11 @@
   - **延后项** → CI YAML 接入样例 → `F38`；队列化执行/水平扩展 → `F37`；监控告警聚合 → `F39`；异常回放诊断 → `F40`
 - **完成记录（2026-08-25）**：feature-builder 全栈闭环（分支 `feat/f34-online-eval-gate`，基于 f33）。端点 `POST /api/v1/evaluation-datasets/{id}/gate/{workflowId}`（Admin/Operator）。新增测试 5 例（超阈值通过+审计/低于阈值阻断/显式覆盖配置/空数据集恒拦/越界抛错）；全绿 App226/Infra154+6skip/Api35/Arch9，build 0/0，前端零改动。三道质量门 PASS。**二期 F29–F34 全部收口。**
 
-## 延后项（独立排期，从已 done 史诗中拆出）
+## 延后项（独立排期，从已 done 史诗中拆出）—— **F35–F40 六项已全部实现完毕（2026-08-31 → 2026-09-03），但六条分支尚未并入 master**
 
 > 以下条目均来自 F26/F30/F31/F32/F43（原 F34 评估门禁）设计文档中显式标注的「延后项」——v1 边界明确排除、依赖未就绪或破坏性过大，需独立 feature 闭环。
 
-### F35 · 多工作空间隔离（Workspace）  [P2]  open  🔴高风险（全聚合加 WorkspaceId + query filter + TenantProvider 体系扩展）
+### F35 · 多工作空间隔离（Workspace）  [P2]  done⚠️未合并  ✅（2026-08-31，分支 `feat/f35-workspace-isolation`；设计文档 features/f35-workspace-isolation.md §6 决策 D1–D5 已锁定 + 质量报告 docs/quality/f35-workspace-isolation-gate.md）🔴高风险（全聚合加 WorkspaceId + query filter + TenantProvider 体系扩展）
 - 来源：F26 企业增强 · S1「Workspace v1 不做，独立排期」
 - 设计依据：`features/enterprise-enhancements.md` §6 S1
 - 目标：创建/切换 workspace；实体按 workspace 隔离；切换后查询仅见当前 workspace 数据。本质是「第二租户维度」——同一租户内再分一层工作空间。
@@ -480,8 +492,10 @@
   - EF 迁移覆盖全仓 ITenantScoped 实体；无遗漏。
   - build 0/0 + 全量测试 0 失败 + 前端 tsc 0 + vitest 通过。
 - 风险：🔴 破坏性极大——全聚合加列 + query filter 修改 + TenantProvider 体系重构 + 前端全局切换。建议独立分支 feature-builder 全栈闭环。
+- **完成记录（2026-08-31）**：feature-builder 全栈实跑落地。决策（用户锁定）：D1=C claim+header 双通道（`IWorkspaceProvider`：claim → header → `WorkspaceDirectory` 租户默认兜底 → 空 fail-closed）/ D2=A 18 聚合全量（AuditLog/ExecutionLog/AgentRunRecord 仅补列）/ D3=B 成员表（非 Admin 仅见默认+已加入，switch 校验成员资格）/ D4=删除守卫（默认 409、非空 409、绝不级联）/ D5=A `useApiState` 单点订阅全站刷新。后端：`Workspace`/`WorkspaceMember` 聚合 + `IWorkspaceScoped` + 18 聚合加列 + `AppDbContext` 组合过滤器与 SaveChanges 注入 + `WorkspaceProvisioner` 幂等供应/回填 + 迁移 `AddWorkspaceIsolation` + `WorkspacesController` 8 端点 + `WorkspaceHeaderGuardMiddleware`（非 Admin 剥离越权头）+ 登录/`/auth/me`/dev-login 携带 workspace claim + API-Key 认证钉到 Key 所属工作空间 + 触发路径 `GetByIdForTriggerAsync`（修复非默认空间工作流被静默跳过的回归）。前端：`WorkspaceSwitcher` + 拦截器注入头 + `appStore.currentWorkspaceId` 持久化 + i18n 对称 + BDD E2E `workspace-switch.feature`。三道质量门全 PASS：ddd-code-reviewer 修 2×P1（header 越权中间件、触发回归）+3 项；结构门 P0-P2=0（2 waiver）；optimizer Round F35-01 0 open（1 修复 + 5 waiver）。验证：build 0/0；App 238 / Infra 158+6skip / Api 35 / Arch 9 / SpecFlow 114/115（唯一失败=master 既有 LLM 用例）/ Integration 5（需 `OPENAI__Key`）；新增 12 handler 测试 + 4 EF 隔离测试；前端 tsc 0 + vitest（2 既有失败豁免）+ vite build。文档同步：CHANGELOG v2.34、BLUEPRINT 平台化清单、appendices/core-aggregates.md（Workspace/WorkspaceMember 聚合）、appendices/api-spec.md（I.11 工作空间 API，资源域 10→11）。已知残留：触发/调度仅落租户默认工作空间、成员列表 N+1、名称唯一大小写依赖 collation、3 个补列实体运行期 WorkspaceId 恒空（D2=A 设计）。
 
-### F36 · Agent 上下文隔离（Blackboard 分区 + 独立对话历史）  [P2]  open  🟡中风险（Blackboard 语义重构 + per-agent 对话状态）
+### F36 · Agent 上下文隔离（Blackboard 分区 + 独立对话历史）  [P2]  done⚠️未合并  ✅（2026-09-01，分支 `feat/f36-agent-context-isolation` 基于 f35；设计文档 features/f36-agent-context-isolation.md §5 决策 D1–D4 已锁定 + §8 审查修复记录 + 质量报告 docs/quality/f36-agent-context-isolation-gate.md）🟡中风险（Blackboard 语义重构 + per-agent 对话状态）
+- 设计文档：`features/f36-agent-context-isolation.md`（已建，§5 决策 D1–D4 已锁定 2026-09-01；现实修正：Blackboard 实为 Dictionary<string,string>、AgentCallStepExecutor 现从不接触 Conversation）
 - 来源：F31 Agent 运行时实体化 · D4「Blackboard 按 agent 分区 / 每 agent 独立对话历史延后」；F32 消息总线 · 明确不做
 - 设计依据：`features/f31-agent-runtime.md` §明确不做 + `features/f32-agent-message-bus.md` §明确不做
 - 目标：每个 agent 拥有独立的上下文视图——Blackboard 按 agent 分区（agent 只读写自己的分区），对话历史按 agent 隔离（同一工作流内不同 agent 的 Conversation 不互相污染）。
@@ -496,6 +510,7 @@
   - 无 AgentId 的 Conversation（F31 前遗留）回退到全局视图（向后兼容）。
   - build 0/0 + 全量测试 0 失败 + 前端 tsc 0 + vitest 通过。
 - 风险：🟡 Blackboard 值对象变更影响 WorkflowContext 全链路；Conversation 加列为最小迁移。依赖 F31/F32 已合入。
+- **完成记录（2026-09-01）**：feature-builder 全栈实跑落地（基于 feat/f35-workspace-isolation）。决策（用户锁定）：D1=A 软分区视图（`agent:{agentId}:` 键约定 + GetPartitionView/GetGlobalView；F30/F25/RunningExecution 持久化格式零变更）/ D2=A AgentCallStepExecutor 自动创建/复用 per-agent per-workflow 会话（唯一过滤索引防并发双建；持久化失败 Detach 隔离不阻断）/ D3=A 会话页 agent 筛选+标签 / D4=A 回复显式回写 `agent:{agentId}:output`。现实修正（相对 backlog 原文）：Blackboard 实为 Dictionary<string,string>，AgentCall 原不接触 Conversation。三道质量门全 PASS：reviewer 修 P1（唯一过滤索引）+3×P2；结构门 P0-P2=0（2 waiver）；optimizer 修 P1（Detach）+3×P3，0 open。验证：build 0/0；App 253/Infra 162+6skip/Api 35/Arch 9/SpecFlow 115/116（既有豁免）/Integration 5；新增 18 测试 + SpecFlow 1 场景；前端 tsc 0 + vitest（既有豁免×2）+ vite build。文档同步：CHANGELOG v2.35、BLUEPRINT、appendices（Conversation.AgentId + 会话列表 agentId 参数）、backlog F36 done。已知残留：硬分区列 v2；SetInPartition/GetFromPartition 为预留 API（agent 工具链接入）；截断字面量未抽配置。
 
 ### F37 · 队列化执行与水平扩展  [P1]  open  🔴高风险（分布式消息中间件 + 租约机制重构 + 多 worker 协调）
 - 来源：F30 执行持久化 · 延后项；F43 评估门禁（原 F34）· 延后项
@@ -513,10 +528,10 @@
   - 评估门禁端点在队列模式下仍正常工作（异步执行 → 同步等待结果）。
   - build 0/0 + 全量测试 0 失败（SkippableFact 覆盖 Redis 不可用场景）。
 - 风险：🔴 分布式一致性（租约竞态、消息去重、幂等）+ 运维复杂度（Redis/RabbitMQ 部署）。建议分两阶段：① Redis Stream 最小闭环 ② RabbitMQ 企业级（独立排期）。
-
-### F38 · CI YAML 接入评估门禁样例  [P2]  open  🟢低风险（文档 + 模板，不触后端代码）
-- 来源：F43 评估门禁（原 F34）· 延后项
-- 设计依据：`features/f34-online-eval-gate.md` §延后项
+- **完成记录（2026-09-02）**：feature-builder 全栈实跑落地。决策（用户锁定）：D1=B 三后端全做 / D2=B run 端点透明「入队+等待」（既有 run/run-existing 契约在 QueueEnabled 下返回 200 完成 / 202 queued / 503 拒投，默认 QueueEnabled=false 直跑零变化）/ D3=A 复用 F30 5min 租约作接管窗口（**校正 backlog 原文「30s」**：现网租约 LeaseTtlMinutes=5，缩至 30s 会改 F30 崩溃恢复窗口，未选）/ D4=A 评估门禁保持同步直跑。**设计偏差（诚实记录）**：① 复用既有 `IDistributedLockProvider`（Redis 实现本就是 SET NX PX 语义）而非新建 `DistributedLeaseProvider`；② 队列投递在 run 命令处理器内透明完成（`QueuedRunSupport.EnqueueAndWaitAsync`），未新增公开 `EnqueueWorkflowRunCommand`；③ Redis/Rabbit 不可用时 run 端点显式 503（不运行时静默切 InMemory，避免多实例脑裂），InMemory 为注册期选定的后端而非运行期降级。落地：`IExecutionQueue`+`ExecutionJob`/`QueueDelivery`/`EnqueueResult`（Application）；三后端 Infrastructure（InMemory Channel 有界 / Redis Stream XADD+XREADGROUP+XAUTOCLAIM+XACK+死信流 / RabbitMQ durable+BasicGet pull+epoch 防跨代 ack+死信队列）；`ExecutionWorker`（BackgroundService，恒注册+QueueEnabled 运行时门控，失败按 Attempt 重投、超限死信、仅接管成功才 ack）；`ExecuteQueuedWorkflowCommand`（消费 scope 复现租户/工作空间 Override、跨租户拒跑、终态重复投递→Duplicate 不重跑、租约冲突→Duplicate、触发投递 FromQueue 防回环）；触发处理器队列模式投递。前端 runWorkflow/runExistingWorkflow union + isQueuedRunResponse 守卫 + queued 提示。三道质量门全 PASS：reviewer 修 P0（重复投递二次执行）+P1×4（轮询 AsNoTracking、死信成败回报防丢任务、Redis 连接泄漏、Rabbit epoch）；结构门 0 open（P3×2 修）；optimizer Round F37-01 0 open（P3×1 修：未知 QueueBackend 静默降级告警；2 waiver）。验证：build 0/0；App 268 / Infra 171+8跳 / Api 37 / Arch 9 / Integration 5 / SpecFlow 115/116（唯一失败=既有豁免）；新增 Application 队列 15 + Infra queue/worker 9 + Api 队列 E2E 2；前端 tsc 0 + vitest（既有豁免×2）+ vite build。文档同步：CHANGELOG v2.36、BLUEPRINT 平台化清单、appendices（api-spec I.3.1 队列模式 / deployment-devops H.4/H.5）、backlog F37 done。遗留：RabbitMQ 真实 broker 投递闭环在 CI services 覆盖（本地跳过）；InMemory 重启丢未 ack 作业（单实例回退设计接受）。
+### F38 · CI YAML 接入评估门禁样例  [P2]  done⚠️未合并  ✅（2026-09-02，分支 `feat/f38-ci-eval-gate` 基于 f37；交付 ci/eval-gate-github.yml + ci/eval-gate-gitlab.yml + docs/ci-eval-gate-guide.md，设计文档 features/f38-ci-eval-gate.md + 质量报告 docs/quality/f38-ci-eval-gate-gate.md）🟢低风险（文档 + 模板，不触后端代码）
+- 来源：F43 评估门禁 · 延后项
+- 设计依据：`features/f43-online-eval-gate.md` §延后项
 - 目标：提供可直接复制使用的 CI/CD 流水线模板，将评估门禁端点接入 GitHub Actions / GitLab CI，实现「模型/prompt 变更前自动回归，未达阈值阻断合并」。
 - 核心改造：
   - `ci/eval-gate-github.yml`：GitHub Actions workflow — 触发 PR + 手动 dispatch → 启动 API → 运行 eval gate → 422 则 `exit 1` 阻断。
@@ -526,7 +541,7 @@
 - 验收子项：
   - GitHub Actions YAML 语法校验通过（`actionlint` 或 `act` 本地跑）。
   - GitLab CI YAML 语法校验通过（`gitlab-ci-lint` 或 `grep` 关键字）。
-  - 接口示例 `curl` 可在本地 QuickStart 模式下跑通（200/422 路径各覆盖）。
+  - 接口示例 `curl` 可跑通 200/422 两条路径。**（2026-09-02 校正：原文写「本地 QuickStart 模式下跑通」，但 F41 已移除 QuickStart 并强制真实 Key fail-fast，该前提不再成立；实际以「已配置真实 Key 的目标实例」或「Test/Integration 环境 Stub 模型冒烟接线」两条路径验证，详见 `features/f38-ci-eval-gate.md` §2 现状校正。）**
   - 指南文档完整：环境变量 / 阈值 / 失败处理 / 故障排查。
 - 风险：🟢 纯增量，不触后端。但需与 F43（原 F34 评估门禁）端点保持接口一致（API schema 变更须同步更新模板）。
 
@@ -546,10 +561,10 @@
   - 告警规则阈值合理（参考实际测试数据：App 226 测试 / Infra 154 通过率）。
   - 指南文档完整：一键部署 / 告警对接 / 自定义。
 - 风险：🟡 Grafana Dashboard JSON 维护成本（版本升级可能断面板）；缓解：文档注明版本要求。
-
-### F40 · 异常回放诊断入口  [P2]  open  🟡中风险（执行日志回放引擎 + 前端诊断视图）
-- 来源：F43 评估门禁（原 F34）· 延后项
-- 设计依据：`features/f34-online-eval-gate.md` §延后项
+- **完成记录（2026-09-02）**：feature-builder 全栈实跑落地。决策（用户锁定）：D1=**B**（补后端埋点，原建议 A 被否，InMemory 亦可观测）/ D2=A（Alertmanager + Slack/PagerDuty）/ D3=A（修 Grafana provisioning 布局 + 12 面板 + 锁版本）/ D4=A（失败率用 `rolledback` 口径 + API 错误率独立告警）。**关键校正（相对 backlog 原文）**：① 代码里不存在 `result="failed"`（失败⇒回滚 `rolledback`），按直觉写 failed 会得到**永不触发的假告警**；② 门禁阻断率优先用新埋点 `evaluation_gate_total{passed}`、HTTP 422 派生作交叉验证；③ 队列积压由应用自身 `execution_queue_depth{backend}` 上报（**Redis 侧 XACK 不减 XLEN，故 ack 后同步 XDEL**，否则「积压」单调增长 = 假告警）；④ 既有 compose 把裸 dashboard JSON 挂进 provisioning 目录**根本不会加载**，已改为 provider YAML + JSON 目录分离并给数据源显式 `uid: prometheus`（否则 12 面板全报 data source not found）；⑤ 镜像 `latest` 改为全部锁版本。交付：prometheus.yml / alert-rules.yml（9 条告警）/ alertmanager.yml / grafana provisioning + 12 面板 dashboard / docker-compose.monitoring.yml / docs/observability-guide.md；后端埋点 `IExecutionQueue.QueueDepth`（三后端真实读数）+ `WorkflowMetrics.EvaluationGateCounter` + `QueueDepthGauge`。三道质量门全 PASS：对抗审查修 P1×2（Redis 积压语义、Grafana 数据源 uid）+P2×3+P3×5；结构门 0 新增（3×P3 waiver）；optimizer Round F39-01 0 新增（修 3×P2 文档同步 + 2×P3 waiver）。验证：build 0/0；Application **269/269**、Infrastructure **174+8跳**、Api **39/39**、Architecture 9、SpecFlow 115/116（唯一失败=既有豁免）；新增 MeterListener 真断言测试 2 文件（守「埋点确实可观测」）；6 个监控 YAML + dashboard JSON 结构校验通过（脚本核验所有面板/告警只引用已核实指标）。文档同步：CHANGELOG v2.38、deployment-devops 附录（监控栈小节）、backlog F39 done。已知残留：promtool/amtool/Grafana 导入本机无 Docker 未实跑（结构校验兜底 + 指南留校验命令）；`workflow_id`/`path` 高基数标签治理与 RabbitMQ 深度 ≤5s 缓存为独立技术债。
+### F40 · 异常回放诊断入口  [P2]  done⚠️未合并  ✅（2026-09-03，分支 `feat/f40-replay-diagnostics` 基于 f39；设计文档 features/f40-replay-diagnostics.md（§3 能力边界、§6b 决策、§8 审查修复记录、Quality Gate Checklist）+ 质量报告 docs/quality/f40-replay-diagnostics-gate.md）🟡中风险（执行日志回放引擎 + 前端诊断视图）
+- 来源：F43 评估门禁 · 延后项
+- 设计依据：`features/f43-online-eval-gate.md` §延后项
 - 目标：从执行日志重建失败工作流的异常路径——定位失败节点、回放输入输出、展示上下文快照（Blackboard/变量/模型响应），辅助快速定位根因。复用 F24 Trace + F25 调试器能力。
 - 核心改造：
   - Application：`ReplayExecutionCommand`（接收 ExecutionLogId）—— 从 `ExecutionLog.Entries` 重建执行路径，标记失败节点，返回 `ReplayReport`（路径序列 + 每节点 IO/耗时/错误信息 + Blackboard 快照）。
@@ -562,6 +577,51 @@
   - 前端回放视图清晰展示失败链路，可折叠/展开每节点详情。
   - build 0/0 + 全量测试 0 失败 + 前端 tsc 0 + vitest 通过。
 - 风险：🟡 回放依赖 ExecutionLog Entries 数据完整性（F20 Trace 节点级数据采集）；历史日志可能缺少 TokensIn/TokensOut/NodeType 列（F24 前迁移的数据）——需降级兼容。
+- **完成记录（2026-09-03）**：feature-builder 全栈实跑落地。交付 `POST /api/v1/execution-logs/{id}/replay`（**只读**重建，不重新执行、不写状态）→ `ReplayReport`（节点序列 + `failurePath` + 末次 `contextSnapshot` + 8 个稳定 `dataGaps` 码）；`ReplayExecutionCommand` 用 `IRequest` 避开 UnitOfWork 提交；前端 `ExecutionLogDetailPage` 改 Tabs + 新 `ReplayPanel`（失败/无失败/**信息不完整**三态判定，杜绝「无数据」渲染成绿色健康；SSE 推进后失效重取）；**同批安全收口**：`ExecutionLog` 不实现 `ITenantScoped` 且 `GetByIdAsync` 无租户谓词，既有详情/steps 端点存在「持 GUID 读他租户日志」窗口（F40 之前既有，用户决策一并修）→ 新增 `GetByIdForTenantAsync`/`IsOwnedByTenantAsync`，三读端点统一租户作用域（跨租户=404）。能力边界诚实化（相对 backlog 原文）：① 平台不落每节点真实入参，`input` 为前序输出推断并标 `inputInferred`；② F30 仅**末次**检查点，不声称 per-step 上下文可回放；③ 建档时 `TotalSteps` 恒 0→ 以 `total-steps-unregistered` 声明「缺步数不可判」，避免 `missingStepCount` 恒 0 冒充无缺失。三道质量门全 PASS：reviewer 修 P1×4（Guid.Empty 兜底无回归锁 / 响应无上限 / TotalSteps=0 假健康 / 既有端点收口无 handler 测试）+P2×2（前端假健康判定、SSE 后报告陈旧）+P3；结构门修 P2×1（循环同序 Collapse key 冲突）+2 waiver；optimizer 修 P3×1（截断撕裂 UTF-16 代理对→U+FFFD 篡改诊断文本）+2 waiver。验证：build 0/0；Application **285** / Infrastructure **175+8跳** / Api **39** / Architecture **9** / Integration **5**（需 `OPENAI__Key`） / SpecFlow **117/118**（唯一失败=既有豁免）；新增 Replay handler 14 + 租户收口 handler + EF 收口 + `ReplayPanel` 组件 8 例，后端 Reqnroll 2 场景（内容级断言）、前端 playwright-bdd `execution-log-replay.feature`（CI 运行）；前端 tsc 0 error、vitest **50 通过**（既有豁免 2）、`vite build` 通过、`bddgen` exit 0。文档同步：CHANGELOG v2.39、`appendices/api-spec.md` I.10.3（并修正 I.10.1 过期注释）、backlog F40 done。已知残留：Entries 全量 Include 读放大、节点封顶后失败节点可能不在展示区（已由缺口码披露）、部分契约字段暂未在 UI 呈现、e2e 硬编码种子 GUID 靠注释锚定。
+## 新立项（2026-09-03 实测发现 → 仅登记，**本轮不实现**）
+
+### F47 · Skill + MCP 执行器真实化（取代未合并的 F10）  [P1]  open  🔴高风险（新依赖/协议实现 + 工具调用语义由「静默伪成功」变为「明确失败」，属行为破坏性变更）
+
+- **立项缘由（实测，非推测）**：F10 的真实实现从未进入基线 —— `src/AgentPlatform.Infrastructure/Tools/McpClient.cs` 与 `SkillPackageExecutor.cs` 各仅 30 行、仍 `Task.FromResult(new ToolExecutionResult(true, "Executed via …"))`，且**注册在 DI 活路径**（`Infrastructure/DependencyInjection.cs:510-511`）。即 `ToolSource=SkillPackage|McpServer` 的工具调用当前**必然静默成功**，属数据正确性缺陷（也是全仓仅剩的 2 处 `TODO`）。
+- 来源：F5 残留 ②；F10（`done⚠️未合并`，见其条目校正）；旧分支 `feat/f10-executor-realization`（commit `e76664c`，27 文件 / +2345 行，**不合并、不 cherry-pick**，仅可参考其 `McpServerName`/`McpToolName` 字段与迁移 `AddToolMcpFields` 设计）。
+- 目标：让 SK 技能包与 MCP 工具产生**真实副作用**，补全 Agent 三类动作源（Native / Skill / Workspace 已真实，Skill / MCP 待补）。
+
+#### ⚠ 关键技术约束（2026-09-03 实测，决定方案选型）
+
+1. **官方 SDK `ModelContextProtocol` 在 net9 上不可用**：其 **2.2.0 / 2.1.0 / 2.0.0 / 1.4.1** 全部把 `Microsoft.Extensions.Hosting.Abstractions` 与 `Logging.Abstractions` 下限抬到 **10.0.7–10.0.10**，而本项目 `net9.0` + M.E. `9.0.4` → 直接 `NU1605` 包降级失败（已逐一验证）。
+2. **这正是旧 F10 分支的处置方式带来的警报**：该分支的 csproj diff 把 `Microsoft.Extensions.*` 从 **9.0.4 批量提到 10.0.10** 才编译通过 —— 在 .NET 9 应用里混用 10.x 抽象包属跨大版本混用，疑为其长期未被合并的原因。
+3. **Skill 侧无阻塞**：已引入的 `Microsoft.SemanticKernel` 1.30.0（net8 目标）提供 `KernelPluginFactory.ImportPluginFromPromptDirectory`（无 `ImportPluginFromDirectory`），文件系统技能加载可在此之上做。
+4. MCP 若走自实现：协议面为 JSON-RPC 2.0 客户端子集（`initialize` → `tools/list` 校验 → `tools/call`），两种传输 streamable HTTP/SSE 与 stdio 子进程；stdio 需自带子进程生命周期、超时与输出上限治理。
+
+#### 待用户在启动实现时拍板的方案（本轮已提出，未选）
+
+| 方案 | 内容 | 代价 / 风险 |
+| :--- | :--- | :--- |
+| A（建议） | **自实现最小 MCP 客户端**（HTTP/SSE + stdio），零新增依赖，保持 net9 + 9.0.4；自带 seam 接口便于单测 | 协议子集自维护；stdio 子进程治理工作量 |
+| B | 本 feature 只做 Skill 真实化；MCP 执行器改为**明确返回未实现** + 启动告警，MCP 真实化并入「升级 .NET 10」史诗 | 最小风险，但 MCP 洞延后一个周期 |
+| C | 先做**解决方案升级 net10.0**（独立史诗：CI / Docker / EF Core / Npgsql / ASP.NET 版本面全动），之后直接用官方 SDK | 最正统，但不是一个 feature 的量 |
+| D | 沿用旧分支做法：仅把 Infrastructure 的 M.E.* 抬到 10.0.10 | 跨大版本混用，不推荐 |
+
+#### 核心改造（实现时展开，须先建 `features/f47-skill-mcp-executor-realization.md` 设计文档并锁定上述方案）
+
+- Domain：`ToolDefinition` 增 `McpServerName?` / `McpToolName?` + EF 配置 + 一次迁移（nullable 列，对齐旧分支字段命名）。
+- Infrastructure：`Mcp/` 连接与配置（`McpServers:{Name}` 的 `Transport`=Http|Stdio、`Url` 或 `Command`+`Arguments`+`WorkingDirectory`、超时）；`McpClient : IToolExecutor(Source=McpServer)` 经可注入的连接抽象真实 `tools/call`，工具名回退链 `McpToolName → HandlerName → Name`；`SkillPackageLoader` + `ISkillPackageProvider` + `KernelSkillPackageProvider`（受控根目录 + 路径穿越校验），`SkillPackageExecutor : IToolExecutor(Source=SkillPackage)` 真实 invoke。
+- 语义（**行为破坏性变更，需显式确认**）：未配置 / 连不上 / 插件或函数不存在 / 超时 → 一律 `Success=false` + 中文原因，**不再静默伪成功**；启动时若存在 MCP/Skill 工具而配置缺失 → `LogWarning`（不 fail-fast，避免与 F41 启动守卫语义打架）。
+- 影响面提示：现网/示例中任何挂载了 MCP 或 Skill 工具的工作流，其「成功」结果会在本 feature 后转为真实结果或失败 —— 属预期修正，但需在 CHANGELOG 以 **BREAKING CHANGE（行为）** 标注。
+
+#### 验收（实现时）
+
+1. Skill：给定已加载插件与函数，真实返回；插件/函数缺失 → `Success=false` 且原因明确；路径穿越配置被拒。
+2. MCP：fake 连接 seam 下覆盖成功/错误/超时/未配置四路；工具名回退链有测试；stdio 子进程在取消与 Dispose 后无残留。
+3. 三执行器注册不变（`IToolExecutor` 按 `Source` 分发），`NativeToolExecutor`/`WorkspaceToolExecutor` 零回归。
+4. 全仓 `TODO(Phase6)` 归零；`dotnet build` 0/0；全量测试 0 失败（既有豁免不变）；三道质量门全绿。
+5. 无 UI 改动 → 不需新增 playwright-bdd（工具执行不经 UI）。
+
+#### 为什么本轮不实现
+
+用户 2026-09-03 指示：**「先写个 feature 到 backlog，不实现」**。方案 A/B/C/D 未拍板前不动代码（该改动含新依赖策略与工具调用语义的破坏性变更，属高风险，按 feature-builder 护栏须先锁方案）。
+
+---
 
 ## 待立题（缺设计文档，feature-builder 不取）
 
@@ -590,3 +650,21 @@
 
 ### feature-dev 意图池 done
 - **P1** 补全 Agents 页「新建 Agent」死按钮 → done（`POST /api/v1/agents` + Modal 表单；QA 五道闸门全绿）
+
+---
+
+## 未立项候选（**登记性质，非承诺**；立项前须用户确认，代理不自创需求）
+
+> 来源仅限各 feature 完成记录 / 质量报告 / 本文件残留项的既有记载，不引入新设想。**F42 已由上方「新立项」节占用**（Skill+MCP 执行器真实化，状态 open、本轮按用户指示只登记不实现）；编号撞车解除时新占用的 **F43** = 在线评估门禁（原 F34）。下一可用编号 = **F44**。
+
+| 候选 | 来源（已记录处） | 性质 |
+| :--- | :--- | :--- |
+| ~~F10 处置~~ → **已立项 F47**（Skill+MCP 真实化；本轮按用户指示只登记不实现） | F10 条目 + F47 新立项节 | **基线功能性缺口**：MCP/Skill 工具执行仍返回伪造成功且在 DI 活路径 |
+| B8 ApiKeys 页真实化（后端 CRUD 端点 + 前端挂载；现为不可达死页调用不存在路由） | F1 验收子项 B8（2026-09-03 复核） | blocked → 需立项 |
+| 指标高基数治理：`workflow_id` 标签与含 GUID 的 `path` 归一化；追踪/日志联动 | `docs/observability-guide.md` §9、F39 质量报告 | 技术债 |
+| F37 阶段②：RabbitMQ 企业级加固 + 门禁/评估走队列（当前门禁恒同步直跑，决策 D4=A） | `features/f37-queued-execution.md` §1/§6、CHANGELOG v2.36 残留 | 明确分期项 |
+| 节点级真实入参采集（并回收 `input-snapshot-unavailable` 缺口码）+ per-step 上下文快照（F30 现为末次覆盖写） | F24 残留①、`features/f40-replay-diagnostics.md` §3 | 能力扩展 |
+| F35 多工作空间的 v1 限制收口：触发/调度执行恒落租户默认工作空间 | `features/f35-workspace-isolation.md` 已知限制、CHANGELOG v2.34 残留 | 技术债 |
+| F36 v1 预留 API 接入：`SetInPartition`/`GetFromPartition` 尚无生产调用方（待 agent 工具链） | F36 结构门 waiver、`features/f36-agent-context-isolation.md` | 待接线 |
+| `ExecutionLog`/`AuditLog`/`AgentRunRecord` 补列后启用 workspace 过滤（现为空值） | CHANGELOG v2.34 残留（D2=A 设计决定） | 技术债 |
+| 成员列表 N+1（F36）、`WorkspaceDirectory` 无清理路径（F35） | 各质量门 waiver 表 | 低风险债 |

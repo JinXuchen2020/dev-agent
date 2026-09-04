@@ -63,6 +63,14 @@ import type {
   DebugVariablesResponse,
   DebugWorkflowStateSnapshot,
   OrchestrationPresetMode,
+  Workspace,
+  WorkspaceMember,
+  CreateWorkspaceRequest,
+  UpdateWorkspaceRequest,
+  AddWorkspaceMemberRequest,
+  SwitchWorkspaceResponse,
+  QueuedRunResponse,
+  ReplayReport,
 } from '../types';
 
 const api = axios.create({
@@ -72,6 +80,19 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
   // Send the httpOnly auth cookie on every request (F2: cookie-based auth).
   withCredentials: true,
+});
+
+// F35: workspace 切换的 localStorage 持久化键（单一事实来源，appStore 从此处导入，
+// 避免 api.ts ↔ appStore 循环依赖；appStore 在 setCurrentWorkspaceId 时同步写 localStorage）。
+export const WORKSPACE_STORAGE_KEY = 'app-workspace-id';
+
+// F35: 每个请求附带 X-Workspace-Id（决策 D1=C：JWT claim 默认 + header 覆盖）。
+api.interceptors.request.use((config) => {
+  const workspaceId = localStorage.getItem(WORKSPACE_STORAGE_KEY);
+  if (workspaceId) {
+    config.headers['X-Workspace-Id'] = workspaceId;
+  }
+  return config;
 });
 
 // No Authorization header injection: the auth cookie is sent automatically via
@@ -100,7 +121,8 @@ api.interceptors.response.use(
 );
 
 // Agents
-export const getAgents = () => api.get<Agent[]>('/agents').then((r) => r.data);
+export const getAgents = (signal?: AbortSignal) =>
+  api.get<Agent[]>('/agents', { signal }).then((r) => r.data);
 export const getAgent = (id: string) => api.get<Agent>(`/agents/${id}`).then((r) => r.data);
 export const createAgent = (data: CreateAgentRequest) =>
   api.post<Agent>('/agents', data).then((r) => r.data);
@@ -288,8 +310,9 @@ export const getWorkflows = (opts?: {
 };
 export const getWorkflow = (id: string) =>
   api.get<WorkflowDetail>(`/workflows/${id}`).then((r) => r.data);
+// F37：队列模式下可能返回 202 QueuedRunResponse（等待超时），调用方须用 isQueuedRunResponse 判别。
 export const runWorkflow = (data: { name: string; initialContext: string; steps?: string[] }) =>
-  api.post<Workflow>('/workflows', data).then((r) => r.data);
+  api.post<Workflow | QueuedRunResponse>('/workflows', data).then((r) => r.data);
 export const updateWorkflow = (
   id: string,
   data: {
@@ -309,7 +332,8 @@ export const runExistingWorkflow = (id: string, mode?: OrchestrationPresetMode) 
   let body: Record<string, unknown> = {};
   if (mode === 'sequential') body = { preset: 0 };
   else if (mode === 'negotiation') body = { preset: 1 };
-  return api.post<WorkflowDetail>(`/workflows/${id}/run`, body).then((r) => r.data);
+  // F37：队列模式下可能返回 202 QueuedRunResponse（等待超时）。
+  return api.post<WorkflowDetail | QueuedRunResponse>(`/workflows/${id}/run`, body).then((r) => r.data);
 };
 
 // F20 S3 — HITL 人工审批门：列出某工作流全部审批记录（含待处理），解析（批准/拒绝）单个审批门。
@@ -491,6 +515,10 @@ export const getExecutionLogs = (opts?: {
 };
 export const getExecutionLogDetail = (id: string) =>
   api.get<ExecutionLogDetail>(`/execution-logs/${id}`).then((r) => r.data);
+// F40 异常回放诊断：后端从执行日志只读重建路径（不重新执行、不写状态）。
+export const replayExecutionLog = (id: string) =>
+  api.post<ReplayReport>(`/execution-logs/${id}/replay`).then((r) => r.data);
+
 export const getExecutionLogSteps = (id: string, params?: { status?: string; skip?: number; take?: number }) =>
   api.get<{ items: ExecutionLogDetail['entries']; totalCount: number }>(`/execution-logs/${id}/steps`, { params }).then((r) => r.data);
 
@@ -531,11 +559,13 @@ export const getApiKeys = () => api.get<ApiKey[]>('/api-keys').then((r) => r.dat
 export const getConversations = (params?: {
   status?: number | string;
   q?: string;
+  // F36：按归属 agent 过滤（per-agent 对话隔离）。
+  agentId?: string;
   signal?: AbortSignal;
 }) => {
-  const { status, q, signal } = params ?? {};
+  const { status, q, agentId, signal } = params ?? {};
   return api
-    .get<Conversation[]>('/conversations', { params: { status, q }, signal })
+    .get<Conversation[]>('/conversations', { params: { status, q, agentId }, signal })
     .then((r) => r.data);
 };
 export const createConversation = () =>
@@ -619,6 +649,32 @@ export const getAuthMe = () =>
 
 export const logoutRequest = () =>
   api.post<void>('/auth/logout').then(() => undefined);
+
+// ── F35 多工作空间 ──
+export const getWorkspaces = () =>
+  api.get<Workspace[]>('/workspaces').then((r) => r.data ?? []);
+
+export const createWorkspace = (data: CreateWorkspaceRequest) =>
+  api.post<Workspace>('/workspaces', data).then((r) => r.data);
+
+export const updateWorkspace = (id: string, data: UpdateWorkspaceRequest) =>
+  api.put<Workspace>(`/workspaces/${id}`, data).then((r) => r.data);
+
+export const deleteWorkspace = (id: string) =>
+  api.delete<void>(`/workspaces/${id}`).then(() => undefined);
+
+export const getWorkspaceMembers = (id: string) =>
+  api.get<WorkspaceMember[]>(`/workspaces/${id}/members`).then((r) => r.data ?? []);
+
+export const addWorkspaceMember = (id: string, data: AddWorkspaceMemberRequest) =>
+  api.post<WorkspaceMember>(`/workspaces/${id}/members`, data).then((r) => r.data);
+
+export const removeWorkspaceMember = (id: string, userId: string) =>
+  api.delete<void>(`/workspaces/${id}/members/${userId}`).then(() => undefined);
+
+// 切换工作空间：后端校验可见性并重签 httpOnly cookie（workspace_id claim）。
+export const switchWorkspace = (id: string) =>
+  api.post<SwitchWorkspaceResponse>(`/workspaces/${id}/switch`).then((r) => r.data);
 
 // F13 多租户凭据（模型 + 搜索，BYO-Key + 平台内置）。
 // 一个租户可配置多个同类凭据，统一以列表返回（可能为空数组）。

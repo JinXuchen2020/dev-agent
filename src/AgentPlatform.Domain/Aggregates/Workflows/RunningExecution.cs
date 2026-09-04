@@ -8,7 +8,7 @@ namespace AgentPlatform.Domain.Aggregates.Workflows;
 /// Replaces the in-memory <c>ConcurrentDictionary<Guid, RunningCtsEntry></c> with a DB-backed truth source
 /// that survives process restarts and enables multi-instance lease coordination.
 /// </summary>
-public sealed class RunningExecution : IAggregateRoot, ITenantScoped
+public sealed class RunningExecution : IAggregateRoot, ITenantScoped, IWorkspaceScoped
 {
     private readonly List<IDomainEvent> _domainEvents = [];
 
@@ -20,6 +20,7 @@ public sealed class RunningExecution : IAggregateRoot, ITenantScoped
 
     /// <summary>Gets the tenant identifier that owns this execution.</summary>
     public Guid TenantId { get; private init; }
+    public Guid WorkspaceId { get; private init; }
 
     /// <summary>Gets the current workflow state (Running / Paused).</summary>
     public WorkflowState WorkflowState { get; private set; }

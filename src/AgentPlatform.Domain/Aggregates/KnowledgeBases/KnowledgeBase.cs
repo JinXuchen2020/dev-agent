@@ -6,13 +6,14 @@ namespace AgentPlatform.Domain.Aggregates.KnowledgeBases;
 /// 知识库聚合根：归属于某个租户，持有若干文档（<see cref="KnowledgeDocument"/>）。
 /// <see cref="CollectionName"/> 为 slug 化的唯一标识，用于路由向量存储集合。
 /// </summary>
-public sealed class KnowledgeBase : ITenantScoped, IAggregateRoot
+public sealed class KnowledgeBase : ITenantScoped, IWorkspaceScoped, IAggregateRoot
 {
     /// <summary>知识库唯一标识。</summary>
     public Guid Id { get; private set; }
 
     /// <summary>所属租户标识（多租户隔离键）。</summary>
     public Guid TenantId { get; private set; }
+    public Guid WorkspaceId { get; private init; }
 
     /// <summary>知识库显示名称。</summary>
     public string Name { get; private set; } = string.Empty;

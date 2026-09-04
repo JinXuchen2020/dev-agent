@@ -105,7 +105,7 @@ namespace AgentPlatform.SpecFlowTests.Features
         
         private static global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages InitializeCucumberMessages()
         {
-            return new global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages("Features/Conversation.feature", 12);
+            return new global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages("Features/Conversation.feature", 13);
         }
         
         async global::System.Threading.Tasks.Task global::Xunit.IAsyncLifetime.InitializeAsync()
@@ -457,15 +457,15 @@ namespace AgentPlatform.SpecFlowTests.Features
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Xunit.SkippableFactAttribute(DisplayName="触发未绑定工作流返回 404")]
+        [global::Xunit.SkippableFactAttribute(DisplayName="会话列表支持按归属 agent 过滤（F36 per-agent 对话隔离）")]
         [global::Xunit.TraitAttribute("FeatureTitle", "会话与聊天管理")]
-        [global::Xunit.TraitAttribute("Description", "触发未绑定工作流返回 404")]
-        public async global::System.Threading.Tasks.Task 触发未绑定工作流返回404()
+        [global::Xunit.TraitAttribute("Description", "会话列表支持按归属 agent 过滤（F36 per-agent 对话隔离）")]
+        public async global::System.Threading.Tasks.Task 会话列表支持按归属Agent过滤F36Per_Agent对话隔离()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "9";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("触发未绑定工作流返回 404", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("会话列表支持按归属 agent 过滤（F36 per-agent 对话隔离）", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
 #line 56
@@ -482,12 +482,58 @@ namespace AgentPlatform.SpecFlowTests.Features
     await testRunner.GivenAsync("以集成租户 T1 admin 身份已登录", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
 #line hidden
 #line 58
-    await testRunner.AndAsync("以 admin 身份创建会话", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+    await testRunner.WhenAsync("列出会话并按 agent \"33333333-3333-3333-3333-333333333301\" 过滤", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 59
-    await testRunner.AndAsync("触发该会话未绑定的工作流", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+    await testRunner.ThenAsync("响应状态码为 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
 #line 60
+    await testRunner.AndAsync("响应体包含 \"55555555-5555-5555-5555-555555555501\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 61
+    await testRunner.WhenAsync("列出会话并按 agent \"00000000-0000-0000-0000-000000000099\" 过滤", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 62
+    await testRunner.ThenAsync("响应状态码为 200", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 63
+    await testRunner.AndAsync("响应体不包含 \"55555555-5555-5555-5555-555555555501\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Xunit.SkippableFactAttribute(DisplayName="触发未绑定工作流返回 404")]
+        [global::Xunit.TraitAttribute("FeatureTitle", "会话与聊天管理")]
+        [global::Xunit.TraitAttribute("Description", "触发未绑定工作流返回 404")]
+        public async global::System.Threading.Tasks.Task 触发未绑定工作流返回404()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "10";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("触发未绑定工作流返回 404", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = null;
+#line 65
+  this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 66
+    await testRunner.GivenAsync("以集成租户 T1 admin 身份已登录", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line hidden
+#line 67
+    await testRunner.AndAsync("以 admin 身份创建会话", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 68
+    await testRunner.AndAsync("触发该会话未绑定的工作流", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 69
     await testRunner.ThenAsync("响应状态码为 404", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }

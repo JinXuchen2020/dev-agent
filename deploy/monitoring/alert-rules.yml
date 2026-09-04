@@ -1,0 +1,131 @@
+# F39 · Prometheus 告警规则（AgentPlatform）
+#
+# 校验：promtool check rules deploy/monitoring/alert-rules.yml
+# 阈值依据与调参见 docs/observability-guide.md §5（新接入建议先按 severity=warning 观察一周再收紧）。
+#
+# 全部表达式只使用已核实存在的指标与标签值：
+#   · 执行失败率用 result="rolledback"（编排器失败→回滚；代码中不存在 result="failed"，
+#     若按直觉写 failed 会得到永不触发的假告警）。
+#   · 门禁阻断率优先用 F39 埋点 evaluation_gate_total{passed="false"}（语义最精确）；
+#     另给一条不依赖新埋点的 HTTP 422 派生口径作为交叉验证。
+#   · 队列积压用 F39 埋点 execution_queue_depth{backend}（InMemory/RedisStream/RabbitMQ 三后端均上报）。
+
+groups:
+  - name: agent-platform.workflow
+    rules:
+      # 执行失败率（回滚占比）>10%，持续 10m —— 工作流编排质量回归。
+      - alert: ExecutionFailureRateHigh
+        expr: >
+          sum(rate(workflow_completed_total{result="rolledback"}[15m]))
+            /
+          clamp_min(sum(rate(workflow_completed_total[15m])), 1e-9)
+            > 0.10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "工作流执行失败率过高（>10%）"
+          description: "近 15m 内 rolledback 占比 {{ $value | humanizePercentage }}，请检查最近 prompt/模型/编排变更与执行日志。"
+
+      # 无任何执行完成信号的兜底（区分「没流量」与「静默全挂」）。
+      # or vector(0)：sum() 对空序列返回空向量，若不加兜底则在「指标从未出现」的
+      # 最严重场景下本告警反而永不触发（空向量 == 0 无结果）。
+      - alert: WorkflowExecutionStalled
+        expr: (sum(increase(workflow_completed_total[30m])) or vector(0)) == 0
+        for: 30m
+        labels:
+          severity: info
+        annotations:
+          summary: "30 分钟内无工作流完成记录"
+          description: "可能为无流量，也可能是执行链路整体不可用（配合 QueueBacklogHigh / TargetDown 一起判断）。"
+
+  - name: agent-platform.model
+    rules:
+      # 模型调用 P99 延迟 >30s —— 上游端点劣化/超时放大。
+      - alert: ModelLatencyP99High
+        expr: >
+          histogram_quantile(0.99,
+            sum by (le) (rate(model_call_duration_ms_bucket[5m]))) > 30000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "模型调用 P99 延迟 >30s"
+          description: "近 5m 模型调用 P99 = {{ $value }} ms（阈值 30000ms），检查供应商限流/网络/降级候选链。"
+
+      # API 错误率（模型出站失败会映射为 5xx）>5% —— 与 ModelLatencyP99High 互补的质量信号。
+      - alert: ApiErrorRateHigh
+        expr: >
+          sum(rate(api_errors_total{path=~"/api/v1/.*"}[5m]))
+            /
+          clamp_min(sum(rate(api_requests_total{path=~"/api/v1/.*"}[5m])), 1e-9)
+            > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API 错误率 >5%"
+          description: "近 5m api_errors_total / api_requests_total = {{ $value | humanizePercentage }}，常与模型出站失败或凭据问题同因。"
+
+  - name: agent-platform.evaluation-gate
+    rules:
+      # 门禁阻断率 >5%（F39 埋点口径）—— 质量回归集中出现。
+      - alert: EvalGateBlockRateHigh
+        expr: >
+          sum(rate(evaluation_gate_total{passed="false"}[30m]))
+            /
+          clamp_min(sum(rate(evaluation_gate_total[30m])), 1e-9)
+            > 0.05
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "评估门禁阻断率 >5%"
+          description: "近 30m 门禁不通过占比 {{ $value | humanizePercentage }}，说明模型/prompt 变更在数据集上退化。"
+
+      # 交叉验证口径：门禁端点 422 占比（不依赖 F39 新埋点，便于回滚对比）。
+      - alert: EvalGateHttp422RateHigh
+        expr: >
+          sum(rate(api_requests_total{path=~".*/evaluation-datasets/.+/gate/.+",status_code="422"}[30m]))
+            /
+          clamp_min(sum(rate(api_requests_total{path=~".*/evaluation-datasets/.+/gate/.+"}[30m])), 1e-9)
+            > 0.05
+        for: 15m
+        labels:
+          severity: info
+        annotations:
+          summary: "门禁端点 422 比例 >5%（HTTP 派生口径）"
+          description: "与 EvalGateBlockRateHigh 同因；若两者背离，多半是 path 正则或埋点版本漂移。"
+
+  - name: agent-platform.execution-queue
+    rules:
+      # 队列积压 >100（F37 InMemory 默认容量 256 的 ~40%）—— worker 不足或卡死。
+      - alert: QueueBacklogHigh
+        expr: max by (backend) (execution_queue_depth) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "执行队列积压过高（backend={{ $labels.backend }}）"
+          description: "当前深度 {{ $value }}，检查 worker 是否运行（DurableExecution:QueueEnabled）、模型是否阻塞导致消费停滞。"
+
+      # 深度序列消失（worker/队列未启用或被误关）。
+      - alert: QueueDepthMetricAbsent
+        expr: absent(execution_queue_depth)
+        for: 15m
+        labels:
+          severity: info
+        annotations:
+          summary: "未采集到 execution_queue_depth 指标"
+          description: "队列仪表随进程启动即注册（与 QueueEnabled 无关），该序列缺失通常意味着平台版本早于 F39 或 /metrics 抓取失败（见 TargetDown）。"
+
+  - name: agent-platform.availability
+    rules:
+      - alert: TargetDown
+        expr: up{job="agent-platform-api"} == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "平台 /metrics 抓取目标下线"
+          description: "API 实例不可达或未暴露 /metrics，其余指标与告警在此状态下不可信。"

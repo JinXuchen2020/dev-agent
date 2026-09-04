@@ -25,6 +25,20 @@ internal sealed class ExecutionLogRepository : IExecutionLogRepository
             .FirstOrDefaultAsync(x => x.Id == id, ct);
     }
 
+    /// <inheritdoc />
+    public async Task<ExecutionLog?> GetByIdForTenantAsync(Guid id, Guid tenantId, CancellationToken ct = default)
+    {
+        // ExecutionLog 不在全局 query filter 覆盖范围内（未实现 ITenantScoped），
+        // 故此处显式按租户过滤：跨租户 id 与不存在同样返回 null（404，不暴露存在性）。
+        return await _context.Set<ExecutionLog>()
+            .Include(x => x.Entries)
+            .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == tenantId, ct);
+    }
+
+    /// <inheritdoc />
+    public Task<bool> IsOwnedByTenantAsync(Guid id, Guid tenantId, CancellationToken ct = default) =>
+        _context.Set<ExecutionLog>().AnyAsync(x => x.Id == id && x.TenantId == tenantId, ct);
+
     public async Task<IReadOnlyList<ExecutionLog>> GetByWorkflowIdAsync(
         Guid workflowId, CancellationToken ct = default)
     {

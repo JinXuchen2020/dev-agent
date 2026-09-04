@@ -7,13 +7,14 @@ namespace AgentPlatform.Domain.Aggregates.ApiKeys;
 /// Keys are stored encrypted at rest via <c>IAesEncryptor</c> and support
 /// versioned rotation, expiration, and revocation for full lifecycle management.
 /// </summary>
-public sealed class ApiKey : ITenantScoped, IAggregateRoot
+public sealed class ApiKey : ITenantScoped, IWorkspaceScoped, IAggregateRoot
 {
     /// <summary>Gets the unique identifier of the API key.</summary>
     public Guid Id { get; private init; }
 
     /// <summary>Gets the tenant that owns this API key.</summary>
     public Guid TenantId { get; private init; }
+    public Guid WorkspaceId { get; private init; }
 
     /// <summary>
     /// Gets the encrypted key value (ciphertext produced by <c>IAesEncryptor.Encrypt</c>).

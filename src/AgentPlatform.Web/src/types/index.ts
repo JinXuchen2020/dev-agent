@@ -97,6 +97,8 @@ export interface ApiKey {
 export interface Conversation {
   id: string;
   agentName?: string;
+  // F36：归属 agent（agent 步骤自动创建的 per-agent 会话绑定其 agent；人工/Chat 会话为空）。
+  agentId?: string | null;
   workflowId?: string;
   knowledgeBaseId?: string;
   collectionName?: string;
@@ -171,6 +173,21 @@ export interface ConfigurationAgentTemplate {
   modelApiUrl?: string | null;
   systemPrompt?: string | null;
   sourceVersion: string;
+}
+
+// F37 队列模式：run 端点等待窗口内未到终态时返回 202 queued（显式不假成功）。
+export interface QueuedRunResponse {
+  queued: true;
+  workflowId: string;
+  state?: string;
+}
+
+export function isQueuedRunResponse(value: unknown): value is QueuedRunResponse {
+  return (
+    typeof value === 'object'
+    && value !== null
+    && (value as { queued?: unknown }).queued === true
+  );
 }
 
 export interface Workflow {
@@ -550,6 +567,65 @@ export interface ExecutionLogStepEntry {
   nodeType: number | null;
 }
 
+// ── F40 异常回放诊断（只读重建，不重新执行）──
+// 注意：平台未注册 JsonStringEnumConverter，枚举按 **数值** 序列化 ——
+// WorkflowState: 0 Pending / 1 Running / 2 Paused / 3 Completed / 4 Failed / 5 RolledBack；
+// StepType 见 pages.executionLogs.stepType.* 的 i18n 数值键。
+export interface ReplayNodeView {
+  stepOrder: number;
+  stepName: string;
+  status: number;
+  nodeType: number | null;
+  isFailure: boolean;
+  startedAt: string;
+  completedAt: string | null;
+  durationMs: number;
+  /** 推断输入（= 前序节点输出）；平台未落库真实入参，见 inputInferred。 */
+  input: string | null;
+  inputInferred: boolean;
+  output: string | null;
+  outputLength: number;
+  outputTruncated: boolean;
+  errorDetail: string | null;
+  errorTruncated: boolean;
+  tokensIn: number;
+  tokensOut: number;
+  tokensReported: boolean;
+}
+
+export interface ReplayFailurePath {
+  firstFailedStepOrder: number | null;
+  failedStepNames: string[];
+  failedCount: number;
+}
+
+export interface ReplayContextSnapshot {
+  available: boolean;
+  source: string | null;
+  variables: Record<string, string>;
+  checkpointVersion: number | null;
+  executionOrderIndex: number | null;
+  stepStateCount: number;
+  note: string;
+}
+
+export interface ReplayReport {
+  executionLogId: string;
+  workflowId: string;
+  workflowName: string;
+  overallStatus: number;
+  startedAt: string;
+  completedAt: string | null;
+  totalSteps: number;
+  nodes: ReplayNodeView[];
+  failurePath: ReplayFailurePath;
+  contextSnapshot: ReplayContextSnapshot;
+  recordedStepCount: number;
+  missingStepCount: number;
+  /** 数据缺口码：前端据此灰显提示，避免把「信息缺失」读成「没有失败」。 */
+  dataGaps: string[];
+}
+
 // ── 评估数据集 / 回归评估（F24）──
 export type EvaluationMatchMode = 0 | 1; // 0=Exact, 1=Contains
 
@@ -616,6 +692,43 @@ export interface AuthUser {
   email: string;
   role: string;
   tenantId: string;
+  // F35: 当前活跃工作空间（无 claim / 空 Id 时缺省，前端回退租户默认工作空间）。
+  currentWorkspaceId?: string | null;
+}
+
+// ── Workspace (F35: 同租户内第二层隔离维度) ──
+export interface Workspace {
+  id: string;
+  name: string;
+  description?: string | null;
+  isDefault: boolean;
+  createdAt: string;
+}
+
+export interface WorkspaceMember {
+  userId: string;
+  email: string;
+  joinedAt: string;
+}
+
+export interface CreateWorkspaceRequest {
+  name: string;
+  description?: string | null;
+}
+
+export interface UpdateWorkspaceRequest {
+  name: string;
+  description?: string | null;
+}
+
+export interface AddWorkspaceMemberRequest {
+  email: string;
+}
+
+// F35: switch 响应（后端重签 httpOnly cookie；token 字段仅调试用，前端不落盘）。
+export interface SwitchWorkspaceResponse {
+  workspace: Workspace;
+  token: string;
 }
 
 export interface LoginRequest {

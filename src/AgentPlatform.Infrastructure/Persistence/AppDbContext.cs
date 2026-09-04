@@ -17,6 +17,7 @@ using AgentPlatform.Domain.Aggregates.Users;
 using AgentPlatform.Domain.Aggregates.HumanApprovals;
 using AgentPlatform.Domain.Aggregates.WorkflowTriggers;
 using AgentPlatform.Domain.Aggregates.Workflows;
+using AgentPlatform.Domain.Aggregates.Workspaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace AgentPlatform.Infrastructure.Persistence;
@@ -27,6 +28,7 @@ namespace AgentPlatform.Infrastructure.Persistence;
 public sealed class AppDbContext : DbContext, IUnitOfWork
 {
     private readonly Guid _tenantId;
+    private readonly Guid _workspaceId;
 
     /// <summary>
     /// 当前使用的数据库类型
@@ -43,10 +45,12 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
     /// </summary>
     /// <param name="options">The options used to configure the database context.</param>
     /// <param name="tenantProvider">The provider that supplies the current tenant identifier for query filtering.</param>
-    public AppDbContext(DbContextOptions<AppDbContext> options, ITenantProvider tenantProvider)
+    /// <param name="workspaceProvider">The provider that supplies the current workspace identifier for query filtering (F35).</param>
+    public AppDbContext(DbContextOptions<AppDbContext> options, ITenantProvider tenantProvider, IWorkspaceProvider workspaceProvider)
         : base(options)
     {
         _tenantId = tenantProvider.GetTenantId();
+        _workspaceId = workspaceProvider.GetWorkspaceId();
     }
 
     /// <summary>
@@ -165,6 +169,16 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
     public DbSet<PlatformModel> PlatformModels => Set<PlatformModel>();
 
     /// <summary>
+    /// Gets the <see cref="DbSet{TEntity}"/> providing access to tenant workspaces (F35, tenant-scoped).
+    /// </summary>
+    public DbSet<Workspace> Workspaces => Set<Workspace>();
+
+    /// <summary>
+    /// Gets the <see cref="DbSet{TEntity}"/> providing access to workspace memberships (F35, tenant-scoped).
+    /// </summary>
+    public DbSet<WorkspaceMember> WorkspaceMembers => Set<WorkspaceMember>();
+
+    /// <summary>
     /// Returns all aggregate roots currently tracked by the change tracker, used for dispatching domain events on save.
     /// </summary>
     /// <returns>A read-only collection of tracked <see cref="IAggregateRoot"/> instances.</returns>
@@ -192,10 +206,58 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
                 // Without this, all requests share the first request's tenant ID — P0 isolation break.
                 var body = Expression.Equal(prop,
                     Expression.Field(Expression.Constant(this, typeof(AppDbContext)), "_tenantId"));
+
+                // F35: 工作空间隔离实体（IWorkspaceScoped，业务聚合）叠加 workspace 过滤。
+                // Workspace / WorkspaceMember 是租户级实体（WorkspaceId 是数据而非隔离范围），不叠加。
+                if (typeof(IWorkspaceScoped).IsAssignableFrom(entity.ClrType))
+                {
+                    var workspaceProp = Expression.Property(param, "WorkspaceId");
+                    var workspaceEquals = Expression.Equal(workspaceProp,
+                        Expression.Field(Expression.Constant(this, typeof(AppDbContext)), "_workspaceId"));
+                    body = Expression.AndAlso(body, workspaceEquals);
+                }
+
                 modelBuilder.Entity(entity.ClrType).HasQueryFilter(Expression.Lambda(body, param));
             }
         }
 
         base.OnModelCreating(modelBuilder);
+    }
+
+    /// <summary>
+    /// F35 写路径约定：对未显式赋值（WorkspaceId 为空）的新增 <see cref="IWorkspaceScoped"/> 实体，
+    /// 注入当前工作空间标识符（JWT claim → header → 租户默认工作空间，见 IWorkspaceProvider）。
+    /// 显式赋值优先，不覆盖；直连上下文构造（测试基座等无 workspace 上下文场景）注入
+    /// <see cref="Guid.Empty"/>，与空过滤器的查询语义自洽。
+    /// </summary>
+    private void InjectWorkspaceIdForAddedEntities()
+    {
+        foreach (var entry in ChangeTracker.Entries())
+        {
+            if (entry.State != EntityState.Added || entry.Entity is not IWorkspaceScoped)
+            {
+                continue;
+            }
+
+            var current = entry.Property(nameof(IWorkspaceScoped.WorkspaceId)).CurrentValue;
+            if (current is null || (Guid)current == Guid.Empty)
+            {
+                entry.Property(nameof(IWorkspaceScoped.WorkspaceId)).CurrentValue = _workspaceId;
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        InjectWorkspaceIdForAddedEntities();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    /// <inheritdoc />
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        InjectWorkspaceIdForAddedEntities();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
 }

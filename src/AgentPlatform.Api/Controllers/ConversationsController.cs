@@ -63,15 +63,17 @@ public sealed class ConversationsController : ControllerBase
     /// </summary>
     /// <param name="status">Optional lifecycle status to filter by.</param>
     /// <param name="q">Optional free-text search across id, workflow id, knowledge base id, collection name, and message contents.</param>
+    /// <param name="agentId">Optional owning agent id to filter by (F36 per-agent conversation isolation).</param>
     /// <param name="ct">A token to observe for cancellation of the request.</param>
     /// <returns>An <see cref="IActionResult"/> containing a list of conversations.</returns>
     [HttpGet]
     public async Task<IActionResult> GetConversations(
         [FromQuery] ConversationStatus? status,
         [FromQuery] string? q,
+        [FromQuery] Guid? agentId,
         CancellationToken ct)
     {
-        var conversations = await _mediator.Send(new GetConversationsQuery(status, q), ct);
+        var conversations = await _mediator.Send(new GetConversationsQuery(status, q, agentId), ct);
         return Ok(conversations);
     }
 

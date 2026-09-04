@@ -7,13 +7,14 @@ namespace AgentPlatform.Domain.Aggregates.Users;
 /// Passwords are never stored in plaintext — only a PBKDF2 hash produced by
 /// <c>IPasswordHasher</c> is persisted in <see cref="PasswordHash"/>.
 /// </summary>
-public sealed class User : ITenantScoped, IAggregateRoot
+public sealed class User : ITenantScoped, IWorkspaceScoped, IAggregateRoot
 {
     /// <summary>Gets the unique identifier of the user.</summary>
     public Guid Id { get; private init; }
 
     /// <summary>Gets the tenant that owns this user.</summary>
     public Guid TenantId { get; private init; }
+    public Guid WorkspaceId { get; private init; }
 
     /// <summary>Gets the user's email (unique per tenant, used as login name).</summary>
     public string Email { get; private set; } = null!;

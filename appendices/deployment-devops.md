@@ -85,6 +85,8 @@ volumes:
 
 ### H.3 CI/CD 流水线（GitHub Actions）【阶段二实现】
 
+> **评估门禁接入模板（F38）**：`ci/eval-gate-github.yml`（GitHub Actions）与 `ci/eval-gate-gitlab.yml`（GitLab CI）是「复制即用」样例，接入 F34 在线评估门禁（`POST /api/v1/evaluation-datasets/{id}/gate/{workflowId}`，200 放行 / 422 阻断）。位于 `ci/` 目录，**不在本仓库自动执行**（需指向已配真实 Key 的目标实例）。配置与故障排查见 `docs/ci-eval-gate-guide.md`。
+
 ```yaml
 # .github/workflows/ci.yml
 name: Agent Platform CI
@@ -125,6 +127,8 @@ jobs:
       # → 推送镜像到容器仓库...
 ```
 
+> **可观测性栈接入模板（F39）**：`deploy/docker-compose.monitoring.yml` 起 Prometheus（v2.54.1）+ Alertmanager（v0.27.0）+ Grafana（11.2.0）+ 可选 redis-exporter（v1.64.0），版本全部锁定。抓取平台 `/metrics`（OTel→Prometheus），告警规则 `deploy/monitoring/alert-rules.yml`（执行失败率/门禁阻断率/队列积压/模型延迟 等 9 条），通知路由 `deploy/monitoring/alertmanager.yml`（Slack/PagerDuty 密钥占位 `REPLACE_ME`，勿提交真实值，部署侧渲染）。Grafana 采用 provisioning 正确布局（provider YAML + JSON 目录分离 + 数据源 `uid: prometheus`）。指标名/标签与阈值调参、故障排查、Dashboard 版本兼容要求见 `docs/observability-guide.md`。
+
 ### H.4 环境配置管理
 
 ```csharp
@@ -134,6 +138,8 @@ jobs:
     "PostgreSQL": "Host=localhost;Database=agent_platform;Username=agent;Password=agent_dev"
   },
   "Redis": { "Connection": "localhost:6379" },
+  // F37 队列化执行：QueueEnabled=false 默认单实例直跑；生产多实例置 true + RedisStream/RabbitMQ
+  "DurableExecution": { "QueueEnabled": false, "QueueBackend": "InMemory", "QueueMaxAttempts": 3 },
   "Jwt": { "Secret": "dev-secret-do-not-use-in-production" }
 }
 
@@ -161,7 +167,7 @@ jobs:
 | 模型调用排队 | vLLM GPU | GPU 节点增加 → vLLM 接入 Nginx 上游组 → 路由层做负载均衡 |
 | 数据库查询慢 | PostgreSQL | 主从分离：写走主库、读走从库；加 pgvector 索引优化向量检索 |
 | 缓存命中低 | Redis | Redis Cluster 分片扩容；增加本地 MemoryCache 作为 L1 缓存 |
-| 工作流并发高 | Agent 执行队列 | 队列从内存改为 Redis Stream，Workflow 实例水平扩展消费 |
+| 工作流并发高 | Agent 执行队列 | ✅ F37 已实现：`DurableExecution:QueueEnabled=true` + `QueueBackend=RedisStream`（或 RabbitMQ），多 `ExecutionWorker` 实例经消费组 + F30 租约水平扩展消费；无中间件时 InMemory 后端单实例回退 |
 
 ### H.6 前端发布
 

@@ -1,5 +1,124 @@
 # 变更日志
 
+## v2.39 (2026-09-03)
+
+### F40 · 异常回放诊断入口 —— 分支 `feat/f40-replay-diagnostics`（基于 f39）
+
+从执行日志**只读重建**失败工作流的异常路径（不重新执行、不写任何状态），复用 F24 Trace 字段与 F30 检查点数据。
+
+**后端**：
+- `POST /api/v1/execution-logs/{id}/replay`（`[Authorize(Roles=Admin,Operator)]`，与同级端点一致）→ `ReplayReport`：节点序列（状态/耗时/输出/错误/token）、`failurePath`（首个失败序号 + 失败节点名 + 计数）、`contextSnapshot`（末次 Blackboard 快照）、`recordedStepCount`/`missingStepCount`、`dataGaps`。
+- `ReplayExecutionCommand` 用 `IRequest` 而非 `ICommand`：只读诊断不应经 `UnitOfWorkBehavior` 触发 SaveChanges。
+- 8 个稳定数据缺口码：`input-snapshot-unavailable` / `node-type-missing-legacy-rows` / `tokens-not-reported` / `context-snapshot-unavailable` / `context-snapshot-unparsable` / `steps-missing-truncated-execution` / `total-steps-unregistered` / `report-nodes-capped`。
+- **安全收口（同批）**：`ExecutionLog` 不实现 `ITenantScoped` 且仓储 `GetByIdAsync` 无租户谓词 → 既有**详情/steps 端点存在「持 GUID 读他租户日志」窗口**（非 F40 引入，按用户决策一并修）。新增 `GetByIdForTenantAsync`/`IsOwnedByTenantAsync`，三个读端点统一租户作用域（跨租户与不存在同为 404）；EF 级测试实证无过滤路径可跨租户取数以防回归。
+
+**前端**：`ExecutionLogDetailPage` 改为 Tabs（步骤明细 + 回放诊断，按需加载）；新 `ReplayPanel` 作**失败/无失败/信息不完整三态判定**（避免「无数据」被渲染成绿色健康）、数据缺口告警、时间线 + 可折叠节点详情、上下文快照边界说明；SSE 进度推进时失效已加载报告按需重取；类型/`api.ts`/i18n 中英对称。
+
+**诚实性校正**：① 平台无每节点真实入参 → `input` 标 `inputInferred=true`，首节点直接 null（不用 Workflow 当前值冒充历史）；② F30 仅末次检查点，不声称 per-step 可回放；③ 建档时 `TotalSteps` 未知恒 0（审查抓出的假健康）→ 用 `total-steps-unregistered` 显式声明不可判，而非让 `missingStepCount` 恒 0 冒充无缺失。
+
+**测试/BDD**：后端 Reqnroll 新增 2 场景（失败日志→内容级断言：失败计数/首个失败序号/错误详情/推断输入/上下文快照/缺口披露；成功日志→无失败）+ 集成种子新增确定失败日志（`FailedExecutionLogId` 含检查点）；前端新增 playwright-bdd `execution-log-replay.feature` + `executionLog.steps.ts`（CI 运行）；单测：Replay handler 14 例（只读性、跨租户、损坏检查点降级、截断代理对安全、响应封顶）+ 租户收口 handler 测试 + EF 收口测试 + `ReplayPanel` 8 例。
+
+**三道质量门全 PASS**（`.quality-gate.json` 推进 `f40-replay-diagnostics`）：对抗审查修 P1×4（`Guid.Empty` 兜底无回归锁、响应无上限、`TotalSteps=0` 假健康、既有端点收口无 handler 级测试）+ P2×2（前端「无失败即健康」误导、SSE 后报告陈旧）+ P3；结构门修 P2×1（循环同序致 Collapse key 冲突）+2 waiver；optimizer 修 P3×1（截断撕裂 UTF-16 代理对→U+FFFD 篡改诊断文本）+2 waiver。质量报告 `docs/quality/f40-replay-diagnostics-gate.md`。
+
+**验证**：build 0/0；Application **285**、Infrastructure **175+8 跳**、Api **39**、Architecture **9**、Integration **5**（需 `OPENAI__Key`）、SpecFlow **117/118**（唯一失败=master 既有 LLM 用例）；前端 tsc 0 error、vitest **50 通过**（既有豁免 2 处）、`vite build` 通过、`bddgen` exit 0。文档同步：CHANGELOG v2.39、`appendices/api-spec.md`（I.10.3 回放契约 + 租户收口，并修正 I.10.1 过期注释）、backlog F40 done。
+
+**已知残留（非阻断）**：Entries 全量 `Include` 读放大（响应已封顶，物化成本未消除）；节点封顶后失败节点可能落在展示区外（已由缺口码披露）；`errorTruncated`/节点时间戳等契约字段暂未在 UI 呈现；e2e 硬编码种子 GUID 靠注释与 `IntegrationConstants` 锚定。
+
+## v2.38 (2026-09-02)
+
+### F39 · 监控告警聚合（可观测性栈）—— 分支 `feat/f39-observability-alerting`（基于 f38）
+
+把裸 `/metrics` + 半成品监控栈升级为可用可观测性栈：Prometheus 抓取 + 告警规则 + 可导入 Grafana 仪表盘 + Alertmanager（Slack/PagerDuty）+ 一键部署与指南。
+
+**交付**：
+- `deploy/monitoring/prometheus.yml`（改造）：抓取目标参数化 + `rule_files` + `alerting.alertmanagers` + relabel 固定 `instance`。
+- `deploy/monitoring/alert-rules.yml`（新）：9 条告警（执行失败率>10%、门禁阻断率>5%、队列积压>100、模型 P99>30s + TargetDown/ApiError/Stalled 辅助），全部只引用真实存在的指标与标签值。
+- `deploy/monitoring/alertmanager.yml`（新）：route + Slack/PagerDuty 占位接收器 + inhibit 规则（密钥占位 `REPLACE_ME`，模板不含真实凭据）。
+- `deploy/monitoring/grafana/provisioning/{datasources,dashboards}/*.yml` + `grafana/dashboards/agent-platform.json`（12 面板）：修正既有「裸 JSON 挂进 provisioning 不加载」缺陷，数据源显式 `uid: prometheus` 供面板引用。
+- `deploy/docker-compose.monitoring.yml`（改造）：镜像锁版本（prometheus v2.54.1 / grafana 11.2.0 / alertmanager v0.27.0 / redis_exporter v1.64.0）+ alertmanager/redis-exporter 服务 + 健康检查。
+- `docs/observability-guide.md`（新）：一键部署 / 指标清单 / 阈值调参 / 告警对接 / 故障排查 / 版本要求 / 高基数技术债。
+- **后端埋点（D1=B）**：`IExecutionQueue.QueueDepth` 契约 + `WorkflowMetrics.EvaluationGateCounter`（`evaluation.gate.total{passed}`）+ `execution.queue.depth{backend}` ObservableGauge（`QueueDepthGauge`）；三后端真实读数（InMemory 精确 / Redis XLEN / RabbitMQ 后台 5s 刷新缓存）。
+
+**关键校正（相对 backlog 原文）**：不存在 `result="failed"`（失败⇒`rolledback`，否则告警永不触发）；门禁阻断率优先用 F39 埋点、HTTP 422 派生作交叉验证；队列深度改由应用自身上报（Redis ack 后同步 XDEL 修正积压名不副实）；Grafana provisioning 挂载布局修正。原设计 §3/§5 倾向「不触 src/（D1=A）」，最终采 **D1=B**：补后端原生 QueueDepth/门禁计数埋点，InMemory 亦可观测（详见设计文档实施校正）。
+
+**质量门**：对抗式审查修 P1×2（Redis XLEN/XDEL 语义、Grafana 数据源 uid）+ P2×3 + P3×5；结构门 0 新增（3×P3 waiver）。三道质量门 PASS（`.quality-gate.json` 推进 `f39-observability-alerting`）。质量报告 `docs/quality/f39-observability-alerting-gate.md`。`dotnet build` 0/0；Application.Tests 269/269、Infrastructure.Tests 174 通过/8 跳过、Api.Tests 39/39；monitoring 全部 YAML/JSON `yaml.safe_load`/`json.load` 结构校验通过。
+
+**已知残留（非阻断）**：promtool/amtool/镜像 tag/Grafana 导入本机无 Docker 无法实跑，以结构校验兜底、指南给可复现命令；`workflow_id`/`path`（含 GUID）高基数标签治理与 RabbitMQ 深度 ≤5s 缓存为独立技术债（指南 §9 标注）。
+
+## v2.37 (2026-09-02)
+
+### F38 · CI YAML 接入评估门禁样例 —— 分支 `feat/f38-ci-eval-gate`（基于 f37）
+
+**纯 CI 模板 + 文档，不触 `src/`**：把 F34 在线评估门禁端点接入 CI/CD，实现「模型/prompt/编排变更前跑数据集回归、未达通过率阈值阻断合并」。
+
+**交付**：
+- `ci/eval-gate-github.yml` — GitHub Actions 可复制模板：PR（限定 prompt/模型/编排 paths）+ workflow_dispatch 触发 → `curl -c` 登录取 httpOnly cookie → `curl -b` 调 `POST /evaluation-datasets/{id}/gate/{workflowId}` → 以 HTTP 码为唯一阻断契约（200 放行 / 422·其它·000 exit 1 阻断）→ 可选 Slack 失败通知；concurrency 串行、`timeout-minutes: 15`。
+- `ci/eval-gate-gitlab.yml` — GitLab CI 模板：`workflow.rules merge_request_event` + `eval-gate` job（before_script 登录 cookie、script 门禁 + 退出码阻断、`allow_failure:false`）+ `artifacts on_failure` 落响应 + `.post` 失败通知 job；支持 `include: local` 或复制 job 两种接法。
+- `docs/ci-eval-gate-guide.md` — 中文接入指南：端点契约表、环境变量/secrets、GitHub/GitLab 接入步骤、阈值优先级（请求体 `minPassRate` > 服务端 `GateMinPassRate` 默认 0.8）、空集恒不通过、超时与 `MaxCases`（默认 10）、失败通知、故障排查表、安全（凭据走 secrets、不打印 cookie/token）、与 F35/F36/F37 关系。
+- 设计文档 `features/f38-ci-eval-gate.md`（含 Quality Gate Checklist + optimizer 记录 + 审查修复记录）。
+
+**关键校正（相对 backlog 原文）**：F41 已删 QuickStart，验收「本地 QuickStart 跑通」不可行 → 改为「指向已配置真实 Key 的实例 / Stub Test 环境冒烟」两路径；端点越界 `minPassRate` 实返 **500 非 400**（服务端无对应 handler，已核 `Program.cs:37-42` 仅 6 个 handler）。模板放置 `ci/`（非 `.github/workflows/`）以免在本仓库自动触发连不存在实例。
+
+**质量门**：对抗式评审修 3×高（curl 传输失败被 `set -e` 抢杀→`|| true`、登录密码/阈值 JSON 注入→json_escape+本地数字校验、外部 PR `ref_name` 脚本注入→内置 env）+ 2×中（400→500 文档、workspace 优先级说明）；两模板 `yaml.safe_load` + 内嵌脚本 `bash -n` 通过；HTTP 码分支本地 mock 桩冒烟 200/422/000 实测 rc=0/1/1。三道门全 PASS（`.quality-gate.json` 推进 `f38-ci-eval-gate`）。质量报告 `docs/quality/f38-ci-eval-gate-gate.md`。
+
+**已知残留（非阻断）**：真实平台端到端跑（含数据集/服务账号/staging）需接入方环境，超出本地沙箱，指南给可复现命令；actionlint/GitLab lint 本机不可用，以 `python yaml.safe_load` 结构校验替代，正式接入由目标 CI 兜底校验。
+
+## v2.36 (2026-09-02)
+
+### F37 · 队列化执行与水平扩展（Redis Stream / RabbitMQ / InMemory 三后端）—— 分支 `feat/f37-queued-execution`（基于 f36）
+
+**决策（features/f37-queued-execution.md §5，2026-09-01 用户锁定）**：D1=B 三后端全做 / D2=B run 端点透明「入队 + 等待终态」/ D3=A 复用 F30 5min 租约作接管窗口（校正 backlog 原文「30s」）/ D4=A 评估门禁保持同步直跑。
+
+**后端**：
+- Application：`IExecutionQueue` 抽象 + `ExecutionJob`（载荷自带 TenantId/WorkspaceId/Preset/Trigger/Payload/Attempt）+ `QueueDelivery`/`EnqueueResult`；`QueuedRunSupport`（入队 + AsNoTracking 轮询等待终态，默认 110s<前端超时）；`ExecuteQueuedWorkflowCommand`（消费 scope 复现租户/工作空间 Override、跨租户拒跑、终态重复投递→Duplicate 绝不 Reset 重跑、F30 租约冲突→Duplicate、触发投递 FromQueue=true 防再入队回环）；`WorkflowRunResult`/`ExistingWorkflowRunResult`（NotQueued/Completed/Queued/Rejected）。
+- Infrastructure：三后端 `InProcessExecutionQueue`（Channel 有界 256，满则显式拒投）/ `RedisStreamExecutionQueue`（XADD MAXLEN + XREADGROUP 消费组 ap-workers + XAUTOCLAIM 空闲=租约 TTL 崩溃接管 + XACK + 死信流；自建 multiplexer 单例双检+Dispose；NOGROUP 自愈）/ `RabbitMqExecutionQueue`（RabbitMQ.Client 7.1.2：durable 队列 + persistent 发布 + BasicGet pull autoAck=false + prefetch=1 + 断线 unacked 重投 + channel epoch 防跨代误 ack + 死信队列）；`ExecutionWorker`（BackgroundService，恒注册 + QueueEnabled 运行时门控；失败按 Attempt 重投、超限死信、仅接管成功才 ack，杜绝「死信失败仍 ack」丢任务）；触发处理器队列模式投递 + 入队失败降级直跑（记 warning）。`DurableExecutionSettings` 扩展 12 队列配置项，未知 QueueBackend 告警回退。
+- Api：`WorkflowsController` run/run-existing 三态映射（200 完成聚合 / 202 `{queued,workflowId,state}` / 503 拒投）；默认 QueueEnabled=false 直跑路径零变化。
+
+**前端**：`types` 加 `QueuedRunResponse` + `isQueuedRunResponse` 守卫；`api.ts` run 返回 union；WorkflowCanvasPage/WorkflowsPage 处理 queued 分支（进度经 SSE/详情）；i18n 中英对称。
+
+**测试/CI**：新增 Application 队列 15 + Infrastructure queue/worker 9 + Api 队列模式 E2E 2（真 HTTP→InMemory 队列→worker→F30 租约→编排终态）；Redis/Rabbit 投递闭环 SkippableFact（本地跳过、CI redis+rabbitmq services 下真跑）。
+
+**质量门**：三道门全 PASS（`.quality-gate.json` 推进 `f37-queued-execution`，`cleared:true`）。ddd-code-reviewer 修 **P0**（重复投递二次执行）+ **P1×4**（轮询读到陈旧实体致必超时、死信失败仍 ack 丢任务、Redis 连接无界泄漏、Rabbit 跨 channel 误 ack）+ P2×3 + P3；结构门 0 open（P3×2 修）；optimizer Round F37-01 0 open（P3×1 修 + 2 waiver）。验证：build 0/0；Application **268** / Infrastructure **171+8跳** / Api **37** / Architecture 9 / Integration 5（需 `OPENAI__Key`）/ SpecFlow **115/116**（唯一失败=master 既有 LLM 用例）；前端 tsc 0 error + vitest（既有豁免×2）+ vite build。文档同步：CHANGELOG v2.36、BLUEPRINT、appendices（api-spec I.3.1 队列模式 / deployment-devops H.4 配置 + H.5 扩容「已实现」）、backlog F37 done。质量报告 `docs/quality/f37-queued-execution-gate.md`。
+
+**已知残留（非阻断）**：RabbitMQ/Redis 真 broker 投递闭环仅在 CI services 覆盖（本地无 broker 跳过）；InMemory 后端进程重启丢未 ack 作业（单实例回退，多实例生产须 Redis/Rabbit）；触发投递重跑会重放载荷（at-least-once 语义，不做 exactly-once）。
+
+## v2.35 (2026-09-01)
+
+### F36 · Agent 上下文隔离（Blackboard 分区 + 独立对话历史）—— 分支 `feat/f36-agent-context-isolation`（基于 f35 分支）
+
+**后端**：
+- Blackboard 软分区（决策 D1=A）：`agent:{agentId}:` 键约定 + `GetPartitionView(agentId)`（全局区+自分区、自分区键剥离前缀）+ `GetGlobalView()`（未绑定 agent 的 LLM 步骤剔除 agent 分区键，对存量数据零变化）；底层扁平存储与 F30 检查点/F25 调试器/RunningExecution 快照三个持久化格式零变更。
+- `Conversation.AgentId`（D2=A）：迁移 `AddConversationAgentId`（nullable 列 + 唯一过滤索引 `IX_Conversations_TenantId_WorkflowId_AgentId` 防并发重复创建 + 复合索引覆盖查询）；`AgentCallStepExecutor` 自动创建/复用 per-agent per-workflow 会话并写入 prompt 摘要与回复消息；best-effort——持久化失败先 `Detach` 隔离再吞（防 Added 实体滞留 change tracker 毒化编排器后续 SaveChanges），OCE 穿透。
+- agent 回复显式回写全局键 `agent:{agentId}:output`（D4=A），下游步骤经 `Blackboard.Get` 引用。
+- 会话列表端点 `GET /conversations?agentId=` 过滤（D3=A）；种子 agent 会话 + BDD 场景（Conversation.feature，确定性无 LLM）。
+
+**前端**：ConversationsPage agent 筛选 Select（getAgents 补 AbortSignal）+ 卡片紫色 agent 标签（agentId→名称映射）+ 新建兜底刷新携带筛选条件 + i18n 中英对称。
+
+**决策（features/f36-agent-context-isolation.md §5，2026-08-31 用户锁定）**：D1=A 软分区 / D2=A 自动建会话 / D3=A 筛选+标签 / D4=A 显式回写。现实修正：Blackboard 实为 `Dictionary<string,string>`（非 backlog 原文的 `<string,object>`）、AgentCallStepExecutor 原本从不接触 Conversation。
+
+**质量门**：三道门全 PASS（`.quality-gate.json` 推进 `f36-agent-context-isolation`，`cleared:true`）。ddd-code-reviewer 修复 P1（唯一过滤索引防并发双建会话）+ 3×P2（OCE 不吞用例锁定、getAgents AbortSignal、兜底刷新带筛选）；结构门 P0-P2=0（2×P3 waiver：分区预留 API、截断字面量）；optimizer Round F36-01 修 P1（Detach 隔离）+ 3×P3（doc 注释归位/if 合并/冗余单列索引移除），0 open。测试：build 0/0；Application **253** / Infrastructure **162+6skip** / Api 35 / Architecture 9 / Integration 5 / SpecFlow **115/116**（唯一失败=master 既有 LLM 用例）；新增 Blackboard 分区 7 例 + executor 7 例 + EF 会话隔离 4 例 + SpecFlow 1 场景；前端 tsc 0 error + vitest（既有豁免×2）+ vite build。质量报告 `docs/quality/f36-agent-context-isolation-gate.md`。
+
+**已知残留（非阻断）**：硬分区（`Dictionary<Guid,…>` 重构 + 持久化 SchemaVersion 升级）列 v2；分区写入 API（SetInPartition/GetFromPartition）v1 为预留、agent 工具链落地时接入；截断字面量 8000/12000 未抽配置。
+
+## v2.34 (2026-08-31)
+
+### F35 · 多工作空间隔离（Workspace）—— 同租户内第二层隔离维度（分支 `feat/f35-workspace-isolation`）
+
+**后端**：
+- Domain：`Workspace`/`WorkspaceMember` 新聚合（不实现 `IWorkspaceScoped`——其 `WorkspaceId` 是数据而非隔离范围）+ `IWorkspaceScoped` 接口 + `IWorkspaceRepository`/`IWorkspaceMemberRepository`；18 个业务聚合全量加 `WorkspaceId`（`AuditLog`/`ExecutionLog`/`AgentRunRecord` 仅补列不过滤，决策 D2=A）。
+- Infrastructure：`AppDbContext` 组合 query filter（tenant AND workspace，闭包 field per-query 求值）+ `SaveChanges` 对新增 `IWorkspaceScoped` 实体自动注入当前工作空间（显式赋值优先）；`IWorkspaceProvider` 三级解析链（JWT `workspace_id` claim → `X-Workspace-Id` header → `WorkspaceDirectory` 租户默认工作空间兜底 → 空=fail-closed）；`WorkspaceProvisioner`（幂等补默认工作空间 + 空 `WorkspaceId` 存量行回填）；迁移 `20260831052610_AddWorkspaceIsolation`（2 新表 + 21 表加列 + 唯一索引）。
+- Api：`WorkspacesController`（list/create/update/delete/members CRUD/switch，switch 重签 JWT + cookie）；登录写 `workspace_id` claim、`/auth/me` 返回 `currentWorkspaceId`、dev-login 支持可选 `workspaceId`；`WorkspaceHeaderGuardMiddleware`（非 Admin 剥离不可见的 `X-Workspace-Id` 头，Admin 亦校验头 id 属于本租户）；API-Key 认证成功后把请求 scope 钉到 Key 所属工作空间（F22 发布端点/MCP 不受影响）。
+- 触发路径：`GetByIdForTriggerAsync`（仅按租户定位）修复非默认工作空间工作流被触发器静默跳过的回归；调度执行 v1 语义 = 落租户默认工作空间（设计文档已知限制）。
+
+**前端**：
+- `WorkspaceSwitcher`（顶栏：Select 切换 + Admin 管理菜单 = 新建/编辑/成员管理 Drawer/删除守卫提示）+ `api.ts` 请求拦截器注入 `X-Workspace-Id` + `appStore.currentWorkspaceId`（localStorage `app-workspace-id` 持久化）+ `useApiState` 订阅 workspace 变更全站自动刷新（决策 D5=A，单点改 hook）+ i18n 中英对称。
+
+**决策（features/f35-workspace-isolation.md §6，2026-08-31 用户锁定）**：D1=C claim+header 双通道 / D2=A 18 聚合 / D3=B 成员表 / D4=删除守卫绝不级联 / D5=A 状态驱动刷新。
+
+**质量门**：三道门全 PASS（`.quality-gate.json` 推进 `f35-workspace-isolation`，`cleared:true`）；ddd-code-reviewer 修复 2×P1（header 越权剥离中间件、触发路径回归）+ 3 项 P2/P3；ddd-phase-quality-gate P0-P2=0（1×P3 已修 + 2×P3 waiver）；codebase-optimizer Round F35-01 0 open（1×P3 存储键常量单源化 + 5×P3 waiver）。测试：后端 build 0/0 + Application 238 / Infrastructure 158+6skip / Api 35 / Architecture 9 / SpecFlow 114/115（唯一失败为 master 既有 LLM 用例）/ Integration 5（需 `OPENAI__Key` 环境变量）；新增 Application handler 测试 12 例 + Infrastructure EF 隔离测试 4 例；前端 tsc 0 error + vitest（2 个 master 既有失败豁免）+ vite build 通过；BDD E2E `e2e/features/workspace-switch.feature`（CI 驱动）。质量报告 `docs/quality/f35-workspace-isolation-gate.md`。
+
+**已知残留（非阻断）**：触发/调度执行仅落租户默认工作空间；成员列表 N+1（量小可接受）；workspace 名称唯一性大小写语义依赖 DB collation；AuditLog/ExecutionLog/AgentRunRecord 运行期 WorkspaceId 恒空（D2=A 设计，仅为未来过滤预留）。
+
 ## v2.33 (2026-08-28)
 
 ### CI/E2E 真实 Key 链路修复系列（8 commits，`496f3bb` → `05028e6`）——「E2E 用真实 key 不用 stub」方向全面收口
@@ -30,16 +149,16 @@ F41 落地后，集成测试与前端 E2E 全部切到真实 LLM，暴露一批�
 
 ## v2.31 (2026-08-25)
 
-### F34 · 在线评估门禁完成（feature-builder 全栈闭环，🟢低风险，三道质量门全 PASS）——二期 F29–F34 全部收口
+### F43 · 在线评估门禁完成（原记 F34，2026-09-03 解除与沙箱双层的撞号）（feature-builder 全栈闭环，🟢低风险，三道质量门全 PASS）——二期 F29–F34 全部收口
 
-F34 v1 将 F24 离线评估升级为**带阻断语义的部署门禁**：CI/发布流水线调用门禁端点，通过率未达阈值返回 HTTP 422（body 含完整报告），达成则 200——「真实阻断」而非仅报告。执行复用 RunEvaluation 一次性克隆路径，影子隔离零生产写入。
+F43 v1（原记 F34）将 F24 离线评估升级为**带阻断语义的部署门禁**：CI/发布流水线调用门禁端点，通过率未达阈值返回 HTTP 422（body 含完整报告），达成则 200——「真实阻断」而非仅报告。执行复用 RunEvaluation 一次性克隆路径，影子隔离零生产写入。
 
 **核心改动：**
 - **RunEvaluationGateCommand/Handler**：阈值解析链（请求显式 > `EvaluationSettings.GateMinPassRate`=0.8）；越界阈值抛 ArgumentOutOfRange；**空数据集显式守卫恒不通过**（防「无数据即放行」）
 - **端点**：`POST /api/v1/evaluation-datasets/{datasetId}/gate/{workflowId}`（Admin/Operator），remarks 含 CI curl 阻断用法示例
 - **审计归因**：新增 `AuditActionType.EvaluationGate`（Aggregates 生效枚举，字符串存储无迁移），details 记录 score vs threshold 与 PASS/BLOCK
 
-**测试**：新增 `RunEvaluationGateCommandHandlerTests` 5 例（超阈值通过+审计断言、低于阈值阻断、显式覆盖配置、空数据集零阈值仍拦、越界抛错）。全绿 App226 / Infra154+6skip / Api35 / Arch9；build 0/0。前端零改动。设计文档 `features/f34-online-eval-gate.md` §5 含二期收口说明。
+**测试**：新增 `RunEvaluationGateCommandHandlerTests` 5 例（超阈值通过+审计断言、低于阈值阻断、显式覆盖配置、空数据集零阈值仍拦、越界抛错）。全绿 App226 / Infra154+6skip / Api35 / Arch9；build 0/0。前端零改动。设计文档 `features/f43-online-eval-gate.md` §5 含二期收口说明。
 
 **延后项（独立排期）**：CI YAML 接入样例、队列化执行/水平扩展、监控告警聚合、异常回放诊断入口。
 

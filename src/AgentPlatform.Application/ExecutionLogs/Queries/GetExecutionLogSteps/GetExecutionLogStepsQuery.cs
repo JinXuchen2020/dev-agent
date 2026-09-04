@@ -28,13 +28,21 @@ public sealed record ExecutionLogStepsResponse(
     int TotalCount);
 
 internal sealed class GetExecutionLogStepsQueryHandler(
-    Domain.Repositories.IExecutionLogRepository repository)
+    Domain.Repositories.IExecutionLogRepository repository,
+    Abstractions.ITenantProvider tenantProvider)
     : IRequestHandler<GetExecutionLogStepsQuery, ExecutionLogStepsResponse?>
 {
     public async Task<ExecutionLogStepsResponse?> Handle(
         GetExecutionLogStepsQuery request, CancellationToken ct)
     {
         var take = Math.Min(request.Take, 100);
+
+        // F40 安全收口（同详情查询）：非本租户一律 null → 404，不暴露存在性。
+        if (!await repository.IsOwnedByTenantAsync(
+                request.ExecutionLogId, tenantProvider.GetTenantId(), ct))
+        {
+            return null;
+        }
 
         var result = await repository.QueryStepsAsync(
             request.ExecutionLogId, request.Status, request.Skip, take, ct);

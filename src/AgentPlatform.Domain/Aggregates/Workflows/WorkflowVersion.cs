@@ -7,7 +7,7 @@ namespace AgentPlatform.Domain.Aggregates.Workflows;
 /// 工作流定义的不可变快照（版本）。每次「存为版本」产生一条记录，可供历史查看与回滚。
 /// 实现 <see cref="ITenantScoped"/> 自动获得多租户隔离（AppDbContext 全局 query filter）。
 /// </summary>
-public sealed class WorkflowVersion : ITenantScoped, IAggregateRoot
+public sealed class WorkflowVersion : ITenantScoped, IWorkspaceScoped, IAggregateRoot
 {
     /// <summary>Gets the unique identifier of the version.</summary>
     public Guid Id { get; private init; }
@@ -17,6 +17,7 @@ public sealed class WorkflowVersion : ITenantScoped, IAggregateRoot
 
     /// <summary>Gets the tenant that owns the version (drives the query filter).</summary>
     public Guid TenantId { get; private init; }
+    public Guid WorkspaceId { get; private init; }
 
     /// <summary>Gets the monotonically increasing version number within the workflow.</summary>
     public int VersionNumber { get; private init; }

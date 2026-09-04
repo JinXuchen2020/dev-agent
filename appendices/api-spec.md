@@ -116,6 +116,18 @@
 }
 ```
 
+### I.3.1 工作流运行与队列模式（F37）
+
+运行端点 `POST /api/v1/workflows`（创建并运行）与 `POST /api/v1/workflows/{id}/run`（重跑）在两种模式下响应不同：
+
+- **直跑模式（`DurableExecution:QueueEnabled=false`，默认）**：请求内同步跑完编排，返回完整工作流聚合（200）。
+- **队列模式（=true）**：请求先入队 → 服务端在等待窗口（`QueueWaitTimeoutSeconds`，默认 110s < 前端超时）内轮询终态。三态：
+  - **200**：等待窗口内到达终态/暂停，body = 工作流聚合（与直跑同构）。
+  - **202**：`{queued:true, workflowId, state}` —— 未及终态，执行仍由 worker 继续，进度经 SSE/详情查看。
+  - **503**：入队被拒（队列满 / 后端不可用），**绝不静默丢任务**。
+- 三后端（`QueueBackend`）：`InMemory`（默认，进程内 Channel 有界）/ `RedisStream`（消费组 + XAUTOCLAIM 崩溃接管）/ `RabbitMQ`（durable 队列 + BasicGet pull + 断线重投）。至少一次投递，重复消费由 F30 `RunningExecution` 租约互斥兜底。
+- 触发器（Webhook/Schedule）在队列模式下改投递队列由 worker 执行；入队失败降级直跑（记 warning）。评估门禁 F34 保持同步直跑（决策 D4）。
+
 ### I.3.2 发布工作流外部调用 API（F22）
 
 > 由 `POST /api/v1/workflows/{id}/publish` 生成的对外能力。鉴权复用现有 **API Key** 体系（`[Authorize(AuthenticationSchemes="ApiKey")]` + `PerApiKey` 令牌桶限流，非 JWT/cookie），租户由密钥 `tenant_id` 声明自动解析，`key_id` 声明用于调用审计归属。
@@ -235,11 +247,35 @@
 { "title": "Bad Request", "status": 400, "detail": "API Key 无效或无权访问该 provider 的模型列表" }
 ```
 
+### I.11 工作空间 API（F35）
+
+同租户内第二层隔离维度。决策 D1=C：JWT `workspace_id` claim 默认 + `X-Workspace-Id` header 覆盖（服务端
+`WorkspaceHeaderGuardMiddleware` 对非 Admin 剥离不可见的头）；决策 D3=B：非 Admin 仅可见/可切默认空间与自己已加入的空间。
+
+| 方法 | 路径 | 说明 | 权限 |
+| :--- | :--- | :--- | :--- |
+| GET | `/api/v1/workspaces` | 列出对调用者可见的工作空间（Admin 全部；非 Admin = 默认 + 已加入） | authenticated |
+| POST | `/api/v1/workspaces` | 新建 `{name, description?}`；重名 409 | Admin |
+| PUT | `/api/v1/workspaces/{id}` | 重命名/改描述；不存在 404；重名 409 | Admin |
+| DELETE | `/api/v1/workspaces/{id}` | 删除空的非默认工作空间；默认空间 409；仍含成员/业务实体 409（绝不级联） | Admin |
+| GET | `/api/v1/workspaces/{id}/members` | 成员列表（`[{userId,email,joinedAt}]`） | Admin |
+| POST | `/api/v1/workspaces/{id}/members` | 按邮箱添加成员 `{email}`；用户不存在 404；已是成员 409 | Admin |
+| DELETE | `/api/v1/workspaces/{id}/members/{userId}` | 移除成员 | Admin |
+| POST | `/api/v1/workspaces/{id}/switch` | 切换：校验可见性后重签 JWT（`workspace_id` claim）并刷新 httpOnly cookie；不可见 404 | authenticated |
+
+```jsonc
+// GET /api/v1/workspaces 响应（WorkspaceDto[]）
+[ { "id": "guid", "name": "Default", "description": null, "isDefault": true, "createdAt": "2026-08-31T00:00:00Z" } ]
+
+// POST /{id}/switch 响应
+{ "workspace": { "id": "guid", "name": "W1", "isDefault": false, "...": "..." }, "token": "eyJ..." }
+```
+
 ### I.6 对话 API（SSE 流式）
 
 | 方法 | 路径 | 说明 | 权限 |
 | :--- | :--- | :--- | :--- |
-| GET | `/api/v1/conversations` | 会话列表 | read:workflow |
+| GET | `/api/v1/conversations` | 会话列表；可选 `?agentId={guid}` 按归属 agent 过滤（F36，agent 步骤自动建的 per-agent 会话；不传=全部含全局会话） | read:workflow |
 | POST | `/api/v1/conversations` | 创建会话 | write:workflow |
 | GET | `/api/v1/conversations/{id}` | 会话详情（含消息历史） | read:workflow |
 | POST | `/api/v1/conversations/{id}/messages` | 发送消息（流式响应 via SSE） | write:workflow |
@@ -366,7 +402,47 @@ data: {}
 }
 ```
 
-> 注：`ExecutionLog` 保持非 `ITenantScoped`（手动过滤，不破坏既有）；**节点级 Input（入参）v1 不采集**（已知残留，需编排器额外 plumbing）。
+> 注：`ExecutionLog` 不实现 `ITenantScoped`，故租户隔离必须由查询侧显式施加（见 I.10.3 租户收口）；
+> **节点级 Input（入参）不落库**（平台无该字段，回放面板的「输入」为前序输出推断值，见 I.10.3）。
+
+#### I.10.3 异常回放诊断与租户收口（F40）
+
+| 方法 | 路径 | 说明 | 权限 |
+| :--- | :--- | :--- | :--- |
+| POST | `/api/v1/execution-logs/{id:guid}/replay` | **只读**从执行日志条目重建异常路径：节点序列 + 失败判定 + 前后上下文 + 末次 Blackboard 快照 + `dataGaps`。不重新执行任何步骤、不写任何状态 | Admin,Operator |
+
+```jsonc
+// POST /api/v1/execution-logs/{id}/replay → 200 ReplayReport（节选）
+{
+  "overallStatus": 4,                     // WorkflowState 数值（无 JsonStringEnumConverter）
+  "nodes": [ {
+      "stepOrder": 2, "stepName": "Review Step", "status": 4, "nodeType": 4, "isFailure": true,
+      "input": "draft output", "inputInferred": true,   // 真实入参未落库 → 推断值必须显式标注
+      "output": null, "outputLength": 0, "outputTruncated": false,
+      "errorDetail": "模型返回超限", "errorTruncated": false,
+      "tokensIn": 0, "tokensOut": 0, "tokensReported": false } ],
+  "failurePath": { "firstFailedStepOrder": 2, "failedStepNames": ["Review Step"], "failedCount": 1 },
+  "contextSnapshot": {
+      "available": true, "source": "F30-final-checkpoint",
+      "variables": { "loop.x": "1" }, "checkpointVersion": 2, "executionOrderIndex": 2,
+      "stepStateCount": 0,
+      "note": "末次检查点快照（F30 覆盖写，非 per-step 历史）…" },
+  "recordedStepCount": 3, "missingStepCount": 0,
+  "dataGaps": ["input-snapshot-unavailable", "total-steps-unregistered", "tokens-not-reported"]
+}
+```
+
+`dataGaps` 稳定码（前端据此灰显并提示，避免把「信息缺失」读成「没有问题」）：
+`input-snapshot-unavailable`（真实入参未落库）、`node-type-missing-legacy-rows`（F24 前旧行无 NodeType）、
+`tokens-not-reported`、`context-snapshot-unavailable`、`context-snapshot-unparsable`（检查点损坏/格式演进）、
+`steps-missing-truncated-execution`、`total-steps-unregistered`（建档时 `TotalSteps` 未知恒 0 → 缺步数不可判）、
+`report-nodes-capped`（响应封顶 `MaxNodesInReport=500`）。
+
+能力边界与防护：① F30 只保留**末次**检查点，不声称可回放每一步上下文（`contextSnapshot.note` 明示）；
+② 长文本截断 4000 字符且**代理对安全**（撕裂会产生 U+FFFD 篡改诊断文本），原始长度经 `outputLength` 回传；
+③ 不存在或跨租户 → 404（不暴露存在性）。
+
+> **租户收口（同批安全修复）**：仓储 `GetByIdAsync` 不带租户谓词，而 `ExecutionLog` 又不在全局 query filter 覆盖范围内 —— 既有 `GET /{id}`、`GET /{id}/steps` 存在「持 GUID 即可读他租户日志」的窗口（**F40 之前就存在**）。现三个读端点统一改用 `GetByIdForTenantAsync` / `IsOwnedByTenantAsync`（跨租户与不存在同为 404），并有 EF 级测试实证无过滤路径可跨租户取数以防回归。
 
 #### I.10.2 评估数据集 API
 
@@ -412,4 +488,4 @@ data: {}
 
 > 注：`EvaluationDataset` 实现 `ITenantScoped`（自动全局过滤）；`RunEvaluation` 每 case 克隆全新 `Workflow`（new Guid）避免污染源工作流，逐 case 复用编排器 step 超时 bounding，硬上限 `EvaluationSettings.MaxCases`（默认 10，可配）；`matchMode`：`Exact=string.Equals(Ordinal)` / `Contains=actual.Contains(expected, OrdinalIgnoreCase)`；缺失 dataset / workflow → 404。
 
-> **一句话总结**：前端通过统一前缀 `/api/v1/` 的 REST API 与后端通信，10 个资源域（认证 / 工作流 / 模板市场 / Agent / 模型 / 对话 / 调研 / 管理 / 监控 / 评估），对话与调研流均走 SSE 流式输出，权限按 RBAC 粒度控制。Agent 角色类型 API（`/agents/types`）支持动态加载自定义角色。完整 Swagger 文档在开发环境 `{host}/swagger` 实时生成。
+> **一句话总结**：前端通过统一前缀 `/api/v1/` 的 REST API 与后端通信，11 个资源域（认证 / 工作流 / 模板市场 / Agent / 模型 / 对话 / 调研 / 管理 / 监控 / 评估 / 工作空间），对话与调研流均走 SSE 流式输出，权限按 RBAC 粒度控制。Agent 角色类型 API（`/agents/types`）支持动态加载自定义角色。完整 Swagger 文档在开发环境 `{host}/swagger` 实时生成。

@@ -1,9 +1,9 @@
 {
-  "phase": "phase-6-frontend-e2e-agentic-run",
-  "reviewer": "PASSED: ddd-code-reviewer 对抗式审查 — agentic-run.feature 的「最终回答」断言失败根因：（1）真实 LLM 下 AgenticOrchestrator 在「无工具调用即结束」分支连续发两次模型请求（RouteAsync 探测 + RouteStreamAsync 逐 token），CI 网络下单次调用已有可见延迟，两轮叠加 > 原 20s 硬超时；（2）若真实模型 429/异常，控制器写 error 事件 → runError 置位 → 前端「最终回答」区块（条件渲染）永不渲染，原断言静默超时掩盖真实失败。修复=纯 E2E 断言加固：等终态（最终回答 OR .ant-alert-error）放宽 90s，错误先现则抛真实原因。无后端/前端业务改动，0 open。",
-  "structureGate": "PASSED: ddd-phase-quality-gate — 仅改 playwright-bdd 步骤断言体（步骤名不变，既有 .features-gen spec 绑定不受影响）；绑定既有 AgentRunPage 终态（成功区块 / .ant-alert-error）；无新增接口/DI/聚合，DDD 分层无违规；0 open。",
-  "codebaseOptimizer": "PASSED (Round 1, 0 open, scoped to this fix): 七维度体检 — 架构(断言与运行终态语义一致)、代码质量(注释说明双调用延迟与错误吞没根因链)、正确性(错误先现时抛真实原因避免静默超时)、测试(等待策略覆盖真实 LLM 延迟+错误诊断)、性能(仅放宽容忍度无逻辑负担)、安全(无)、工程化(Playwright 1.62.1 支持 Locator.or()/innerText，无新依赖)。未执行全库多轮扫描(聚焦修复，同 prior phase-6-frontend-e2e 先例)。",
+  "phase": "ci-e2e-2026-09-04-double-handler-fix",
+  "reviewer": "ddd-code-reviewer PASSED (聚焦式修复：根因分析复核——MediatR 12.4.1 ServiceRegistrar 对 INotificationHandler 走 addIfAlreadyExists=true 分支（普通 AddTransient 非 TryAdd），与 Infrastructure 显式注册构成双重注册、每通知处理两次；无 P0/P1 open)",
+  "structureGate": "N/A (聚焦式 CI 修复，非阶段收尾)",
+  "codebaseOptimizer": "PASSED (Round 1, 0 open, scoped to this fix)",
   "cleared": true,
-  "reportRef": "docs/quality/phase-6-frontend-e2e-agentic-run-gate.md",
-  "notes": "agentic-run.feature（F29）E2E 失败：原 20s 硬超时 + 只等成功文案，真实 key 下因双模型调用延迟/429 错误被静默吞没。修复=agent.steps.ts 的「运行弹窗显示最终回答」步骤改为等终态（最终回答 OR 错误告警）90s，错误先现抛真实原因。聚焦修复，未动后端业务代码。"
+  "reportRef": "docs/quality/ci-e2e-2026-09-04-double-handler-gate.md",
+  "notes": "CI E2E 复跑双败修复（2026-09-04）：1) F40 exactly-1 断言得 2——根因是 WorkflowStartedEventHandler 等领域事件处理器被双重注册（AddMediatR 程序集扫描 + Infrastructure 显式 AddScoped，MediatR 12 对 INotificationHandler 非 TryAdd），每次 run 产生 2 条 ExecutionLog，与「POST /workflows 留两条日志」历史观察吻合；修复=删除 Infrastructure 的 7 处显式注册（Infrastructure 程序集无 INotificationHandler 实现，grep 证实），扫描为唯一注册源。2) F35 combobox click 被 antd selection-item span 拦截 60s（该步骤首次在 CI 跑到，前次卡在确认按钮）——照 credentials.steps.ts:28 先例改 click({force:true})×2。校验：build 0/0；后端全量回归结果见提交信息；bddgen exit 0、tsc 0 error。第二轮断言修复（2026-09-04，本地复现后修，本地全新库 2 passed）：F40 时间线 getByText 双命中（步骤明细 td + 回放 span，antd Tabs 非激活面板仍挂载）→ 锚定 .ant-tabs-tabpane-active 内 Collapse header；「错误」.first() 命中隐藏表头 th → 锚定激活 tabpane 的 .ant-collapse-item-active；F35 getByRole('option') 恒 hidden——本 antd 版本把 role=option 挂在 rc-select 无障碍镜像 div（宽0、textContent=value GUID、恒隐形，探针实测），可见选项在 .ant-select-dropdown 门户 .ant-select-item-option-content（无 ARIA 角色）→ 断言/点击均改锚定 option-content。 E2E 超时基线协调（2026-09-04，与本次提交一并入库）：playwright 测试级 timeout 30s→60s，F29 真实 LLM 场景改用 Gherkin 标签 @timeout:180000 单独放大，agent.steps 的等待预算由 testInfo.timeout 推导（预留 30s 给前置步骤、可用 E2E_AGENTIC_ANSWER_TIMEOUT 覆盖但不超预算），消除「步骤等 90s、测试 30s 被强杀」的错位；本地 bddgen exit 0 / tsc 0 error。"
 }

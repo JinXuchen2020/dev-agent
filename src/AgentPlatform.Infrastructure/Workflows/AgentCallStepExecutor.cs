@@ -3,6 +3,7 @@ using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Application.Routing.Services;
 using AgentPlatform.Domain.Abstractions;
 using AgentPlatform.Domain.Aggregates.Agents;
+using AgentPlatform.Domain.Aggregates.Conversations;
 using AgentPlatform.Domain.Aggregates.Workflows;
 using AgentPlatform.Domain.Enums;
 using AgentPlatform.Domain.Repositories;
@@ -18,6 +19,13 @@ namespace AgentPlatform.Infrastructure.Workflows;
 /// aggregate is loaded at execution time and its <c>SystemPrompt</c> drives the prompt while its
 /// <c>ModelEndpoint.ModelName</c> becomes the routing preference (F31 ① runtime materialization).
 /// Unbound nodes keep the legacy generic prompt and route without a model preference (acceptance #5).
+/// <para>
+/// F36 上下文隔离：(1) prompt 注入的 Blackboard 视图按 agent 软分区——agent 步骤只见「全局共享区 +
+/// 自己分区」（<c>agent:{agentId}:*</c>），未绑定 agent 的 LLM 步骤见全局区；(2) agent 步骤自动
+/// 创建/复用 per-agent per-workflow 的 <see cref="Conversation"/> 并写入本轮 prompt/回复消息
+/// （best-effort，持久化失败不阻断编排）；(3) 最终回复显式回写全局键 <c>agent:{agentId}:output</c>
+/// 供下游步骤引用。
+/// </para>
 /// Falls back to any node whose <see cref="IStepExecutor.HandlesType"/> is not explicitly handled.
 /// </summary>
 internal sealed class AgentCallStepExecutor : IStepExecutor
@@ -25,15 +33,21 @@ internal sealed class AgentCallStepExecutor : IStepExecutor
     private readonly ILogger<AgentCallStepExecutor> _logger;
     private readonly IAgentRepository _agentRepository;
     private readonly IModelRouter _modelRouter;
+    private readonly IConversationRepository _conversationRepository;
+    private readonly IUnitOfWork _unitOfWork;
 
     public AgentCallStepExecutor(
         ILogger<AgentCallStepExecutor> logger,
         IAgentRepository agentRepository,
-        IModelRouter modelRouter)
+        IModelRouter modelRouter,
+        IConversationRepository conversationRepository,
+        IUnitOfWork unitOfWork)
     {
         _logger = logger;
         _agentRepository = agentRepository;
         _modelRouter = modelRouter;
+        _conversationRepository = conversationRepository;
+        _unitOfWork = unitOfWork;
     }
 
     /// <summary>Legacy glob fallback — matches any step name.</summary>
@@ -87,6 +101,30 @@ internal sealed class AgentCallStepExecutor : IStepExecutor
                 output = Truncate(output, 500)
             });
 
+            if (agent is not null)
+            {
+                // F36 D4=A：最终回复显式回写全局键，下游步骤可经 Blackboard.Get 显式引用；
+                // 键名带 agentId，其他 agent 的分区视图读不到（非自身分区键一律过滤）。
+                ctx.Blackboard.Set(Blackboard.AgentOutputKey(agent.Id), Truncate(output, 8000));
+
+                // F36 D2=A：agent 步骤的对话历史落 per-agent per-workflow 会话（创建/复用 + 写入
+                // prompt 摘要与回复）。best-effort：持久化失败仅告警，不阻断工作流执行。
+                try
+                {
+                    await PersistAgentConversationAsync(agent, ctx, step.Name, messages, output, response.TokenUsage, ct);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex,
+                        "Step {StepName}: failed to persist agent conversation for agent {AgentId} (non-blocking)",
+                        step.Name, agent.Id);
+                }
+            }
+
             _logger.LogInformation("Step {StepName} completed via model {ModelId} (tokens: {Tokens})",
                 step.Name, response.ModelId, response.TokenUsage?.TotalTokens ?? 0);
             return StepExecutionResult.Success(output, artifact, tokenUsage: response.TokenUsage);
@@ -126,9 +164,18 @@ internal sealed class AgentCallStepExecutor : IStepExecutor
 
         if (ctx.Blackboard.Entries.Count > 0)
         {
-            var boardLines = ctx.Blackboard.Entries
-                .Select(e => $"- {e.Key}: {Truncate(e.Value, 200)}");
-            userParts.Add("Shared blackboard:\n" + string.Join("\n", boardLines));
+            // F36 D1=A：prompt 注入的 Blackboard 视图按 agent 软分区——绑定 agent 的步骤只见
+            // 「全局共享区 + 自己分区（自分区键剥离前缀）」；未绑定 agent 的 LLM 步骤见全局区
+            // （对既有工作流零变化：存量数据无 agent: 前缀键）。
+            var boardEntries = agent is not null
+                ? ctx.Blackboard.GetPartitionView(agent.Id)
+                : ctx.Blackboard.GetGlobalView();
+            if (boardEntries.Count > 0)
+            {
+                var boardLines = boardEntries
+                    .Select(e => $"- {e.Key}: {Truncate(e.Value, 200)}");
+                userParts.Add("Shared blackboard:\n" + string.Join("\n", boardLines));
+            }
         }
 
         if (ctx.Summary.Summaries.Count > 0)        {
@@ -158,4 +205,60 @@ internal sealed class AgentCallStepExecutor : IStepExecutor
 
     private static string Truncate(string value, int maxLength) =>
         StringHelpers.Truncate(value, maxLength);
+
+    /// <summary>
+    /// F36 D2=A：把本轮 agent 调用持久化到 per-agent per-workflow 的会话——已存在则复用
+    /// （同一工作流内同 agent 历史累积），不存在则创建（<see cref="Conversation.AgentId"/> 绑定）。
+    /// 写入两条消息：user = 本轮 prompt 摘要，agent = 模型回复（含 token 用量）。
+    /// 调用方已 best-effort 包裹：此处抛出的异常不会阻断工作流执行。
+    /// </summary>
+    private async Task PersistAgentConversationAsync(
+        Agent agent,
+        WorkflowContext ctx,
+        string stepName,
+        IReadOnlyList<ChatMessage> messages,
+        string response,
+        Domain.ValueObjects.TokenUsage? tokenUsage,
+        CancellationToken ct)
+    {
+        var conversation = await _conversationRepository.GetByAgentAsync(ctx.TenantId, ctx.WorkflowId, agent.Id, ct);
+        var created = conversation is null;
+        if (created)
+        {
+            conversation = new Conversation(Guid.NewGuid(), ctx.TenantId, ctx.WorkflowId, agent.Id);
+            _conversationRepository.Add(conversation);
+            _logger.LogInformation(
+                "Step {StepName}: created agent conversation {ConversationId} for agent {AgentId} (workflow {WorkflowId})",
+                stepName, conversation.Id, agent.Id, ctx.WorkflowId);
+        }
+
+        // prompt 摘要：system prompt 之外的用户消息串联（与 prompt 注入同源，截断防超长）。
+        var userContent = string.Join("\n\n", messages
+            .Where(m => m.Role == MessageRole.User)
+            .Select(m => m.Content));
+        conversation!.AddMessage(new Message(Guid.NewGuid(), MessageRole.User, Truncate(userContent, 12000)));
+        conversation.AddMessage(new Message(Guid.NewGuid(), MessageRole.Agent, Truncate(response, 12000), tokenUsage: tokenUsage));
+
+        try
+        {
+            await _unitOfWork.SaveChangesAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            // F36 三道门修复：创建路径 SaveChanges 失败（典型=唯一过滤索引并发冲突）时，
+            // 新实体仍以 Added 状态滞留在本 scope 共享的 change tracker 中——编排器紧随其后的
+            // SaveChangesAsync（步骤状态落库）会重放同一冲突，把 best-effort 的「吞掉仅告警」
+            // 放大成工作流状态保存失败。此处先行 Detach 隔离，保证 non-blocking 契约真正成立。
+            if (created)
+            {
+                _conversationRepository.Detach(conversation);
+            }
+
+            throw;
+        }
+    }
 }

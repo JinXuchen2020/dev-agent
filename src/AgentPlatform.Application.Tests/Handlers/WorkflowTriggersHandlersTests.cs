@@ -439,12 +439,17 @@ public sealed class WorkflowTriggersHandlersTests
         var unitOfWork = Substitute.For<IUnitOfWork>();
         var audit = Substitute.For<IAuditLogRepository>();
         var tenantContext = Substitute.For<ITenantContext>();
+        var workspaceContext = Substitute.For<IWorkspaceContext>();
+        var workspaceDirectory = Substitute.For<IWorkspaceDirectory>();
+        var executionQueue = Substitute.For<IExecutionQueue>();
+        var durableOptions = Microsoft.Extensions.Options.Options.Create(new DurableExecutionSettings());
+        var triggerLogger = Substitute.For<Microsoft.Extensions.Logging.ILogger<TriggerWorkflowCommandHandler>>();
 
-        workflowRepo.GetByIdAsync(workflowId, Arg.Any<CancellationToken>()).Returns(wf);
+        workflowRepo.GetByIdForTriggerAsync(workflowId, tenantId, Arg.Any<CancellationToken>()).Returns(wf);
         primitive.RunAsync(Arg.Any<Workflow>(), Arg.Any<OrchestrationPreset>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(wf));
 
-        var handler = new TriggerWorkflowCommandHandler(workflowRepo, primitive, unitOfWork, audit, tenantContext);
+        var handler = new TriggerWorkflowCommandHandler(workflowRepo, primitive, unitOfWork, audit, tenantContext, workspaceContext, workspaceDirectory, executionQueue, durableOptions, triggerLogger);
         var result = await handler.Handle(
             new TriggerWorkflowCommand(workflowId, tenantId, TriggerType.Webhook, "{\"a\":1}"), CancellationToken.None);
 
@@ -466,10 +471,16 @@ public sealed class WorkflowTriggersHandlersTests
         var unitOfWork = Substitute.For<IUnitOfWork>();
         var audit = Substitute.For<IAuditLogRepository>();
         var tenantContext = Substitute.For<ITenantContext>();
+        var workspaceContext = Substitute.For<IWorkspaceContext>();
+        var workspaceDirectory = Substitute.For<IWorkspaceDirectory>();
+        var executionQueue = Substitute.For<IExecutionQueue>();
+        var durableOptions = Microsoft.Extensions.Options.Options.Create(new DurableExecutionSettings());
+        var triggerLogger = Substitute.For<Microsoft.Extensions.Logging.ILogger<TriggerWorkflowCommandHandler>>();
 
-        workflowRepo.GetByIdAsync(workflowId, Arg.Any<CancellationToken>()).Returns((Workflow?)null);
+        workflowRepo.GetByIdForTriggerAsync(workflowId, tenantId, Arg.Any<CancellationToken>())
+            .Returns((Workflow?)null);
 
-        var handler = new TriggerWorkflowCommandHandler(workflowRepo, primitive, unitOfWork, audit, tenantContext);
+        var handler = new TriggerWorkflowCommandHandler(workflowRepo, primitive, unitOfWork, audit, tenantContext, workspaceContext, workspaceDirectory, executionQueue, durableOptions, triggerLogger);
         var result = await handler.Handle(
             new TriggerWorkflowCommand(workflowId, tenantId, TriggerType.Webhook, null), CancellationToken.None);
 

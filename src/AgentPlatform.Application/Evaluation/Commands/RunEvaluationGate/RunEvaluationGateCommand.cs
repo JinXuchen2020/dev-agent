@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using AgentPlatform.Application.Abstractions;
 using AgentPlatform.Application.Evaluation;
 using AgentPlatform.Application.Evaluation.Commands.RunEvaluation;
@@ -46,6 +47,10 @@ internal sealed class RunEvaluationGateCommandHandler(
 
         // 空数据集 Score=0 → 不通过：防「无数据即放行」漏洞（显式守卫，min=0 也拦）
         var passed = report.Total > 0 && report.Score >= minPassRate;
+
+        // F39 观测：门禁判定计数（低基数标签 passed，避免 GUID 高基数）。
+        AgentPlatform.Application.Diagnostics.WorkflowMetrics.EvaluationGateCounter.Add(1,
+            new KeyValuePair<string, object?>("passed", passed ? "true" : "false"));
 
         var tenantId = tenantProvider.GetTenantId();
         auditLogRepository.Add(AuditLog.Record(

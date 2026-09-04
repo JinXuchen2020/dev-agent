@@ -13,6 +13,8 @@ const AUTH_USER: AuthUser = {
 vi.mock('../../services/api', () => ({
   getAuthMe: vi.fn(),
   logoutRequest: vi.fn(),
+  // F35: appStore 从 api 模块导入 workspace 持久化键（单一事实来源），mock 需同步提供。
+  WORKSPACE_STORAGE_KEY: 'app-workspace-id',
 }));
 
 beforeEach(() => {

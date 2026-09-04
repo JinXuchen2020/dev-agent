@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using AgentPlatform.Application.Abstractions;
+using AgentPlatform.Application.Workflows;
 using AgentPlatform.Domain;
 using AgentPlatform.Domain.Aggregates.AuditLogs;
 using AuditActionType = AgentPlatform.Domain.Aggregates.AuditLogs.AuditActionType;
@@ -8,6 +9,8 @@ using AgentPlatform.Domain.Aggregates.Workflows;
 using AgentPlatform.Domain.Enums;
 using AgentPlatform.Domain.Repositories;
 using MediatR;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace AgentPlatform.Application.WorkflowTriggers;
 
@@ -23,33 +26,77 @@ internal sealed class TriggerWorkflowCommandHandler
     private readonly IUnitOfWork _unitOfWork;
     private readonly IAuditLogRepository _auditLogRepository;
     private readonly ITenantContext _tenantContext;
+    private readonly IWorkspaceContext _workspaceContext;
+    private readonly IWorkspaceDirectory _workspaceDirectory;
+    private readonly IExecutionQueue _executionQueue;
+    private readonly DurableExecutionSettings _durableSettings;
+    private readonly ILogger<TriggerWorkflowCommandHandler> _logger;
 
     public TriggerWorkflowCommandHandler(
         IWorkflowRepository repo,
         IOrchestrationPrimitive primitive,
         IUnitOfWork unitOfWork,
         IAuditLogRepository auditLogRepository,
-        ITenantContext tenantContext)
+        ITenantContext tenantContext,
+        IWorkspaceContext workspaceContext,
+        IWorkspaceDirectory workspaceDirectory,
+        IExecutionQueue executionQueue,
+        IOptions<DurableExecutionSettings> durableSettings,
+        ILogger<TriggerWorkflowCommandHandler> logger)
     {
         _repo = repo;
         _primitive = primitive;
         _unitOfWork = unitOfWork;
         _auditLogRepository = auditLogRepository;
         _tenantContext = tenantContext;
+        _workspaceContext = workspaceContext;
+        _workspaceDirectory = workspaceDirectory;
+        _executionQueue = executionQueue;
+        _durableSettings = durableSettings.Value;
+        _logger = logger;
     }
 
     public async Task<TriggerRunResult?> Handle(TriggerWorkflowCommand request, CancellationToken ct)
     {
-        // 后台调度 / 匿名 Webhook 无 HTTP 租户上下文：显式注入，使 DbContext 全局过滤器与
-        // RunAsync 的租户解析落到正确租户。
+        // 后台调度 / 匿名 Webhook 无 HTTP 租户上下文：显式注入，使 RunAsync 的租户解析落到正确租户。
         _tenantContext.OverrideTenantId = request.TenantId;
+        // F35：同步注入工作空间上下文（v1 语义 = 触发执行落在租户默认工作空间，见设计文档已知限制）。
+        // 注意：请求 scope 的 AppDbContext 在处理器构造前即已捕获过滤器值，此注入不影响查询过滤器。
+        _workspaceContext.OverrideWorkspaceId = _workspaceDirectory.GetDefaultWorkspaceId(request.TenantId);
 
-        var wf = await _repo.GetByIdAsync(request.WorkflowId, ct);
-        if (wf is null || wf.TenantId != request.TenantId)
+        // 触发器定位仅按租户（GetByIdForTriggerAsync）：scope 的工作空间上下文恒为租户默认工作空间，
+        // 若沿用工作空间过滤，非默认工作空间的工作流会被静默跳过（永不触发）。
+        var wf = await _repo.GetByIdForTriggerAsync(request.WorkflowId, request.TenantId, ct);
+        if (wf is null)
             return null; // 404，不暴露存在性
 
         if (wf.CurrentState is WorkflowState.Running)
             return null; // 已在运行，避免并发冲突（调度/Webhook 直接跳过）
+
+        // F37：队列模式下的外部触发（Webhook/调度）改投递队列由 worker 执行；
+        // FromQueue=true 的 worker 回灌不走此分支（防再入队回环）。
+        // 入队被拒时降级为直跑（匿名 Webhook 可用性优先，已记 warning，不静默）。
+        if (_durableSettings.QueueEnabled && !request.FromQueue)
+        {
+            var enqueueResult = await _executionQueue.EnqueueAsync(
+                QueuedRunSupport.BuildJob(
+                    wf.Id,
+                    request.TenantId,
+                    _workspaceContext.OverrideWorkspaceId ?? _workspaceDirectory.GetDefaultWorkspaceId(request.TenantId) ?? Guid.Empty,
+                    OrchestrationPreset.Sequential,
+                    triggerType: request.TriggerType,
+                    payloadJson: request.PayloadJson),
+                ct);
+
+            if (enqueueResult == EnqueueResult.Enqueued)
+            {
+                return new TriggerRunResult(wf.Id, wf.Name, WorkflowState.Pending);
+            }
+
+            _logger.LogWarning(
+                "Queue enqueue failed for triggered workflow {WorkflowId} ({Result}) — falling back to direct run",
+                wf.Id, enqueueResult);
+        }
 
         // 终态 / 暂停态需重置为干净状态后再跑（RunAsync 仅接受 Pending/Running）。
         if (wf.CurrentState is not (WorkflowState.Pending or WorkflowState.Running))

@@ -38,3 +38,20 @@ Feature: Execution Log
         When a user queries with page 1 and page size 20
         Then they should receive 20 entries
         And total count should be 50
+
+    Scenario: Replay diagnostics rebuild the failed path from stored logs (F40)
+        Given the execution log store is reset
+        And an execution with one failed step and a final checkpoint exists
+        When a user requests a replay for that execution log
+        Then the replay report marks exactly one failed node
+        And the replay report points at the failing step order
+        And the replay report exposes the final context snapshot
+        And the replay report discloses that real step inputs are not recorded
+        When a user requests a replay for a missing execution log
+        Then the missing replay request is rejected with 404
+
+    Scenario: Replay of a successful execution reports no failures
+        Given the execution log store is reset
+        And a fully successful execution exists
+        When a user requests a replay for that execution log
+        Then the replay report contains no failed nodes

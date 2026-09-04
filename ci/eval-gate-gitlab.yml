@@ -1,0 +1,113 @@
+# F38 · 评估门禁 GitLab CI 接入模板（复制即用）
+#
+# 用途：模型 / prompt / 编排配置变更前跑评估数据集回归，未达通过率阈值即让 MR 流水线失败（阻断合并）。
+#       基于 F34 在线评估门禁端点。
+#
+# ⚠️ 本文件是**模板/样例**，不会被本仓库自动执行。接入方式二选一：
+#   A) 复制 eval-gate job 到你项目 `.gitlab-ci.yml` 的合适 stage；
+#   B) 把本文件放到目标仓库某路径后用 include 引用：
+#        include:
+#          - local: 'ci/eval-gate-gitlab.yml'
+#
+# 所需 CI/CD 变量（Settings → CI/CD → Variables；勾选 Masked / Protected）：
+#   EVAL_GATE_BASE_URL    目标实例根地址，如 https://staging.example.com
+#   EVAL_GATE_EMAIL       Admin/Operator 服务账号邮箱
+#   EVAL_GATE_PASSWORD    服务账号密码（MFA 禁用；JWT 经 httpOnly cookie 承载）
+#   （可选）EVAL_GATE_SLACK_WEBHOOK_URL  配则失败时通知
+# 可选（非 masked）变量：
+#   EVAL_GATE_DATASET_ID / EVAL_GATE_WORKFLOW_ID / EVAL_GATE_MIN_PASS_RATE
+#
+# F41 现状：目标实例必须已配真实 LLM Key；否则评估步骤失败（预期内的门禁不通过）。
+#
+# 契约校验：本文件可被 `python -c "import yaml,sys;yaml.safe_load(open(sys.argv[1]))"` 解析；
+#           正式接入后用 GitLab CI Lint（项目页 CI/CD → Pipeline Editor）校验。
+
+# 仅在 merge request 流水线跑门禁；避免 push/branch 流水线重复评估。
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+
+# 目标仓库若无对应 stage，请在本 job 前用 `stages:` 增加 'eval-gate'，或把 stage 改为已存在的（如 test）。
+eval-gate:
+  stage: test
+  image: curlimages/curl:8.9.1
+  # 评估是请求内同步跑完整数据集（≤ MaxCases，默认 10）；整 job 超时兜底。
+  timeout: 15m
+  allow_failure: false
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  variables:
+    # 让 MIN_PASS_RATE 等可被项目级变量覆盖；GIT_DEPTH 无谓。
+    GATE_PATH: "api/v1/evaluation-datasets"
+  before_script:
+    - |
+      : "${EVAL_GATE_BASE_URL:?EVAL_GATE_BASE_URL is required}"
+      : "${EVAL_GATE_EMAIL:?EVAL_GATE_EMAIL is required}"
+      : "${EVAL_GATE_PASSWORD:?EVAL_GATE_PASSWORD is required}"
+      : "${EVAL_GATE_DATASET_ID:?dataset id required}"
+      : "${EVAL_GATE_WORKFLOW_ID:?workflow id required}"
+      export BASE_URL="${EVAL_GATE_BASE_URL%/}"
+      COOKIE_JAR="$(mktemp)"
+  script:
+    # 1) 登录取 httpOnly cookie（ap_access_token）。-w 取码，不用 -f。
+    #    `|| true`：curl 传输层失败（DNS/连接拒绝）退出码非 0，会在 runner 的 errexit 语义下抢在
+    #    非 200 判断前杀掉脚本；-w 仍输出 000，交给显式分支处理。
+    #    密码/邮箱可含 " 或 \：直接拼 JSON 会破坏载荷甚至注入字段，先做 JSON 转义。
+    - |
+      json_escape() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }
+      LOGIN_BODY="{\"email\":\"$(json_escape "$EVAL_GATE_EMAIL")\",\"password\":\"$(json_escape "$EVAL_GATE_PASSWORD")\"}"
+      login_code="$(curl -s -o /dev/null -w '%{http_code}' -c "$COOKIE_JAR" \
+        -H 'Content-Type: application/json' \
+        -d "$LOGIN_BODY" \
+        "${BASE_URL}/api/v1/auth/login")" || true
+      if [ "$login_code" != "200" ]; then
+        rm -f "$COOKIE_JAR"
+        echo "login failed (HTTP ${login_code}) — 检查凭据/角色/EVAL_GATE_BASE_URL"; exit 1
+      fi
+    # 2) 调门禁端点：200=通过 / 422=未通过或空集 / 其它=异常。有阈值则带 minPassRate。
+    #    阈值必须是 [0,1] 数字（服务端对越界值是未映射 400 的 500；非法字符串还会拼坏 JSON）→ 本地先 fail-fast。
+    - |
+      if [ -n "${EVAL_GATE_MIN_PASS_RATE:-}" ] && ! printf '%s' "$EVAL_GATE_MIN_PASS_RATE" | grep -Eq '^(0*\.[0-9]+|[01](\.[0-9]+)?)$'; then
+        rm -f "$COOKIE_JAR"
+        echo "EVAL_GATE_MIN_PASS_RATE must be a number in [0,1], got '${EVAL_GATE_MIN_PASS_RATE}'"; exit 1
+      fi
+      if [ -n "${EVAL_GATE_MIN_PASS_RATE:-}" ]; then
+        REQ_BODY="{\"minPassRate\":${EVAL_GATE_MIN_PASS_RATE}}"
+      else
+        REQ_BODY='{}'
+      fi
+      resp_body="$(mktemp)"
+      gate_code="$(curl -s -o "$resp_body" -w '%{http_code}' -b "$COOKIE_JAR" \
+        -H 'Content-Type: application/json' -X POST -d "$REQ_BODY" \
+        "${BASE_URL}/${GATE_PATH}/${EVAL_GATE_DATASET_ID}/gate/${EVAL_GATE_WORKFLOW_ID}")" || true
+      rm -f "$COOKIE_JAR"
+      echo "gate HTTP ${gate_code}"; cat "$resp_body"; echo
+      cp "$resp_body" gate-result.json 2>/dev/null || true
+      case "$gate_code" in
+        200) echo "✅ 评估门禁通过" ;;
+        422) echo "❌ 评估门禁未通过（低于阈值或空集）"; exit 1 ;;
+        401|403) echo "鉴权失败（${gate_code}）— 需 Admin/Operator"; exit 1 ;;
+        404) echo "数据集或工作流不存在（${gate_code}）"; exit 1 ;;
+        000) echo "无法连接目标实例（curl 000）"; exit 1 ;;
+        *) echo "非预期返回码 ${gate_code}"; exit 1 ;;
+      esac
+  # 失败时保留门禁响应 JSON 供排查。
+  artifacts:
+    when: on_failure
+    expire_in: 1 week
+    paths:
+      - gate-result.json
+
+# 失败通知（配了 webhook 才发）；独立 .post job，不污染门禁结论。
+notify-eval-gate-failure:
+  stage: .post
+  image: curlimages/curl:8.9.1
+  rules:
+    - if: '$EVAL_GATE_SLACK_WEBHOOK_URL'
+      when: on_failure
+  script:
+    - |
+      if [ -z "${EVAL_GATE_SLACK_WEBHOOK_URL:-}" ]; then exit 0; fi
+      curl -s -X POST -H 'Content-Type: application/json' \
+        -d "{\"text\":\"❌ Eval gate blocked — ${CI_PROJECT_PATH} @ ${CI_MERGE_REQUEST_SOURCE_BRANCH_NAME:-$CI_COMMIT_REF_NAME} | ${CI_PIPELINE_URL}\"}" \
+        "$EVAL_GATE_SLACK_WEBHOOK_URL" || echo "Slack notify failed (non-fatal)"

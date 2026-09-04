@@ -22,18 +22,21 @@ public sealed class ApiKeyAuthenticationHandler : AuthenticationHandler<Authenti
     private readonly SecuritySettings _settings;
     private readonly ILogger<ApiKeyAuthenticationHandler> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IWorkspaceContext _workspaceContext;
 
     public ApiKeyAuthenticationHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory loggerFactory,
         UrlEncoder encoder,
         IOptions<SecuritySettings> settings,
-        IServiceScopeFactory scopeFactory)
+        IServiceScopeFactory scopeFactory,
+        IWorkspaceContext workspaceContext)
         : base(options, loggerFactory, encoder)
     {
         _settings = settings.Value;
         _logger = loggerFactory.CreateLogger<ApiKeyAuthenticationHandler>();
         _scopeFactory = scopeFactory;
+        _workspaceContext = workspaceContext;
     }
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -76,6 +79,14 @@ public sealed class ApiKeyAuthenticationHandler : AuthenticationHandler<Authenti
         {
             _logger.LogWarning("Invalid API key provided.");
             return AuthenticateResult.Fail("Invalid API key.");
+        }
+
+        // F35：API-Key 调用无 JWT workspace claim —— 认证成功后把请求 scope 的工作空间上下文
+        // 钉到该 Key 所属工作空间（Key 创建时所在工作空间），使发布运行 / MCP 列表等后续查询
+        // 解析到正确工作空间；存量密钥（WorkspaceId 为空，启动回填后 = 默认工作空间）行为不变。
+        if (matchedKey.WorkspaceId != Guid.Empty)
+        {
+            _workspaceContext.OverrideWorkspaceId = matchedKey.WorkspaceId;
         }
 
         var roles = matchedKey.GetRoles();

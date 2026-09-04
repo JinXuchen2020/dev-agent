@@ -19,6 +19,7 @@ internal static class AuthEndpoints
             IPasswordHasher hasher,
             IJwtTokenService tokenService,
             ITenantProvider tenantProvider,
+            IWorkspaceRepository workspaceRepo,
             HttpContext http) =>
         {
             if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
@@ -29,6 +30,9 @@ internal static class AuthEndpoints
             if (user is null || !user.IsActive || !hasher.Verify(request.Password, user.PasswordHash))
                 return Results.Unauthorized();
 
+            // F35：登录即解析租户默认工作空间，写入 workspace_id claim（决策 D1=C：claim 默认 + header 覆盖）。
+            var defaultWorkspace = await workspaceRepo.GetDefaultAsync(http.RequestAborted);
+
             var claims = new List<Claim>
                 {
                     new(ClaimTypes.NameIdentifier, user.Id.ToString()),
@@ -36,6 +40,7 @@ internal static class AuthEndpoints
                     new(ClaimTypes.Email, user.Email),
                     new("sub", user.Email),
                     new("tenant_id", user.TenantId.ToString()),
+                    new("workspace_id", defaultWorkspace?.Id.ToString() ?? Guid.Empty.ToString()),
                     new(ClaimTypes.Role, user.Role),
                 };
             var token = tokenService.CreateToken(claims);
@@ -51,7 +56,8 @@ internal static class AuthEndpoints
             });
 
             return Results.Ok(new LoginResponse(new AuthUserDto(
-                user.Id.ToString(), user.Email, user.Role, user.TenantId.ToString())));
+                user.Id.ToString(), user.Email, user.Role, user.TenantId.ToString(),
+                defaultWorkspace?.Id.ToString())));
         })
         .WithTags("Auth")
         .WithSummary("Authenticate with email + password (sets httpOnly cookie)")
@@ -69,11 +75,13 @@ internal static class AuthEndpoints
                 ?? principal.FindFirstValue(ClaimTypes.Name);
             var role = principal.FindFirstValue(ClaimTypes.Role);
             var tenantId = principal.FindFirstValue("tenant_id");
+            var workspaceId = principal.FindFirstValue("workspace_id");
 
             if (id is null || email is null || role is null || tenantId is null)
                 return Results.Unauthorized();
 
-            return Results.Ok(new AuthUserDto(id, email, role, tenantId));
+            return Results.Ok(new AuthUserDto(id, email, role, tenantId,
+                string.IsNullOrEmpty(workspaceId) || workspaceId == Guid.Empty.ToString() ? null : workspaceId));
         })
         .WithTags("Auth")
         .WithSummary("Get the current authenticated user's identity");
@@ -94,7 +102,12 @@ internal static class AuthEndpoints
 internal sealed record LoginRequest(string Email, string Password);
 
 /// <summary>Identity of the authenticated user, returned by login and /auth/me.</summary>
-internal sealed record AuthUserDto(string Id, string Email, string Role, string TenantId);
+/// <param name="Id">User identifier.</param>
+/// <param name="Email">User email.</param>
+/// <param name="Role">Tenant role.</param>
+/// <param name="TenantId">Tenant identifier.</param>
+/// <param name="CurrentWorkspaceId">当前活跃工作空间（F35）；无 claim / 空 Id 时为 null。</param>
+internal sealed record AuthUserDto(string Id, string Email, string Role, string TenantId, string? CurrentWorkspaceId = null);
 
 /// <summary>Response from <c>POST /api/v1/auth/login</c>.</summary>
 internal sealed record LoginResponse(AuthUserDto User);

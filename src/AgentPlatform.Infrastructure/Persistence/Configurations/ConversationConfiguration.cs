@@ -26,6 +26,15 @@ internal sealed class ConversationConfiguration : IEntityTypeConfiguration<Conve
         builder.Property(c => c.CollectionName)
             .IsRequired(false)
             .HasMaxLength(120);
+        // F36：agent 归属（nullable = 人工创建/Chat 绑定的全局会话，存量兼容）。
+        builder.Property(c => c.AgentId).IsRequired(false);
+        // F36 审查修复：per-agent 会话唯一性由数据库强制——并发的同 (tenant, workflow, agent)
+        // 双步骤同时创建会话时，后者提交失败并被 best-effort 包裹吞掉（仅告警），
+        // 杜绝 GetByAgentAsync 命中双行导致历史分裂。过滤掉存量 AgentId=NULL 行。
+        // （复合索引同时覆盖 GetByAgentAsync 的查询谓词；不另建单列 AgentId 索引。）
+        builder.HasIndex(c => new { c.TenantId, c.WorkflowId, c.AgentId })
+            .IsUnique()
+            .HasFilter("\"AgentId\" IS NOT NULL");
         builder.OwnsOne(c => c.TotalTokenUsage, t =>
         {
             t.Property(p => p.PromptTokens).HasColumnName("PromptTokens");

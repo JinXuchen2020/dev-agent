@@ -31,6 +31,7 @@ internal sealed class DatabaseInitializer : IDatabaseInitializer
     private readonly ILogger<DatabaseInitializer> _logger;
     private readonly TenantSettings _tenantSettings;
     private readonly IHostEnvironment _environment;
+    private readonly IWorkspaceProvisioner _workspaceProvisioner;
 
     // Default tenant GUID used when no tenant is configured — all-zeros is explicit sentinel.
     // Configure via Tenant:DefaultTenantId in appsettings or user-secrets.
@@ -49,7 +50,8 @@ internal sealed class DatabaseInitializer : IDatabaseInitializer
         IConfiguration configuration,
         ILogger<DatabaseInitializer> logger,
         IOptions<TenantSettings> tenantSettings,
-        IHostEnvironment environment)
+        IHostEnvironment environment,
+        IWorkspaceProvisioner workspaceProvisioner)
     {
         _context = context;
         _serviceProvider = serviceProvider;
@@ -57,6 +59,7 @@ internal sealed class DatabaseInitializer : IDatabaseInitializer
         _logger = logger;
         _tenantSettings = tenantSettings.Value;
         _environment = environment;
+        _workspaceProvisioner = workspaceProvisioner;
     }
 
     public async Task InitializeAsync(CancellationToken ct = default)
@@ -74,12 +77,24 @@ internal sealed class DatabaseInitializer : IDatabaseInitializer
             // "no such table".
             await ApplyMigrationsAsync(ct);
 
-            // 初始化种子数据
+            // 初始化种子数据。
+            // 注意顺序（F35）：种子实体此时拿到的 WorkspaceId 为空（目录尚未登记），
+            // 由随后的 EnsureDefaultWorkspacesAsync 统一回填到各租户默认工作空间。
             await SeedDataAsync(ct);
 
+            // ── F35 工作空间：幂等补齐每个租户的默认工作空间（登记 WorkspaceDirectory 供
+            // IWorkspaceProvider 无 claim/header 时同步兜底），并把 WorkspaceId 为空的存量行
+            // （含本轮种子）回填到各自租户的默认工作空间。
+            await EnsureDefaultWorkspacesAsync(ct);
+
             // 集成测试夹具（仅 Integration 环境）：供前端 E2E 与手动集成验证复用。
+            // 夹具实体同样落空 WorkspaceId，由 EnsureDefaultWorkspacesAsync 的回填兜底；
+            // 但回填发生在夹具播种之前，故此处播种后再次调用回填（幂等）。
             if (_environment.IsEnvironment("Integration"))
+            {
                 await SeedIntegrationFixturesAsync(ct);
+                await EnsureDefaultWorkspacesAsync(ct);
+            }
         }
         catch (Exception ex)
         {
@@ -114,6 +129,42 @@ internal sealed class DatabaseInitializer : IDatabaseInitializer
             // the current model.
             _logger.LogWarning(ex, "MigrateAsync failed; falling back to EnsureCreated for non-migration providers.");
             await _context.Database.EnsureCreatedAsync(ct);
+        }
+    }
+
+    /// <summary>
+    /// F35：为所有已知租户（Users 表出现过的 + 配置的默认租户）幂等补齐默认工作空间并预载目录。
+    /// 任一租户补齐失败不阻断启动（workspace 兜底目录缺失只影响该租户的空上下文解析）。
+    /// </summary>
+    private async Task EnsureDefaultWorkspacesAsync(CancellationToken ct)
+    {
+        try
+        {
+            var tenantIds = await _context.Users
+                .IgnoreQueryFilters()
+                .Select(u => u.TenantId)
+                .Distinct()
+                .ToListAsync(ct);
+
+            var configuredDefault = _tenantSettings.DefaultTenantId != Guid.Empty
+                ? _tenantSettings.DefaultTenantId
+                : DefaultTenantIdSeed;
+            if (!tenantIds.Contains(configuredDefault))
+            {
+                tenantIds.Add(configuredDefault);
+            }
+
+            foreach (var tenantId in tenantIds)
+            {
+                await _workspaceProvisioner.EnsureDefaultWorkspaceAsync(tenantId, ct);
+            }
+
+            // 存量数据回填：WorkspaceId 为空的行 → 各自租户的默认工作空间（幂等）。
+            await _workspaceProvisioner.BackfillEmptyWorkspaceIdsAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to ensure default workspaces, but continuing with startup");
         }
     }
 

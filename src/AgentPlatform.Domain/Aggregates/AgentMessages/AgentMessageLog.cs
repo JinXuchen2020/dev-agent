@@ -9,7 +9,7 @@ namespace AgentPlatform.Domain.Aggregates.AgentMessages;
 /// semantics with a replayable audit trail. Idempotent consumption is enforced by
 /// <see cref="MarkConsumed"/> guarded by <c>ConsumedAt IS NULL</c> at the store level.
 /// </summary>
-public sealed class AgentMessageLog : IAggregateRoot, ITenantScoped
+public sealed class AgentMessageLog : IAggregateRoot, ITenantScoped, IWorkspaceScoped
 {
     /// <summary>Gets the message identifier (primary key; equals the in-flight MessageId).</summary>
     public Guid Id { get; private init; }
@@ -43,6 +43,7 @@ public sealed class AgentMessageLog : IAggregateRoot, ITenantScoped
 
     /// <summary>Gets the tenant that owns this message.</summary>
     public Guid TenantId { get; private init; }
+    public Guid WorkspaceId { get; private init; }
 
     /// <summary>Gets domain events raised by this aggregate (none — pure log record).</summary>
     public IReadOnlyCollection<IDomainEvent> DomainEvents => Array.Empty<IDomainEvent>();

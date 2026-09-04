@@ -1,0 +1,17 @@
+# F39 · Grafana 仪表盘 provider（挂到 /etc/grafana/provisioning/dashboards/）
+# 修正既有缺陷：原 compose 把裸 dashboard.json 直接挂进 provisioning/dashboards/，
+# Grafana 只识别该目录下的 **provider YAML**，JSON 需由 provider 指向的 folder 加载，
+# 因此旧配置下面板根本不会导入（验收「可导入且面板无报错」不成立）。
+apiVersion: 1
+
+providers:
+  - name: agent-platform
+    orgId: 1
+    folder: Agent Platform
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

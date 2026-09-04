@@ -9,13 +9,14 @@ namespace AgentPlatform.Domain.Aggregates.PublishedWorkflows;
 /// 实体遵循租户隔离（<see cref="ITenantScoped"/>），由 AppDbContext 的查询过滤器强制；
 /// <see cref="Slug"/> 在同一租户内唯一，作为外部调用地址。
 /// </summary>
-public sealed class PublishedWorkflow : ITenantScoped
+public sealed class PublishedWorkflow : ITenantScoped, IWorkspaceScoped
 {
     /// <summary>获取已发布记录的唯一标识符（由调用方以 ValueGeneratedNever 显式提供）。</summary>
     public Guid Id { get; private init; }
 
     /// <summary>获取拥有该发布记录的租户标识符（租户隔离键）。</summary>
     public Guid TenantId { get; private init; }
+    public Guid WorkspaceId { get; private init; }
 
     /// <summary>获取被发布的工作流标识符。</summary>
     public Guid WorkflowId { get; private init; }

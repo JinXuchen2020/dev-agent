@@ -324,6 +324,13 @@ public static class DependencyInjection
         services.AddScoped<ITenantProvider, TenantProvider>();
         // 后台调度 / 匿名 Webhook 的 scope 内租户注入持有器（TenantProvider 优先读此覆盖值）。
         services.AddScoped<ITenantContext, TenantContext>();
+        // ── F35 多工作空间：上下文持有器 + 解析器（claim → header → 租户默认 workspace 目录兜底）──
+        services.AddScoped<IWorkspaceContext, WorkspaceContext>();
+        services.AddScoped<IWorkspaceProvider, WorkspaceProvider>();
+        services.AddSingleton<IWorkspaceDirectory, WorkspaceDirectory>();
+        services.AddScoped<IWorkspaceProvisioner, WorkspaceProvisioner>();
+        services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
+        services.AddScoped<IWorkspaceMemberRepository, WorkspaceMemberRepository>();
         services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IAesEncryptor, AesGcmEncryptor>();
@@ -399,14 +406,63 @@ public static class DependencyInjection
         };
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(stateMachineSettings));
 
-        var deSection = configuration.GetSection("DurableExecution");
-        var durableExecutionSettings = new DurableExecutionSettings
+        // F37 optimizer 修复：注册期快照 → 延迟到首次解析（Build 之后）才读取配置。
+        // 原实现在 AddInfrastructure 调用点即时物化 DurableExecution 节：晚于此刻合并的配置源
+        // （WebApplicationFactory 的延迟 ConfigureAppConfiguration 等）一律不可见 → 测试基座里
+        // QueueEnabled=true 恒被读成 false（队列 E2E 实际走了直跑路径、worker 未注册）。
+        static DurableExecutionSettings BuildDurableExecutionSettings(IConfiguration cfg)
         {
-            LeaseTtlMinutes = int.TryParse(deSection["LeaseTtlMinutes"], out var leaseTtl) ? leaseTtl : 5,
-            CheckpointBatchSize = int.TryParse(deSection["CheckpointBatchSize"], out var batchSize) ? batchSize : 5,
-            CheckpointMaxAgeSeconds = int.TryParse(deSection["CheckpointMaxAgeSeconds"], out var maxAge) ? maxAge : 30
-        };
-        services.AddSingleton(Microsoft.Extensions.Options.Options.Create(durableExecutionSettings));
+            var deSection = cfg.GetSection("DurableExecution");
+            return new DurableExecutionSettings
+            {
+                LeaseTtlMinutes = int.TryParse(deSection["LeaseTtlMinutes"], out var leaseTtl) ? leaseTtl : 5,
+                CheckpointBatchSize = int.TryParse(deSection["CheckpointBatchSize"], out var batchSize) ? batchSize : 5,
+                CheckpointMaxAgeSeconds = int.TryParse(deSection["CheckpointMaxAgeSeconds"], out var maxAge) ? maxAge : 30,
+                // ── F37 队列化执行与水平扩展 ──
+                QueueEnabled = bool.TryParse(deSection["QueueEnabled"], out var queueEnabled) && queueEnabled,
+                QueueBackend = deSection["QueueBackend"] ?? "InMemory",
+                QueueWaitTimeoutSeconds = int.TryParse(deSection["QueueWaitTimeoutSeconds"], out var waitSec) ? waitSec : 110,
+                QueuePollIntervalSeconds = int.TryParse(deSection["QueuePollIntervalSeconds"], out var pollSec) ? pollSec : 2,
+                QueueMaxAttempts = int.TryParse(deSection["QueueMaxAttempts"], out var maxAttempts) ? maxAttempts : 3,
+                QueueCapacity = int.TryParse(deSection["QueueCapacity"], out var capacity) ? capacity : 256,
+                RedisStreamKey = deSection["RedisStreamKey"] ?? "ap:exec-queue",
+                RedisDeadLetterKey = deSection["RedisDeadLetterKey"] ?? "ap:exec-deadletter",
+                RabbitQueueName = deSection["RabbitQueueName"] ?? "ap.execution.queue",
+                RabbitDeadLetterQueueName = deSection["RabbitDeadLetterQueueName"] ?? "ap.execution.deadletter",
+                RabbitMqUrl = deSection["RabbitMqUrl"],
+                WorkerIdleDelayMilliseconds = int.TryParse(deSection["WorkerIdleDelayMilliseconds"], out var idleMs) ? idleMs : 500
+            };
+        }
+
+        services.AddSingleton(sp => BuildDurableExecutionSettings(sp.GetRequiredService<IConfiguration>()));
+        services.AddSingleton<Microsoft.Extensions.Options.IOptions<DurableExecutionSettings>>(sp =>
+            Microsoft.Extensions.Options.Options.Create(sp.GetRequiredService<DurableExecutionSettings>()));
+
+        // ── F37 执行队列（决策 D1=B 三后端，按 DurableExecution:QueueBackend 条件注册；恒注册：
+        // run 处理器在无队列模式下也依赖此抽象）。──
+        services.AddSingleton<AgentPlatform.Application.Abstractions.IExecutionQueue>(sp =>
+        {
+            var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AgentPlatform.Application.Abstractions.DurableExecutionSettings>>();
+            var backend = settings.Value.QueueBackend;
+            AgentPlatform.Application.Abstractions.IExecutionQueue queue = backend switch
+            {
+                "RedisStream" => ActivatorUtilities.CreateInstance<Queues.RedisStreamExecutionQueue>(sp),
+                "RabbitMQ" => ActivatorUtilities.CreateInstance<Queues.RabbitMqExecutionQueue>(sp),
+                _ => ActivatorUtilities.CreateInstance<Queues.InProcessExecutionQueue>(sp),
+            };
+            // 生产就绪度：QueueBackend 拼写错误（如 "redis"/"RabbitMq"）不能静默降级到仅单实例的
+            // InMemory 后端——显式告警，否则运维以为已分布式分发实际未跨 worker。
+            if (backend is not ("InMemory" or "RedisStream" or "RabbitMQ"))
+            {
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>()
+                    .CreateLogger("F37.ExecutionQueue")
+                    .LogWarning(
+                        "Unknown DurableExecution:QueueBackend '{Backend}' — falling back to InProcess queue (single-instance only, no cross-worker distribution)",
+                        backend);
+            }
+
+            return queue;
+        });
 
         // ── F32 多 Agent 协作防护配置（风暴/活锁熔断参数）──
         services.Configure<AgentCollaborationSettings>(configuration.GetSection("AgentCollaboration"));
@@ -432,17 +488,12 @@ public static class DependencyInjection
         services.AddSingleton<ICostController, CostController>();
         services.AddScoped<IDomainEventBus, DomainEventBus>();
 
-        // Register domain event handlers for execution logging
-        services.AddScoped<INotificationHandler<DomainEventNotification<WorkflowStarted>>, WorkflowStartedEventHandler>();
-        services.AddScoped<INotificationHandler<DomainEventNotification<StepCompleted>>, StepCompletedEventHandler>();
-        services.AddScoped<INotificationHandler<DomainEventNotification<StepFailed>>, StepFailedEventHandler>();
-        services.AddScoped<INotificationHandler<DomainEventNotification<WorkflowCompleted>>, WorkflowCompletedEventHandler>();
-        services.AddScoped<INotificationHandler<DomainEventNotification<WorkflowRolledBack>>, WorkflowRolledBackEventHandler>();
-        // ── F33 语义记忆 episodic 写回（成功经验 + 失败教训）──
-        services.AddScoped<INotificationHandler<DomainEventNotification<WorkflowCompleted>>,
-            AgentPlatform.Application.EventHandlers.SemanticMemoryWriteBackHandler>();
-        services.AddScoped<INotificationHandler<DomainEventNotification<WorkflowRolledBack>>,
-            AgentPlatform.Application.EventHandlers.SemanticMemoryWriteBackHandler>();
+        // ── 领域事件处理器注册（重复注册修复 2026-09-04）──
+        // 此处曾对 Application.EventHandlers 的 5 个处理器 + SemanticMemoryWriteBackHandler 显式注册，
+        // 但 AddApplication 的 AddMediatR 程序集扫描已注册同一批类型（MediatR 12 对 INotificationHandler
+        // 用普通 AddTransient，非 TryAdd）→ 每条通知被处理两次：每次 run 产生 2 条 ExecutionLog
+        // （WorkflowStartedEventHandler 双跑，F40 前端 E2E 断言 exactly-1 复现）。显式注册已删除，
+        // 扫描是唯一注册源；Infrastructure 程序集内无 INotificationHandler 实现，无遗漏。
 
         // AutoGenAgentOrchestrator + AutoGenSettings removed (Phase 3 cleanup): the [Obsolete]
         // orchestrator and its dead config block are gone; OrchestrationPrimitive is the only engine.
@@ -472,6 +523,12 @@ public static class DependencyInjection
 
         // F21 定时触发器后台调度器（轮询到期 Schedule，分布式锁防重）。
         services.AddHostedService<WorkflowScheduler>();
+
+        // F37 队列 worker：恒注册，实际是否消费由 ExecutionWorker.ExecuteAsync 依 QueueEnabled 运行时判定
+        // （QueueEnabled=false 立即返回 = 既有请求内直跑语义零变化）。注册期不可判定 QueueEnabled：
+        // 见上方 DurableExecutionSettings 延迟快照修复——晚合并的配置源在注册期读不到。
+        // 测试基座 IntegrationAppFactory 移除全部 IHostedService，故 BDD 中 worker 天然不启用（双保险）。
+        services.AddHostedService<Queues.ExecutionWorker>();
 
         return services;
     }

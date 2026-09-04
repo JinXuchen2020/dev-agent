@@ -10,7 +10,7 @@ namespace AgentPlatform.Domain.Aggregates.Agents;
 /// Represents an agent aggregate root within the multi-agent platform, encapsulating
 /// its identity, role, model endpoint, system prompt, associated tools, and lifecycle status.
 /// </summary>
-public sealed class Agent : ITenantScoped, IAggregateRoot
+public sealed class Agent : ITenantScoped, IWorkspaceScoped, IAggregateRoot
 {
     private readonly List<ToolDefinition> _tools = [];
     private readonly List<string> _skillPackageNames = [];
@@ -69,6 +69,7 @@ public sealed class Agent : ITenantScoped, IAggregateRoot
     /// Gets the unique identifier of the tenant that owns this agent.
     /// </summary>
     public Guid TenantId { get; private init; }
+    public Guid WorkspaceId { get; private init; }
 
     /// <summary>
     /// Gets the UTC timestamp when the agent was created.

@@ -1,0 +1,55 @@
+# F39 · Alertmanager 配置（模板；密钥/地址以占位符标注，勿提交真实值）
+#
+# 校验：amtool check-config deploy/monitoring/alertmanager.yml
+# 注入真实凭据的两种方式：
+#   A) 部署时由 CI/CD 从 secret store 渲染本文件（推荐：不落盘到仓库）；
+#   B) 用 docker secret 挂载覆盖 /etc/alertmanager/alertmanager.yml。
+#
+# 路由策略：critical 直推 PagerDuty + Slack；warning/info 只进 Slack，避免夜间噪声。
+
+global:
+  resolve_timeout: 5m
+  # Slack / PagerDuty 的真实凭据在 receivers 里覆写；此处仅留占位。
+
+route:
+  receiver: 'slack-default'
+  group_by: ['alertname', 'severity']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers:
+        - severity = "critical"
+      receiver: 'pagerduty-critical'
+      group_wait: 10s
+      repeat_interval: 1h
+
+receivers:
+  - name: 'slack-default'
+    slack_configs:
+      # REPLACE_ME：Slack Incoming Webhook（或改用 api_url + channel 的 Bot 模式）
+      api_url: 'https://hooks.slack.com/services/REPLACE_ME'
+      channel: '#agent-platform-alerts'
+      send_resolved: true
+      title: '{{ .Status | toUpper }} {{ .CommonLabels.alertname }}'
+      text: |-
+        *{{ .Status | toUpper }}* {{ if eq .Status "firing" }}🔴{{ else }}✅{{ end }}
+        {{ range .Alerts }}• *{{ .Labels.alertname }}* [{{ .Labels.severity }}] {{ .Annotations.description }}
+        {{ end }}
+
+  - name: 'pagerduty-critical'
+    pagerduty_configs:
+      # REPLACE_ME：PagerDuty Services → Integration Key
+      routing_key: REPLACE_PAGERDUTY_INTEGRATION_KEY
+      severity: '{{ if eq .GroupLabels.severity "critical" }}critical{{ else }}warning{{ end }}'
+      description: '{{ .CommonAnnotations.summary }}'
+
+inhibit_rules:
+  # 抓取目标已下线时，抑制同源的性能/质量类告警（避免雪崩式噪声，根因优先）。
+  # equal 留空 = 所有告警互相关联：规则聚合（sum/max by）后的告警不带 instance 标签，
+  # 若按 equal:['instance'] 比较则永不相等 → 抑制永不生效（死配置）。
+  - source_matchers:
+      - alertname = "TargetDown"
+    target_matchers:
+      - severity =~ "warning|info"
+    equal: []

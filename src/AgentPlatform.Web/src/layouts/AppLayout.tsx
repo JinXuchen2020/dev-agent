@@ -23,6 +23,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '../stores/appStore';
 import LanguageSwitcher from '../components/LanguageSwitcher';
+import WorkspaceSwitcher from '../components/WorkspaceSwitcher';
 
 const { Header, Sider, Content } = Layout;
 
@@ -138,6 +139,7 @@ const AppLayout: React.FC = () => {
             icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
             onClick={toggleSidebar}
           />
+          <WorkspaceSwitcher />
           <LanguageSwitcher />
           <Dropdown menu={userMenu} placement="bottomRight">
             <Button type="text" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

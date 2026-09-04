@@ -8,7 +8,7 @@ namespace AgentPlatform.Domain.Aggregates.Workflows;
 /// 表示工作流聚合根。以 <see cref="WorkflowNode"/> 经 <see cref="WorkflowEdge"/> 连接而成的
 /// 有向图（唯一事实来源）为底层，并保留遗留的 <see cref="WorkflowStep"/> 投影以兼容读取。
 /// </summary>
-public sealed class Workflow : ITenantScoped, IAggregateRoot
+public sealed class Workflow : ITenantScoped, IWorkspaceScoped, IAggregateRoot
 {
     private readonly List<WorkflowStep> _steps = [];
     private readonly List<WorkflowNode> _nodes = [];
@@ -50,6 +50,7 @@ public sealed class Workflow : ITenantScoped, IAggregateRoot
 
     /// <summary>Gets the unique identifier of the tenant that owns this workflow.</summary>
     public Guid TenantId { get; private init; }
+    public Guid WorkspaceId { get; private init; }
 
     /// <summary>Gets the UTC timestamp when the workflow was created.</summary>
     public DateTime CreatedAt { get; private init; }

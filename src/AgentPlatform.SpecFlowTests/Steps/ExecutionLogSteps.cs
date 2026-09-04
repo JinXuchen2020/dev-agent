@@ -22,6 +22,10 @@ public class ExecutionLogSteps
     private ExecutionLogListResponseDto? _lastList;
     private ExecutionLogStepsResponseDto? _lastSteps;
     private Guid _lastLogId;
+    private Guid _replayLogId;
+    private HttpStatusCode _replayStatus;
+    private HttpStatusCode _missingReplayStatus;
+    private ReplayReportDto? _replay;
 
     private async Task EnsureAdminAsync() => _adminToken = await IntegrationClient.AdminTokenAsync();
 
@@ -220,4 +224,130 @@ public class ExecutionLogSteps
         Assert.NotNull(_lastList);
         Assert.Equal(50, _lastList!.TotalCount);
     }
+
+    // ── F40 异常回放诊断（真 HTTP + 真 DB：POST /execution-logs/{id}/replay）──
+
+    private static ExecutionLog MakeFailedLogWithCheckpoint(Guid id)
+    {
+        var log = new ExecutionLog(id, Guid.NewGuid(), "Failing WF", IntegrationConstants.Tenant1Id, totalSteps: 3);
+        log.AddEntry(new ExecutionLogEntry(
+            Guid.NewGuid(), "Start Step", 0, WorkflowState.Completed,
+            TimeSpan.FromMilliseconds(40), "kickoff", null, 10, 3, StepType.Start));
+        log.AddEntry(new ExecutionLogEntry(
+            Guid.NewGuid(), "Generate Step", 1, WorkflowState.Completed,
+            TimeSpan.FromMilliseconds(900), "draft output", null, 200, 80, StepType.LLM));
+        log.AddEntry(new ExecutionLogEntry(
+            Guid.NewGuid(), "Review Step", 2, WorkflowState.Failed,
+            TimeSpan.FromMilliseconds(60), null, "模型返回超限", 0, 0, StepType.Critic));
+        log.Fail();
+        log.UpdateCheckpoint(
+            "{\"SchemaVersion\":1,\"CheckpointVersion\":2,\"Blackboard\":{\"loop.x\":\"1\"},"
+            + "\"ExecutionOrderIndex\":2,\"LoopBodyIndices\":{},\"SkipSet\":[],\"StepStates\":[],"
+            + "\"TenantId\":\"00000000-0000-0000-0000-000000000001\","
+            + "\"WorkflowId\":\"00000000-0000-0000-0000-0000000000aa\","
+            + "\"CapturedAt\":\"2026-09-01T00:00:00.000000Z\"}");
+        return log;
+    }
+
+    [Given("an execution with one failed step and a final checkpoint exists")]
+    public async Task GivenFailedExecutionWithCheckpoint()
+    {
+        var id = Guid.NewGuid();
+        await ExecutionLogSeeder.SeedAsync(new[] { MakeFailedLogWithCheckpoint(id) });
+        _replayLogId = id;
+    }
+
+    [Given("a fully successful execution exists")]
+    public async Task GivenSuccessfulExecution()
+    {
+        var id = Guid.NewGuid();
+        await ExecutionLogSeeder.SeedAsync(new[] { MakeCompletedLog(id, "Healthy WF", 2) });
+        _replayLogId = id;
+    }
+
+    [When("a user requests a replay for that execution log")]
+    public async Task WhenRequestReplay()
+    {
+        await EnsureAdminAsync();
+        var resp = await IntegrationClient.SendAsync(
+            HttpMethod.Post, $"/api/v1/execution-logs/{_replayLogId}/replay", _adminToken);
+        _replayStatus = resp.StatusCode;
+        _replay = await IntegrationClient.ReadAsAsync<ReplayReportDto>(resp);
+    }
+
+    [When("a user requests a replay for a missing execution log")]
+    public async Task WhenRequestMissingReplay()
+    {
+        await EnsureAdminAsync();
+        var resp = await IntegrationClient.SendAsync(
+            HttpMethod.Post, $"/api/v1/execution-logs/{Guid.NewGuid()}/replay", _adminToken);
+        _missingReplayStatus = resp.StatusCode;
+    }
+
+    /// <summary>不存在或跨租户的日志一律 404（不暴露存在性）。</summary>
+    [Then("the missing replay request is rejected with 404")]
+    public void ThenMissingReplayRejected() => Assert.Equal(HttpStatusCode.NotFound, _missingReplayStatus);
+
+    [Then("the replay report marks exactly one failed node")]
+    public void ThenOneFailedNode()
+    {
+        Assert.Equal(HttpStatusCode.OK, _replayStatus);
+        Assert.NotNull(_replay);
+        Assert.Equal(1, _replay!.failurePath.failedCount);
+        Assert.Single(_replay.nodes, n => n.isFailure);
+    }
+
+    [Then("the replay report points at the failing step order")]
+    public void ThenFailedOrderPointed()
+    {
+        Assert.Equal(2, _replay!.failurePath.firstFailedStepOrder);
+        Assert.Equal("Review Step", _replay.failurePath.failedStepNames.Single());
+        var failed = _replay.nodes.Single(n => n.isFailure);
+        Assert.Contains("模型返回超限", failed.errorDetail ?? "");
+        // 前后上下文：失败节点的输入为前序输出推断值，必须带标注。
+        Assert.Equal("draft output", failed.input);
+        Assert.True(failed.inputInferred);
+    }
+
+    [Then("the replay report exposes the final context snapshot")]
+    public void ThenContextSnapshot()
+    {
+        Assert.True(_replay!.contextSnapshot.available);
+        Assert.Equal("F30-final-checkpoint", _replay.contextSnapshot.source);
+        Assert.Equal("1", _replay.contextSnapshot.variables["loop.x"]);
+        Assert.Equal(2, _replay.contextSnapshot.executionOrderIndex);
+    }
+
+    [Then("the replay report discloses that real step inputs are not recorded")]
+    public void ThenDisclosesInputGap()
+    {
+        Assert.Contains("input-snapshot-unavailable", _replay!.dataGaps);
+    }
+
+    [Then("the replay report contains no failed nodes")]
+    public void ThenNoFailures()
+    {
+        Assert.Equal(HttpStatusCode.OK, _replayStatus);
+        Assert.Equal(0, _replay!.failurePath.failedCount);
+        Assert.Null(_replay.failurePath.firstFailedStepOrder);
+        Assert.DoesNotContain(_replay.nodes, n => n.isFailure);
+    }
+
+    /// <summary>F40 回放报告 DTO（camelCase，与 Api 契约一致）。</summary>
+    private sealed record ReplayNodeDto(
+        int stepOrder, string stepName, int status, int? nodeType, bool isFailure,
+        string? input, bool inputInferred, string? output, int outputLength, bool outputTruncated,
+        string? errorDetail, bool errorTruncated, int tokensIn, int tokensOut, bool tokensReported);
+
+    private sealed record ReplayFailurePathDto(int? firstFailedStepOrder, List<string> failedStepNames, int failedCount);
+
+    private sealed record ReplaySnapshotDto(
+        bool available, string? source, Dictionary<string, string> variables, int? checkpointVersion,
+        int? executionOrderIndex, int stepStateCount, string note);
+
+    private sealed record ReplayReportDto(
+        Guid executionLogId, Guid workflowId, string workflowName, int overallStatus,
+        List<ReplayNodeDto> nodes, ReplayFailurePathDto failurePath,
+        ReplaySnapshotDto contextSnapshot, int recordedStepCount, int missingStepCount,
+        List<string> dataGaps);
 }

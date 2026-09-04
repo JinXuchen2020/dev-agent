@@ -12,6 +12,7 @@ public sealed class AgentRunRecord
 
     /// <summary>Tenant that owns the run (for isolation).</summary>
     public Guid TenantId { get; private set; }
+    public Guid WorkspaceId { get; private init; }
 
     /// <summary>The agent that was driven.</summary>
     public Guid AgentId { get; private set; }

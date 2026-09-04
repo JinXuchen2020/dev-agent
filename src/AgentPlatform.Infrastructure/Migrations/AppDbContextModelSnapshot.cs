@@ -49,6 +49,9 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("YamlContent")
                         .IsRequired()
                         .HasColumnType("text");
@@ -98,6 +101,9 @@ namespace AgentPlatform.Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("WorkflowId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WorkspaceId")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -204,6 +210,9 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.Property<int>("TotalTokensOut")
                         .HasColumnType("INTEGER");
 
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("RunId")
@@ -262,6 +271,9 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.ToTable("Agents", (string)null);
@@ -313,6 +325,9 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.Property<Guid>("TenantId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("TenantId", "IsActive");
@@ -355,6 +370,9 @@ namespace AgentPlatform.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Action");
@@ -368,6 +386,9 @@ namespace AgentPlatform.Infrastructure.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("AgentId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("CollectionName")
@@ -394,7 +415,14 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.Property<Guid?>("WorkflowId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "WorkflowId", "AgentId")
+                        .IsUnique()
+                        .HasFilter("\"AgentId\" IS NOT NULL");
 
                     b.ToTable("Conversations", (string)null);
                 });
@@ -414,6 +442,9 @@ namespace AgentPlatform.Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("WorkflowId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WorkspaceId")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -452,6 +483,9 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.Property<Guid>("WorkflowId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("TenantId", "WorkflowId");
@@ -480,6 +514,9 @@ namespace AgentPlatform.Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WorkspaceId")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -525,6 +562,9 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.Property<string>("WorkflowName")
                         .IsRequired()
                         .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WorkspaceId")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -577,6 +617,9 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.Property<Guid>("WorkflowId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("WorkflowId");
@@ -616,6 +659,9 @@ namespace AgentPlatform.Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("TenantId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WorkspaceId")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -741,6 +787,9 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.Property<Guid>("WorkflowId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("TenantId", "Slug")
@@ -799,6 +848,9 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("TenantId", "Category");
@@ -850,6 +902,9 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.Property<Guid>("TenantId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.ToTable("ToolDefinitions", (string)null);
@@ -883,6 +938,9 @@ namespace AgentPlatform.Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("TenantId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WorkspaceId")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -973,6 +1031,9 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.Property<Guid>("WorkflowId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("NextRunAt");
@@ -1020,6 +1081,9 @@ namespace AgentPlatform.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("WorkflowId")
@@ -1058,6 +1122,9 @@ namespace AgentPlatform.Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WorkspaceId")
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("_isDag")
@@ -1104,11 +1171,75 @@ namespace AgentPlatform.Infrastructure.Migrations
                     b.Property<Guid>("WorkflowId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("WorkflowId", "VersionNumber");
 
                     b.ToTable("WorkflowVersions", (string)null);
+                });
+
+            modelBuilder.Entity("AgentPlatform.Domain.Aggregates.Workspaces.Workspace", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("Workspaces", (string)null);
+                });
+
+            modelBuilder.Entity("AgentPlatform.Domain.Aggregates.Workspaces.WorkspaceMember", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("WorkspaceId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("WorkspaceMembers", (string)null);
                 });
 
             modelBuilder.Entity("AgentPlatform.Domain.Aggregates.AgentConfigurations.AgentConfiguration", b =>

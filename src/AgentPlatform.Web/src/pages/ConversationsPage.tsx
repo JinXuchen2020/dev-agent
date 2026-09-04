@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, App as AntApp, Tag, Input, Space, Select } from 'antd';
-import type { Conversation, KnowledgeBase } from '../types';
-import { getConversations, createConversation, getKnowledgeBases } from '../services/api';
+import type { Agent, Conversation, KnowledgeBase } from '../types';
+import { getConversations, createConversation, getKnowledgeBases, getAgents } from '../services/api';
 import {
   conversationStatusLabel,
   CONVERSATION_STATUS_META,
@@ -29,25 +29,30 @@ const ConversationsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [appliedQ, setAppliedQ] = useState('');
   const [statusFilter, setStatusFilter] = useState<number | undefined>(undefined);
+  // F36：agent 筛选 + agentId→名称映射（卡片标签用）。
+  const [agentFilter, setAgentFilter] = useState<string | undefined>(undefined);
+  const [agentNameById, setAgentNameById] = useState<Map<string, string>>(new Map());
   const { message } = AntApp.useApp();
 
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     Promise.all([
-      getConversations({ status: statusFilter, q: appliedQ || undefined, signal: controller.signal }),
+      getConversations({ status: statusFilter, q: appliedQ || undefined, agentId: agentFilter, signal: controller.signal }),
       getKnowledgeBases(controller.signal).catch(() => [] as KnowledgeBase[]),
+      getAgents(controller.signal).catch(() => [] as Agent[]),
     ])
-      .then(([convos, kbs]) => {
+      .then(([convos, kbs, agents]) => {
         setConversations(Array.isArray(convos) ? convos : []);
         setKbNameByCollection(new Map((kbs ?? []).map((kb) => [kb.collectionName, kb.name])));
+        setAgentNameById(new Map((agents ?? []).map((a) => [a.id, a.name])));
       })
       .catch((err: unknown) => {
         if ((err as { name?: string })?.name !== 'CanceledError') console.error('[Conversations] fetch failed', err);
       })
       .finally(() => setLoading(false));
     return () => controller.abort();
-  }, [appliedQ, statusFilter]);
+  }, [appliedQ, statusFilter, agentFilter]);
 
   const handleCreate = async () => {
     setCreating(true);
@@ -57,7 +62,13 @@ const ConversationsPage: React.FC = () => {
       if (conv?.id) navigate(`/conversations/${conv.id}`);
       else {
         const controller = new AbortController();
-        getConversations({ signal: controller.signal }).then(setConversations).catch(() => undefined);
+        // 刷新时携带当前筛选条件，避免列表与已展示的筛选状态不一致。
+        getConversations({
+          status: statusFilter,
+          q: appliedQ || undefined,
+          agentId: agentFilter,
+          signal: controller.signal,
+        }).then(setConversations).catch(() => undefined);
       }
     } catch {
       message.error(t('pages.conversations.createFailed'));
@@ -72,6 +83,11 @@ const ConversationsPage: React.FC = () => {
         <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: colors.textPrimary, fontSize: 13 }}>
           {c.id ? (c.id.length > 16 ? `${c.id.slice(0, 16)}…` : c.id) : '-'}
         </span>
+        {c.agentId && (
+          <Tag color="purple">
+            {t('pages.conversations.agentTag')}: {agentNameById.get(c.agentId) ?? c.agentId.slice(0, 8)}
+          </Tag>
+        )}
         {c.collectionName && kbNameByCollection.get(c.collectionName) ? (
           <Tag color="blue">{kbNameByCollection.get(c.collectionName)}</Tag>
         ) : (
@@ -122,6 +138,17 @@ const ConversationsPage: React.FC = () => {
             value={statusFilter}
             onChange={(v) => setStatusFilter(v ?? undefined)}
             options={CONVERSATION_STATUS_OPTIONS}
+          />
+          <Select<string>
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            aria-label={t('pages.conversations.agentFilter')}
+            placeholder={t('pages.conversations.agentFilter')}
+            style={{ width: 200 }}
+            value={agentFilter}
+            onChange={(v) => setAgentFilter(v ?? undefined)}
+            options={[...agentNameById.entries()].map(([id, name]) => ({ value: id, label: name }))}
           />
         </Space>
         <EntityCardGrid

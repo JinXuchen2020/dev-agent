@@ -214,6 +214,8 @@ public sealed class DddLayerTests
             {
                 "IOptions", "IMediator", "IServiceProvider", "IEnumerable",
                 "ILogger", "IResult", "ITenantProvider", "IExecutionProgressBroadcaster",
+                // F35 WorkspacesController 重签 JWT（切换工作空间）需要令牌服务（横切基础设施，同 ITenantProvider）。
+                "IJwtTokenService",
             };
 
             var injections = new System.Text.RegularExpressions.Regex(

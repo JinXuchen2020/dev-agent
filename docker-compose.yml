@@ -19,5 +19,33 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: agent_platform_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # F37 队列化执行后端之一（QueueBackend=RabbitMQ）。启用方式：
+  #   DurableExecution__QueueEnabled=true DurableExecution__QueueBackend=RabbitMQ
+  #   ConnectionStrings__RabbitMQ=amqp://guest:guest@rabbitmq:5672
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: agent_platform_rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:

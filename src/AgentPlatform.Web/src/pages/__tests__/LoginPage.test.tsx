@@ -8,6 +8,8 @@ import { useAppStore } from '../../stores/appStore';
 
 vi.mock('../../services/api', () => ({
   loginRequest: vi.fn(),
+  // F35: appStore（经 appStore → api 导入链）需要 workspace 持久化键，mock 需同步提供。
+  WORKSPACE_STORAGE_KEY: 'app-workspace-id',
 }));
 
 // antd 对双字中文按钮自动插入空格（"登录" → "登 录"），用去空白匹配避免脆弱。

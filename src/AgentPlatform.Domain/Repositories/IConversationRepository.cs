@@ -32,6 +32,18 @@ public interface IConversationRepository
     Task<IReadOnlyList<Conversation>> GetByTenantAsync(Guid tenantId, CancellationToken ct = default);
 
     /// <summary>
+    /// Retrieves the agent-owned conversation for a (workflow, agent) pair (F36 per-agent
+    /// conversation isolation). Returns the existing conversation for reuse, or null when the
+    /// agent step should create one. Messages are not eagerly loaded.
+    /// </summary>
+    /// <param name="tenantId">The tenant identifier (explicit for clarity; the EF filter also enforces it).</param>
+    /// <param name="workflowId">The workflow the conversation is bound to.</param>
+    /// <param name="agentId">The owning agent identifier.</param>
+    /// <param name="ct">A cancellation token.</param>
+    /// <returns>The existing agent conversation, or null.</returns>
+    Task<Conversation?> GetByAgentAsync(Guid tenantId, Guid workflowId, Guid agentId, CancellationToken ct = default);
+
+    /// <summary>
     /// Retrieves all conversations for a tenant within an optional date range (filtered by
     /// <c>CreatedAt</c>). Used by the analytics summary query for in-memory day-bucket aggregation.
     /// Messages are not eagerly loaded since only <c>TotalTokenUsage</c> and <c>CreatedAt</c> are needed.
@@ -64,4 +76,12 @@ public interface IConversationRepository
     /// </summary>
     /// <param name="conversation">The conversation aggregate to remove.</param>
     void Remove(Conversation conversation);
+
+    /// <summary>
+    /// Detaches a conversation from the persistence change tracker (F36 best-effort
+    /// agent-conversation persistence: a failed save must not leave the entity queued for
+    /// a retry by an unrelated later save in the same scope).
+    /// </summary>
+    /// <param name="conversation">The conversation aggregate to detach.</param>
+    void Detach(Conversation conversation);
 }
