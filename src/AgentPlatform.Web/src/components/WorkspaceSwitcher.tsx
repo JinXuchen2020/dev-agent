@@ -212,6 +212,8 @@ const WorkspaceSwitcher: React.FC = () => {
       <Modal
         title={editing ? t('workspace.edit') : t('workspace.create')}
         open={manageOpen}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
         onOk={() => void handleSave()}
         confirmLoading={saving}
         onCancel={() => setManageOpen(false)}

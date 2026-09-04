@@ -21,8 +21,11 @@ When('我在顶栏工作空间管理菜单中新建工作空间 {string}', async
   await page.getByText('新建工作空间', { exact: true }).click();
   // antd Modal（role=dialog）内填 名称 / 描述，提交。
   const dialog = page.getByRole('dialog');
-  await dialog.getByLabel('名称').fill(name);
-  await dialog.getByRole('button', { name: looseName('确 定') }).click();
+  // antd 必填项 label 渲染为「* 名称」→ 用正则子串（credentials.steps 同款已验证写法）。
+  await dialog.getByRole('textbox', { name: /名称/ }).fill(name);
+  // okText 显式取 common.confirm=「确认」（antd 旧默认文案为「确定」，两汉字间空格由 CSS 插入，
+  // 可及名可能是「确 定」/「确定」）→ 两者都容忍，避免再次卡 60s。
+  await dialog.getByRole('button', { name: /确\s*[认定]/ }).click();
   // 等待模态关闭 + 列表刷新（创建成功提示由 WorkspaceSwitcher message.success 触发）。
   await expect(page.getByRole('dialog')).toBeHidden({ timeout: 10000 });
 });

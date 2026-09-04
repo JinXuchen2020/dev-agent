@@ -211,3 +211,13 @@ Module 6: 前端（api.ts/appStore/useApiState/WorkspaceSwitcher + E2E feature�
 - [x] 全量 `dotnet build` 0/0；`dotnet test`（Application/Infrastructure/Architecture/Api.Tests）0 失败
 - [x] master 既有失败清单豁免：SpecFlow LLM 用例 1、IntegrationTests 需 `OPENAI__Key` 环境变量、前端 vitest 2（均不计入本 gate）
 - [x] 无新增未豁免 P0/P1/P2 审计发现；质量门报告见本节上方 §8 + 会话报告
+
+## 9. CI E2E 修复记录（2026-09-03）
+
+| 项 | 位置 | 问题 | 修复 |
+| :--- | :--- | :--- | :--- |
+| CI E2E 失败（60s 超时） | `e2e/steps/workspace.steps.ts`、`components/WorkspaceSwitcher.tsx` | 步骤用 `looseName('确 定')` 定位模态框确定按钮，生成的正则里含**字面空格**；但 antd 两汉字按钮的空格由 CSS 插入、可及名实为「确定」，且组件 okText 取 `common.confirm`＝「确认」→ 选择器永不命中。 | ① Modal 显式 `okText`/`cancelText`，不再依赖 locale 默认文案；② 匹配器放宽为 `/确\s*[认定]/`（两种文案 + 0..n 空白都容忍）；③ 名称字段改用与既有已过步骤一致的 `getByRole('textbox', { name: /名称/ })`（antd 必填 label 实为「* 名称」）。 |
+
+教训：`looseName()` 这种「逐字插 `\s*`」的宽松匹配器，一旦输入本身含空格就退化为**必须匹配该空格**；对 antd 的 CJK 按钮应写可选空白的正则（`/确\s*定/`），不要把视觉空格当真传进匹配串。
+
+本地校验：`npx bddgen` exit 0、`tsc --noEmit` 0 error；浏览器内 E2E 由 CI 验证。

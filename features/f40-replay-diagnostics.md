@@ -198,3 +198,12 @@ P3 waivers：
 - `MaxTextLength`/`MaxNodesInReport`/`MaxFailedStepNames` 未外置 IOptions —— 理由：协议级响应体积 DoS 防护上限，非业务可调项，外置徒增配置面；风险：需调大上限须改代码重部署（低）；目标期：如无运维诉求则长期保留。
 - `ReplayReport`/`ReplayNodeView` 若干字段（`errorTruncated`、节点 `startedAt`/`completedAt`、快照 `source`/`checkpointVersion`/`executionOrderIndex`/`stepStateCount`、`overallStatus` 等）当前 UI 未渲染 —— 理由：只读诊断 API 契约完整性的显式字段，供任何消费方/工具取用，部分由后端 BDD（`source`/`executionOrderIndex`）断言；均已被 handler 落值，非 `.Empty` 蜜罐；风险：UI 未即时呈现；目标期：后续按需增补展示即可，不阻塞 F40。
 
+## 9. CI E2E 修复记录（2026-09-03）
+
+| 项 | 位置 | 问题 | 修复 |
+| :--- | :--- | :--- | :--- |
+| CI E2E 失败（15s 超时） | `e2e/steps/executionLog.steps.ts`、`e2e/features/execution-log-replay.feature` | 步骤等待 `IntegrationSeeder` 播种的失败执行日志，但**该 seeder 只在 SpecFlow 进程内运行**（`IntegrationAppFactory.InitializeAsync`）；前端 E2E 后端是真实 `dotnet run --environment Integration`，只执行 `DatabaseInitializer` 的 Integration 夹具（ApiKey + 工作流）→ 该日志在此进程内根本不存在。附带：该种子会把 `ExecutionLog.feature` 的「total count should be 50」变成 51。 | 改为**场景自造数据**：`POST /workflows/import`（只建不跑，已核 handler 不调 `RunAsync`）建图 → `POST /{id}/run` 恰好一次 → 列表按 workflowId 定位并断言「恰好 1 条日志」；同时删除 seeder 块与 `FailedExecutionLogId`/`FailedExecutionStepName` 常量（消除计数干扰与死码）。 |
+| 连带修正 | 同上 | 原以为 Start→End 图就能产出日志条目；实测编排器把 `StepType.Start/End` 排除在可执行节点之外（`SequentialOrchestrator.cs:378`）→ **结构节点不写 `ExecutionLogEntry`**。 | 图中加入 `Variable` 节点（`mode=set` 纯内存、无 LLM；E2E 后端跑真实模型，必须避开模型节点），时间线断言只针对该被执行的节点。 |
+| 夹具位置 | `e2e/steps/fixtures.ts` | 在步骤文件内 `base.extend()` 自定义 test 会让 `bddgen` 直接失败：`Can't guess test instance`（playwright-bdd 只认 fixtures 文件导出的那一个 `test`）。 | `replay` 夹具并入 `fixtures.ts` 的同一条 extend 链；步骤文件恢复 `import { test } from './fixtures'`。 |
+
+本地校验：`npx bddgen` exit 0、`tsc --noEmit` 0 error、`vitest` 与基线一致；真实浏览器 E2E 依 CI 验证。
