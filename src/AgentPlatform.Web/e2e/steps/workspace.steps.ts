@@ -32,12 +32,14 @@ When('我在顶栏工作空间管理菜单中新建工作空间 {string}', async
 
 Then('工作空间切换器包含 {string}', async ({ page }, name: string) => {
   // 打开 Select 下拉（aria-label = t('workspace.label')），断言选项出现。
-  await page.getByRole('combobox', { name: '工作空间' }).click();
+  // force:true 与 credentials.steps.ts:28 同款：有选中值时 antd 的 selection-item span
+  // 会盖住 combobox input 拦截点击（CI 卡满 60s 的实锤），对 span 所在 selector 点击即可展开。
+  await page.getByRole('combobox', { name: '工作空间' }).click({ force: true });
   await expect(page.getByRole('option', { name: new RegExp(name) })).toBeVisible({ timeout: 10000 });
   await page.keyboard.press('Escape');
 });
 
 When('我选择工作空间 {string}', async ({ page }, name: string) => {
-  await page.getByRole('combobox', { name: '工作空间' }).click();
+  await page.getByRole('combobox', { name: '工作空间' }).click({ force: true });
   await page.getByRole('option', { name: new RegExp(name) }).click();
 });

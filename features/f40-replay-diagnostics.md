@@ -207,3 +207,12 @@ P3 waivers：
 | 夹具位置 | `e2e/steps/fixtures.ts` | 在步骤文件内 `base.extend()` 自定义 test 会让 `bddgen` 直接失败：`Can't guess test instance`（playwright-bdd 只认 fixtures 文件导出的那一个 `test`）。 | `replay` 夹具并入 `fixtures.ts` 的同一条 extend 链；步骤文件恢复 `import { test } from './fixtures'`。 |
 
 本地校验：`npx bddgen` exit 0、`tsc --noEmit` 0 error、`vitest` 与基线一致；真实浏览器 E2E 依 CI 验证。
+
+## 10. CI E2E 复跑修复记录（2026-09-04）
+
+| 项 | 位置 | 问题 | 修复 |
+| :--- | :--- | :--- | :--- |
+| exactly-1 断言得 2（平台级根因） | `Infrastructure/DependencyInjection.cs` | `WorkflowStartedEventHandler` 被注册**两次**：`AddApplication` 的 `cfg.RegisterServicesFromAssembly`（MediatR 12.4.1 对 `INotificationHandler<>` 走 `addIfAlreadyExists=true` 分支＝普通 `AddTransient`，**非 TryAdd**，源码 `ServiceRegistrar.cs` 已核实）+ Infrastructure 对同一批 Application.EventHandlers 类型的显式 `AddScoped` → 每条通知处理两次，**每次 run 产生 2 条 ExecutionLog**。与 §9 注释中「POST /workflows 留下两条日志」的历史观察吻合（当时误归因为创建即跑）。 | 删除 Infrastructure 的 7 处显式 `INotificationHandler` 注册（5 个事件处理器 + `SemanticMemoryWriteBackHandler`×2 接口）；Infrastructure 程序集内无任何 `INotificationHandler` 实现（grep 证实），扫描为唯一注册源。StepCompleted/StepFailed 等处理器此前同样双跑，去重后单跑。 |
+| combobox 点击被拦截 60s | `e2e/steps/workspace.steps.ts` | 有选中值时 antd 的 `.ant-select-selection-item` span 盖住 combobox input，Playwright 命中目标检查失败无限重试。该步骤首次在 CI 跑到（前次卡在「确认」按钮）。 | 两处 click 改 `click({ force: true })`——与 `credentials.steps.ts:28` 已验证先例同款。 |
+
+校验：build 0/0；App 285 / Infra 175+8skip / Api 39 / Arch 9 全绿；bddgen exit 0、tsc 0 error；真实浏览器 E2E 依 CI 验证。质量门：`docs/quality/ci-e2e-2026-09-04-double-handler-gate.md`。

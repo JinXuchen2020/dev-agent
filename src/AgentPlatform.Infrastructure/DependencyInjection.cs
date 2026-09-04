@@ -488,17 +488,12 @@ public static class DependencyInjection
         services.AddSingleton<ICostController, CostController>();
         services.AddScoped<IDomainEventBus, DomainEventBus>();
 
-        // Register domain event handlers for execution logging
-        services.AddScoped<INotificationHandler<DomainEventNotification<WorkflowStarted>>, WorkflowStartedEventHandler>();
-        services.AddScoped<INotificationHandler<DomainEventNotification<StepCompleted>>, StepCompletedEventHandler>();
-        services.AddScoped<INotificationHandler<DomainEventNotification<StepFailed>>, StepFailedEventHandler>();
-        services.AddScoped<INotificationHandler<DomainEventNotification<WorkflowCompleted>>, WorkflowCompletedEventHandler>();
-        services.AddScoped<INotificationHandler<DomainEventNotification<WorkflowRolledBack>>, WorkflowRolledBackEventHandler>();
-        // ── F33 语义记忆 episodic 写回（成功经验 + 失败教训）──
-        services.AddScoped<INotificationHandler<DomainEventNotification<WorkflowCompleted>>,
-            AgentPlatform.Application.EventHandlers.SemanticMemoryWriteBackHandler>();
-        services.AddScoped<INotificationHandler<DomainEventNotification<WorkflowRolledBack>>,
-            AgentPlatform.Application.EventHandlers.SemanticMemoryWriteBackHandler>();
+        // ── 领域事件处理器注册（重复注册修复 2026-09-04）──
+        // 此处曾对 Application.EventHandlers 的 5 个处理器 + SemanticMemoryWriteBackHandler 显式注册，
+        // 但 AddApplication 的 AddMediatR 程序集扫描已注册同一批类型（MediatR 12 对 INotificationHandler
+        // 用普通 AddTransient，非 TryAdd）→ 每条通知被处理两次：每次 run 产生 2 条 ExecutionLog
+        // （WorkflowStartedEventHandler 双跑，F40 前端 E2E 断言 exactly-1 复现）。显式注册已删除，
+        // 扫描是唯一注册源；Infrastructure 程序集内无 INotificationHandler 实现，无遗漏。
 
         // AutoGenAgentOrchestrator + AutoGenSettings removed (Phase 3 cleanup): the [Obsolete]
         // orchestrator and its dead config block are gone; OrchestrationPrimitive is the only engine.
