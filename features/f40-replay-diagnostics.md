@@ -216,3 +216,15 @@ P3 waivers：
 | combobox 点击被拦截 60s | `e2e/steps/workspace.steps.ts` | 有选中值时 antd 的 `.ant-select-selection-item` span 盖住 combobox input，Playwright 命中目标检查失败无限重试。该步骤首次在 CI 跑到（前次卡在「确认」按钮）。 | 两处 click 改 `click({ force: true })`——与 `credentials.steps.ts:28` 已验证先例同款。 |
 
 校验：build 0/0；App 285 / Infra 175+8skip / Api 39 / Arch 9 全绿；bddgen exit 0、tsc 0 error；真实浏览器 E2E 依 CI 验证。质量门：`docs/quality/ci-e2e-2026-09-04-double-handler-gate.md`。
+
+## 11. CI E2E 复跑修复记录（2026-09-04，第二轮：断言选择器）
+
+前轮根因修复生效（exactly-1 通过、新建流程走通），两场景推进到新断言点后失败。**本轮先本地复现再修**（本地 `dotnet run --environment Integration` + 占位 `OpenAI__Key`（守卫只查非空）+ Edge 跑 playwright，两败与 CI 完全一致）。
+
+| 项 | 位置 | 问题 | 修复 |
+| :--- | :--- | :--- | :--- |
+| 回放时间线断言 strict mode 双命中 | `e2e/steps/executionLog.steps.ts` | `getByText('E2E Set Var')` 同时命中「步骤明细」表格 td 与回放时间线 span（antd Tabs 非激活面板仍挂载 DOM）。 | 锚定 `.ant-tabs-tabpane-active` 内时间线 Collapse header（`getByRole('button', {name:/…/})`）。 |
+| 节点详情「错误」栏命中隐藏表头 | 同上 | `getByText('错误').first()` 按 DOM 序命中隐藏「步骤明细」表的 th 列头（非激活 tab）。 | 锚定 `.ant-tabs-tabpane-active .ant-collapse-item-active` 内断言。 |
+| 工作空间选项恒 hidden | `e2e/steps/workspace.steps.ts` | **本 antd 版本把 `role="option"` 挂在 rc-select 的无障碍镜像 div 上**（本地探针实测：宽 0、textContent=value GUID、`aria-label`=label、恒隐形）；真正可见选项在 `.ant-select-dropdown` 门户的 `.ant-select-item-option-content`（无 ARIA 角色）→ `getByRole('option')` 永远 hidden，断言必败。 | 选项断言/点击均改为 `.ant-select-dropdown .ant-select-item-option-content` + `filter({hasText})`。 |
+
+本地校验：全新 `integration-e2e.db` 上两场景 **2 passed**；bddgen exit 0、tsc 0 error。诊断用一次性探针脚本已删除。

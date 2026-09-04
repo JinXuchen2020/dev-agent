@@ -85,7 +85,11 @@ When('我切到回放诊断标签', async ({ page }) => {
 Then('回放诊断显示执行路径时间线', async ({ page }) => {
   await expect(page.getByText(/执行路径/)).toBeVisible({ timeout: 15000 });
   // 报告条目来自真实日志记录：Start/End 是结构节点不写条目，故只断言被执行的 Variable 节点。
-  await expect(page.getByText('E2E Set Var')).toBeVisible();
+  // ⚠️ 不能用裸 getByText：节点名同时出现在「步骤明细」表格 td 与回放时间线 span（strict mode
+  // 双命中，CI 实锤）。锚定激活 tabpane 内时间线 Collapse 的 header（role=button，可及名含节点名）。
+  await expect(
+    page.locator('.ant-tabs-tabpane-active').getByRole('button', { name: /E2E Set Var/ }),
+  ).toBeVisible();
 });
 
 Then('回放诊断给出明确的结论横幅', async ({ page }) => {
@@ -106,6 +110,9 @@ When('我展开回放路径中的第一个节点', async ({ page }) => {
 });
 
 Then('节点详情显示输入输出与错误栏', async ({ page }) => {
-  await expect(page.getByText('输入（推断）')).toBeVisible();
-  await expect(page.getByText('错误', { exact: true }).first()).toBeVisible();
+  // ⚠️ 锚定激活 tabpane 内**已展开**的 Collapse 面板：「错误」同时是隐藏「步骤明细」表的列头
+  // （th，DOM 序在前，裸 .first() 会命中它——本地复现实锤）；「输入（推断）」仅存在于节点详情。
+  const expanded = page.locator('.ant-tabs-tabpane-active .ant-collapse-item-active');
+  await expect(expanded.getByText('输入（推断）')).toBeVisible();
+  await expect(expanded.getByText('错误', { exact: true })).toBeVisible();
 });

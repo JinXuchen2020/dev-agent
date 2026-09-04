@@ -35,11 +35,20 @@ Then('工作空间切换器包含 {string}', async ({ page }, name: string) => {
   // force:true 与 credentials.steps.ts:28 同款：有选中值时 antd 的 selection-item span
   // 会盖住 combobox input 拦截点击（CI 卡满 60s 的实锤），对 span 所在 selector 点击即可展开。
   await page.getByRole('combobox', { name: '工作空间' }).click({ force: true });
-  await expect(page.getByRole('option', { name: new RegExp(name) })).toBeVisible({ timeout: 10000 });
+  // ⚠️ 不能用 getByRole('option')：本 antd 版本把 role=option 挂在 rc-select 的无障碍镜像 div
+  // 上（宽 0、textContent=value GUID、恒隐形，本地探针实测），真正可见的选项内容在
+  // .ant-select-dropdown 门户的 .ant-select-item-option-content 里（无 ARIA 角色）。
+  await expect(
+    page.locator('.ant-select-dropdown .ant-select-item-option-content').filter({ hasText: name }),
+  ).toBeVisible({ timeout: 10000 });
   await page.keyboard.press('Escape');
 });
 
 When('我选择工作空间 {string}', async ({ page }, name: string) => {
   await page.getByRole('combobox', { name: '工作空间' }).click({ force: true });
-  await page.getByRole('option', { name: new RegExp(name) }).click();
+  // 点击选项内容 div（事件冒泡到 .ant-select-item-option 触发 onSelect），理由同上。
+  await page
+    .locator('.ant-select-dropdown .ant-select-item-option-content')
+    .filter({ hasText: name })
+    .click();
 });

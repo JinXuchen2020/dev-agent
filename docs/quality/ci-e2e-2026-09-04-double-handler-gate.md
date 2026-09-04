@@ -35,3 +35,19 @@
 
 ## 结论
 cleared=true。真实浏览器 E2E 交 CI 验证。
+
+## 第二轮（2026-09-04 复跑后）：断言选择器修复（先本地复现再修）
+
+前轮修复生效（两场景推进过原失败点），但暴露三处新断言问题。本轮搭起本地复现环境：
+`dotnet run --environment Integration` + 占位 `OpenAI__Key`（Program.cs 守卫只查非空）+ 本地 Edge
+跑 playwright —— 两败与 CI 完全一致；另写一次性探针脚本转储下拉 DOM/几何，实证：
+
+- **F35**：`getByRole('option')` 命中的是 rc-select 的**无障碍镜像 div**（宽 0、textContent=value
+  GUID、`aria-label`=label、恒隐形）——本 antd 版本可见选项无 ARIA 角色，在 `.ant-select-dropdown`
+  门户的 `.ant-select-item-option-content` 里 → 断言与点击均改锚定 option-content。
+- **F40**：`getByText('E2E Set Var')` 双命中（「步骤明细」td + 回放时间线 span，antd Tabs 非激活
+  面板仍挂载）→ 改锚定激活 tabpane 内 Collapse header（role=button）。
+- **F40 后续步骤**：「错误」`.first()` 按 DOM 序命中隐藏「步骤明细」表的 th 列头 → 改锚定激活
+  tabpane 的 `.ant-collapse-item-active`。
+
+本地校验：全新 `integration-e2e.db` 上 **2 passed**；bddgen exit 0、tsc 0 error。探针脚本已删。
