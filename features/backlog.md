@@ -10,29 +10,13 @@
 
 状态图例：`open`(待做) · `doing`(进行中) · `done`(已完成，已在当前基线) · `done⚠️未合并`(实现完整但停在未合并分支，**当前基线不可用**) · `blocked`(阻塞等待依赖)
 
-> **状态口径（2026-09-03 按代码实测校正）**：`done` 此前混用了「代码已并入 master」与「做完但在未合并分支上」两种含义。现显式区分：
-> `done`＝已在当前基线；`done⚠️未合并`＝实现存在于分支但未并入 master，**当前基线里功能不可用**。
+> **完成度统计（2026-08-30 二次整理）**：Tier 1 史诗 40 条 + 延后项 6 条 = **46 条**；其中 **done 36 / open 10**。
+> 当前 open 清单（按建议执行顺序）：`F38`(CI YAML 门禁样例) → `F45`(发布端点完整 URL 展示) → `F44`(ApiKeys 租户自助端点，**阻断 F22 生产可用**) → `F42`(工作流数据流) → `F39`(监控告警聚合) → `F46`(生产部署编排) → `F37`(队列化执行与水平扩展) → `F40`(异常回放诊断) → `F36`(Agent 上下文隔离) → `F35`(多工作空间隔离)。
 >
-> **实测：未并入 master 的分支**（`git branch --no-merged master`）
->
-> | 分支 | 对应史诗 | 基线实际状态 |
-> | :--- | :--- | :--- |
-> | `feat/f10-executor-realization` | F10 | ❌ **基线未真实化**（详见 F10 条目校正） |
-> | `feat/f20-node-bundle` | —— | ⚠️ 过期重复分支（真正的 F20 为 `feat/f20-node-types`，已合并；当前基线 `StepType` 已到 `Agentic=15`） |
-> | `feat/f35-workspace-isolation` … `feat/f40-replay-diagnostics` | F35–F40 | ✅ 实现完整、测试全绿，但**六条分支链尚未合并 master**（feature-builder 约定：不主动 merge，待人工 review） |
->
-> 合并链为 `master → f35 → f36 → f37 → f38 → f39 → f40`（线性，共 6 个 feature commit），合并 f40 即一次带入 F35–F40 全部实现。
->
-> **编号撞车已于 2026-09-03 解除**：曾有两个 **F34** —— 「F34 · 沙箱双层隔离」与「F34 · 在线评估门禁 + 部署闭环」。按**先到先得**原则处理（沙箱双层 2026-08-07 早于评估门禁 2026-08-25），保留沙箱双层为 **F34**，将在线评估门禁重编号为 **F43**（其设计文档已 `git mv` 为 `features/f43-online-eval-gate.md`，backlog / F37–F40 来源引用 / phase-11 / CHANGELOG 标题同步更新）。**历史标识不改写**：分支名 `feat/f34-online-eval-gate`、当时的 `.quality-gate.json` phase 值、以及 CHANGELOG 该版正文内容保持原样（仅在标题加校正注），旧 journal（`.workbuddy/memory/*.md`）不回改。
+> **编号冲突已修正（2026-08-30）**：原存在两个 `F34`（沙箱双层隔离 / 在线评估门禁）。后者现改号为 **F43**（旧号仅作历史别名保留），详情见 `### F43` 条目备注。
+> **2026-08-30 走查新增 3 项**：`F44`（ApiKeys 生命周期闭环，P1）、`F45`（发布端点完整 URL 展示，P3）、`F46`（生产部署编排，P2）——均来自 ApiKeysPage / F22 链路代码走查，缺口定性见各条目；原「待立题」分组已清空（ApiKeys 项升级为 F44）。
 
-
-> **代码基现状（2026-09-03 实测刷新，替代 2026-07-22 走查结论）**
->
-> - 栈：.NET 9 + EF Core 9（SQLite 开发 / PostgreSQL 生产双栈）+ MediatR + Semantic Kernel 1.30；前端 React 19 + Vite + TS(strict) + Antd 5 + @xyflow/react + zustand + playwright-bdd。
-> - 规模（当前基线）：设计文档 48 篇（`features/*.md`）；API HTTP 端点 105 个；Reqnroll 场景 104 条（执行 118 例）；前端 BDD E2E feature 17 个；迁移 `Infrastructure/Migrations` 57 文件 + **遗留孤儿目录** `Infrastructure/Persistence/Migrations` 6 文件（F30–F32 时代产物，同程序集内不冲突，勿混用新迁移输出目录）。
-> - 闸门现状：`dotnet build` 0 警告 0 错误（`TreatWarningsAsErrors`）；Application 285 / Infrastructure 175+8 跳 / Api 39 / Architecture 9 / Integration 5（需 `OPENAI__Key`）/ SpecFlow 117 通过 + 1 失败（**master 既有** LLM 用例「Admin 创建会话后向其发送消息得到回复」）；前端 tsc 0 error、vitest 50 通过（2 处既有豁免）。
-> - 与 07-22 结论的差异：**「0 TODO/FIXME」已不成立**——现存 2 处，均为 `Tools/McpClient.cs:27` 与 `Tools/SkillPackageExecutor.cs:27` 的 `TODO(Phase6)` 桩注释（见 F10 校正）。「后端行动层空心」判断已过时：NativeToolExecutor/进程与容器沙箱/SK 技能链/RAG/调研 Agent/自主 Agentic 循环均已真实落地，唯 Skill+MCP 两个执行器因分支未合并仍为桩。
-> - 环境注意：集成与 E2E 测试需 `OPENAI_API_KEY`（真实 Key，F41 起 fail-fast）；`.env`/CI 变量映射为 `OpenAI__Key` 双下划线。
+代码基现状（2026-07-22 全量走查）：React 19 + Vite 8 + TS（strict）+ Antd 5 + @xyflow/react + zustand；`typecheck/lint/build/unit/e2e` 五道闸门当前全绿。优点：严格 TS、0 处 `any`、0 TODO/FIXME、lint 净。问题集中于「前端数据真实性 / 鉴权态 / 错误兜底 / 工程化」与「后端行动层（工具·代码·调研）空心」两类。
 
 > **完成度统计（2026-09-04 台账对账后重算）**：史诗条目 47 —— done 42（其中 **done⚠️未合并 7**：实现完整但停在未合并分支，对当前基线不可用）/ 待做 5。
 > 待做清单（按建议顺序）：F44 → F45 → F46 → F42 → F47。
@@ -480,9 +464,9 @@
 - 优先级：P1。
 
 ### F43 · 在线评估门禁 + 部署闭环  [P2]  done  🟢低风险（复用 F24 数据集）
-> **编号变更（2026-08-30 归档整理）**：原编号 `F34` 与「F34 沙箱双层隔离」冲突，现改号 **F43**；旧号仅作历史别名保留——分支 `feat/f34-online-eval-gate`、设计文档 `features/f43-online-eval-gate.md` 文件名均不改（避免断链）。同时清理了本条目下与上方重复的旧片段（重复的设计依据/验收 v1 段）。
+> **编号变更（2026-08-30 归档整理）**：原编号 `F34` 与「F34 沙箱双层隔离」冲突，现改号 **F43**；旧号仅作历史别名保留——分支 `feat/f34-online-eval-gate`、设计文档 `features/f34-online-eval-gate.md` 文件名均不改（避免断链）。同时清理了本条目下与上方重复的旧片段（重复的设计依据/验收 v1 段）。
 - 目标：将 F24 评估数据集接入生产前 / 影子门禁（队列化水平扩展 → 已独立排期为 `F37`）。
-- 设计依据：`phases/phase-11-online-eval-gate.md` + `docs/agent-harness-blueprint.md` §Phase 11；设计文档 `features/f43-online-eval-gate.md`（v1 仅验收①，§3 设计+§5 完成记录）
+- 设计依据：`phases/phase-11-online-eval-gate.md` + `docs/agent-harness-blueprint.md` §Phase 11；设计文档 `features/f34-online-eval-gate.md`（v1 仅验收①，§3 设计+§5 完成记录）
 - 验收子项：
   - **①** 在线 eval 门禁 → ✅ `RunEvaluationGateCommand`：阈值解析链（请求显式 > `EvaluationSettings.GateMinPassRate`=0.8）；执行委托 RunEvaluation（一次性克隆=影子隔离零生产写入）；Passed=false 端点返回 **HTTP 422 阻断语义**；空数据集显式守卫恒不通过；审计新增 `AuditActionType.EvaluationGate`
   - **延后项** → CI YAML 接入样例 → `F38`；队列化执行/水平扩展 → `F37`；监控告警聚合 → `F39`；异常回放诊断 → `F40`
@@ -528,10 +512,9 @@
 - 风险：🟡 Blackboard 值对象变更影响 WorkflowContext 全链路；Conversation 加列为最小迁移。依赖 F31/F32 已合入。
 - **完成记录（2026-09-01）**：feature-builder 全栈实跑落地（基于 feat/f35-workspace-isolation）。决策（用户锁定）：D1=A 软分区视图（`agent:{agentId}:` 键约定 + GetPartitionView/GetGlobalView；F30/F25/RunningExecution 持久化格式零变更）/ D2=A AgentCallStepExecutor 自动创建/复用 per-agent per-workflow 会话（唯一过滤索引防并发双建；持久化失败 Detach 隔离不阻断）/ D3=A 会话页 agent 筛选+标签 / D4=A 回复显式回写 `agent:{agentId}:output`。现实修正（相对 backlog 原文）：Blackboard 实为 Dictionary<string,string>，AgentCall 原不接触 Conversation。三道质量门全 PASS：reviewer 修 P1（唯一过滤索引）+3×P2；结构门 P0-P2=0（2 waiver）；optimizer 修 P1（Detach）+3×P3，0 open。验证：build 0/0；App 253/Infra 162+6skip/Api 35/Arch 9/SpecFlow 115/116（既有豁免）/Integration 5；新增 18 测试 + SpecFlow 1 场景；前端 tsc 0 + vitest（既有豁免×2）+ vite build。文档同步：CHANGELOG v2.35、BLUEPRINT、appendices（Conversation.AgentId + 会话列表 agentId 参数）、backlog F36 done。已知残留：硬分区列 v2；SetInPartition/GetFromPartition 为预留 API（agent 工具链接入）；截断字面量未抽配置。
 
-### F37 · 队列化执行与水平扩展  [P1]  done⚠️未合并  ✅（2026-09-02，分支 `feat/f37-queued-execution` 基于 f36；设计文档 features/f37-queued-execution.md §5 决策 D1–D4 已锁定 + §8 审查修复记录 + 质量报告 docs/quality/f37-queued-execution-gate.md）🔴高风险（分布式消息中间件 + 多 worker 协调；基于 feat/f36-agent-context-isolation 分支）
-- 设计文档：`features/f37-queued-execution.md`（已建，§5 决策 D1–D4 已锁定 2026-09-01；现实校正：现租约 LeaseTtlMinutes=5 非 30s、既有 run 端点为请求内同步契约）
-- 来源：F30 执行持久化 · 延后项；F43 评估门禁 · 延后项
-- 设计依据：`features/f30-durable-execution.md` + `features/f43-online-eval-gate.md` §延后项
+### F37 · 队列化执行与水平扩展  [P1]  open  🔴高风险（分布式消息中间件 + 租约机制重构 + 多 worker 协调）
+- 来源：F30 执行持久化 · 延后项；F43 评估门禁（原 F34）· 延后项
+- 设计依据：`features/f30-durable-execution.md` + `features/f34-online-eval-gate.md` §延后项
 - 目标：将当前进程内 BackgroundService 轮询升级为基于消息队列的分布式任务分发——多 worker 实例可水平消费执行任务，无状态执行引擎横向扩展。复用 F30 租约机制（RunningExecution）防多 worker 重复驱动。
 - 核心改造：
   - Infrastructure：`IExecutionQueue` 抽象 + Redis Stream / RabbitMQ 实现（进程内 Channel 替代方案回退保留）；`DistributedLeaseProvider`（Redis `SET NX EX` 替代内存 `SemaphoreSlim`）。
@@ -560,13 +543,11 @@
   - GitLab CI YAML 语法校验通过（`gitlab-ci-lint` 或 `grep` 关键字）。
   - 接口示例 `curl` 可跑通 200/422 两条路径。**（2026-09-02 校正：原文写「本地 QuickStart 模式下跑通」，但 F41 已移除 QuickStart 并强制真实 Key fail-fast，该前提不再成立；实际以「已配置真实 Key 的目标实例」或「Test/Integration 环境 Stub 模型冒烟接线」两条路径验证，详见 `features/f38-ci-eval-gate.md` §2 现状校正。）**
   - 指南文档完整：环境变量 / 阈值 / 失败处理 / 故障排查。
-- 风险：🟢 纯增量，不触后端。但需与 F34 端点保持接口一致（API schema 变更须同步更新模板）。
-- **完成记录（2026-09-02）**：交付 GitHub Actions + GitLab CI 可复制门禁模板（`ci/` 目录，非自动生效）+ 中文接入指南。以 HTTP 码为唯一阻断契约（200 放行 / 422·400·401·403·404·000·其它 exit 1），认证走 httpOnly cookie jar（无 Bearer 反模式），curl 用 `-s -o -w %{http_code}` 而非 `-f`。关键校正：F41 已删 QuickStart→本地验证改「真实实例 / Stub Test 冒烟」；端点越界 minPassRate 实返 500 非 400（服务端无 handler，Program.cs 仅 6 handler）。对抗式评审修 3×高（set -e 抢杀 curl/登录与阈值 JSON 注入/外部 PR ref_name 脚本注入）+2×中，两模板 yaml.safe_load + bash -n 通过、HTTP 码分支 mock 桩冒烟 200/422/000=rc 0/1/1。三道质量门 PASS（结构门/optimizer scope=F38-only，0 open；waiver：真实平台端到端需接入方环境）。
+- 风险：🟢 纯增量，不触后端。但需与 F43（原 F34 评估门禁）端点保持接口一致（API schema 变更须同步更新模板）。
 
-### F39 · 监控告警聚合  [P2]  done⚠️未合并  ✅（2026-09-02，分支 `feat/f39-observability-alerting` 基于 f38；设计文档 features/f39-observability-alerting.md §5 决策 D1–D4 已锁定 + §8 审查修复记录 + §9 Quality Gate Checklist + 质量报告 docs/quality/f39-observability-alerting-gate.md）🟡中风险（OpenTelemetry 指标 + 告警规则 + Dashboard 配置）
-- 设计文档：`features/f39-observability-alerting.md`（已建，§5 决策 D1–D4 已锁定 2026-09-02；§2 关键校正：无 `result="failed"` 标签（失败⇒rolledback）、门禁阻断率可由 422 派生、队列指标须走 redis_exporter/RabbitMQ 插件、既有 Grafana provisioning 挂载路径无效）
-- 来源：F43 评估门禁 · 延后项
-- 设计依据：`features/f43-online-eval-gate.md` §延后项
+### F39 · 监控告警聚合  [P2]  open  🟡中风险（OpenTelemetry 指标 + 告警规则 + Dashboard 配置）
+- 来源：F43 评估门禁（原 F34）· 延后项
+- 设计依据：`features/f34-online-eval-gate.md` §延后项
 - 目标：将当前裸 OpenTelemetry `/metrics` 端点升级为可用的可观测性栈——Prometheus 抓取配置 + Grafana Dashboard 模板 + 告警规则（执行失败率、门禁阻断率、队列积压、模型调用延迟），实现「平台运行状态一目了然 + 异常自动通知」。
 - 核心改造：
   - `deploy/prometheus.yml`：Prometheus 配置（scrape interval / relabel / 告警规则引用）。
