@@ -71,6 +71,9 @@ import type {
   SwitchWorkspaceResponse,
   QueuedRunResponse,
   ReplayReport,
+  StepType,
+  WorkflowNodeResponse,
+  WorkflowEdgeResponse,
 } from '../types';
 
 const api = axios.create({
@@ -323,6 +326,26 @@ export const updateWorkflow = (
     edges?: WorkflowEdgeRequest[];
   },
 ) => api.put<WorkflowDetail>(`/workflows/${id}`, data).then((r) => r.data);
+// #2 增量节点/连线 API（2026-09-07）：单点增删，避免整图替换；返回服务端生成的 Id。
+export const addWorkflowNode = (
+  id: string,
+  data: {
+    type: StepType;
+    name: string;
+    positionX: number;
+    positionY: number;
+    config?: string | null;
+    assignedAgentId?: string | null;
+  },
+) => api.post<WorkflowNodeResponse>(`/workflows/${id}/nodes`, data).then((r) => r.data);
+export const removeWorkflowNode = (id: string, nodeId: string) =>
+  api.delete(`/workflows/${id}/nodes/${nodeId}`).then(() => undefined);
+export const addWorkflowEdge = (
+  id: string,
+  data: { sourceNodeId: string; targetNodeId: string; label?: string | null },
+) => api.post<WorkflowEdgeResponse>(`/workflows/${id}/edges`, data).then((r) => r.data);
+export const removeWorkflowEdge = (id: string, edgeId: string) =>
+  api.delete(`/workflows/${id}/edges/${edgeId}`).then(() => undefined);
 // F8 · 编排模式 → 后端预设（int）。
 // API 全局未注册 JsonStringEnumConverter，故 preset 必须以 **int** 收发：
 //   sequential → 0 (OrchestrationPreset.Sequential)

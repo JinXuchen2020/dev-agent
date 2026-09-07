@@ -21,6 +21,7 @@ export default function VariableWatchPanel() {
     [StepType.SubWorkflow]: t('canvas.nodeType.subworkflow'),
     [StepType.Delay]: t('canvas.nodeType.delay'),
     [StepType.UserInput]: t('canvas.nodeType.userinput'),
+    [StepType.Agentic]: t('canvas.nodeType.agentic'),
   };
   const nodes = useCanvasStore((s) => s.nodes);
   const watched = nodes.filter((n) => n.data.state || n.data.result);

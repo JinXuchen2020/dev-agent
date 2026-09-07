@@ -868,6 +868,7 @@ export const zhCN = {
       subWorkflow: '子工作流',
       delay: '延迟',
       userInput: '审批 (HITL)',
+      agentic: '自驱智能体',
     },
     nodeDesc: {
       start: '工作流入口',
@@ -885,6 +886,7 @@ export const zhCN = {
       subWorkflow: '触发嵌套子工作流',
       delay: '继续执行前等待',
       userInput: '暂停等待人工审批',
+      agentic: 'ReAct 自驱循环节点',
     },
     httpMethod: 'HTTP 方法',
     httpMethodTooltip: 'GET / POST / PUT / DELETE',
@@ -930,6 +932,12 @@ export const zhCN = {
     hitlModalEmpty: '暂无待审批项',
     hitlResolved: '审批已处理，恢复运行',
     hitlResolveFailed: '审批处理失败',
+    // ── #1 Agentic 自驱节点配置 ──
+    agenticAgentTooltip: '选择执行 ReAct 循环的智能体（其 maxIterations/stopCriteria 作为循环上界）',
+    agenticGoal: '目标 (goal)',
+    agenticGoalTooltip: 'ReAct 循环要达成的目标；留空则使用节点名称',
+    agenticGoalPlaceholder: '例如：调研竞品并产出对比报告',
+    agenticHint: '该节点会把单个智能体变为工作流内的自驱子图：循环调用工具直至达成目标或达到迭代上限。',
     variableWatch: '变量监视',
     noRunResult: '尚无运行结果',
     // ── F8 · 协商式多智能体（Negotiation + Critic）产品化 ──

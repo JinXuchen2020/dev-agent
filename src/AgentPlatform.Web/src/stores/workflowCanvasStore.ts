@@ -52,6 +52,7 @@ export const STEP_TYPE_TO_NODE_TYPE: Record<StepType, string> = {
   [StepType.SubWorkflow]: 'subworkflow',
   [StepType.Delay]: 'delay',
   [StepType.UserInput]: 'userinput',
+  [StepType.Agentic]: 'agentic',
 };
 
 export const NODE_TYPE_TO_STEP_TYPE: Record<string, StepType> = {
@@ -70,6 +71,7 @@ export const NODE_TYPE_TO_STEP_TYPE: Record<string, StepType> = {
   subworkflow: StepType.SubWorkflow,
   delay: StepType.Delay,
   userinput: StepType.UserInput,
+  agentic: StepType.Agentic,
 };
 
 export const STEP_TYPE_LABEL: Record<StepType, string> = {
@@ -88,6 +90,7 @@ export const STEP_TYPE_LABEL: Record<StepType, string> = {
   [StepType.SubWorkflow]: 'SubWorkflow',
   [StepType.Delay]: 'Delay',
   [StepType.UserInput]: 'UserInput',
+  [StepType.Agentic]: 'Agentic',
 };
 
 function newId(): string {
@@ -127,6 +130,8 @@ function defaultConfig(stepType: StepType): NodeConfig {
       return { durationMs: 1000 };
     case StepType.UserInput:
       return { prompt: '', approvalRole: '' };
+    case StepType.Agentic:
+      return { agentId: null, goal: '' };
     default:
       return {};
   }

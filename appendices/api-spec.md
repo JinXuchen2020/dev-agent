@@ -65,6 +65,10 @@
 | GET | `/api/v1/workflows/{id}` | 工作流详情 | read:workflow |
 | PUT | `/api/v1/workflows/{id}` | 更新工作流 | write:workflow |
 | DELETE | `/api/v1/workflows/{id}` | 删除工作流 | write:workflow |
+| POST | `/api/v1/workflows/{id}/nodes` | 增量追加单个节点（body: `type`,`name`,`positionX`,`positionY`,`config?`,`assignedAgentId?`）→ 返回含服务端 Id 的节点 | write:workflow |
+| DELETE | `/api/v1/workflows/{id}/nodes/{nodeId}` | 增量删除单个节点（连带其关联边） | write:workflow |
+| POST | `/api/v1/workflows/{id}/edges` | 增量追加单条有向边（body: `sourceNodeId`,`targetNodeId`,`label?`）→ 返回含服务端 Id 的边 | write:workflow |
+| DELETE | `/api/v1/workflows/{id}/edges/{edgeId}` | 增量删除单条边 | write:workflow |
 | POST | `/api/v1/workflows/{id}/execute` | 执行工作流（异步） | write:workflow |
 | GET | `/api/v1/workflows/{id}/executions` | 执行历史 | read:workflow |
 | GET | `/api/v1/workflows/{id}/stream` | 流式执行状态（SSE） | read:workflow |

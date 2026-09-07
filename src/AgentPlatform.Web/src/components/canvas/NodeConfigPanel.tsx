@@ -33,6 +33,7 @@ export default function NodeConfigPanel() {
     [StepType.SubWorkflow]: t('canvas.nodeType.subWorkflow'),
     [StepType.Delay]: t('canvas.nodeType.delay'),
     [StepType.UserInput]: t('canvas.nodeType.userInput'),
+    [StepType.Agentic]: t('canvas.nodeType.agentic'),
   };
   const node = useCanvasStore((s) => s.nodes.find((n) => n.id === s.selectedNodeId));
   const setNodeData = useCanvasStore((s) => s.setNodeData);
@@ -46,7 +47,7 @@ export default function NodeConfigPanel() {
 
   const stepType = node?.data.stepType;
   useEffect(() => {
-    if (stepType === StepType.Agent) {
+    if (stepType === StepType.Agent || stepType === StepType.Agentic) {
       getAgents()
         .then(setAgents)
         .catch(() => setAgents([]));
@@ -410,6 +411,38 @@ export default function NodeConfigPanel() {
                 placeholder="admin"
               />
             </Form.Item>
+          </>
+        )}
+
+        {type === StepType.Agentic && (
+          <>
+            <Form.Item label={t('canvas.assignAgent')} tooltip={t('canvas.agenticAgentTooltip')}>
+              <Select
+                allowClear
+                placeholder={t('canvas.agentPlaceholder')}
+                value={config?.agentId ?? undefined}
+                onFocus={snapshot}
+                onChange={(value) =>
+                  setNodeData(node.id, {
+                    assignedAgentId: value ?? null,
+                    config: { ...(config ?? {}), agentId: value ?? null },
+                  })
+                }
+                options={agents.map((a) => ({ value: a.id, label: a.name }))}
+              />
+            </Form.Item>
+            <Form.Item label={t('canvas.agenticGoal')} tooltip={t('canvas.agenticGoalTooltip')}>
+              <Input.TextArea
+                rows={4}
+                value={config?.goal ?? ''}
+                onFocus={snapshot}
+                onChange={(e) => patchConfig({ goal: e.target.value })}
+                placeholder={t('canvas.agenticGoalPlaceholder')}
+              />
+            </Form.Item>
+            <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
+              {t('canvas.agenticHint')}
+            </Typography.Paragraph>
           </>
         )}
 

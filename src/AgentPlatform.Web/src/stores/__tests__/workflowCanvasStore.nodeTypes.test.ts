@@ -77,3 +77,31 @@ describe('workflowCanvasStore 扩展节点类型映射', () => {
     }
   });
 });
+
+// #1 Agentic（ReAct）节点入画布：值必须与后端 StepType.cs 的 Agentic = 15 一致，
+// 且四处映射（种类/逆映射/标签/默认 config）与执行器契约（agentId + goal）齐备。
+describe('workflowCanvasStore Agentic(ReAct) 节点', () => {
+  beforeEach(() => {
+    useCanvasStore.setState({ nodes: [], edges: [], selectedNodeId: null });
+  });
+
+  it('StepType.Agentic 对齐后端枚举值 15', () => {
+    expect(StepType.Agentic).toBe(15);
+  });
+
+  it('映射 / 逆映射 / 标签齐备', () => {
+    expect(STEP_TYPE_TO_NODE_TYPE[StepType.Agentic]).toBe('agentic');
+    expect(NODE_TYPE_TO_STEP_TYPE['agentic']).toBe(StepType.Agentic);
+    expect(STEP_TYPE_LABEL[StepType.Agentic]).toBeTypeOf('string');
+    expect(STEP_TYPE_LABEL[StepType.Agentic]).not.toBe('');
+  });
+
+  it('addNode 生成 agentic 节点与 goal/agentId 默认配置', () => {
+    useCanvasStore.getState().addNode(StepType.Agentic, { x: 0, y: 0 });
+    const node = useCanvasStore.getState().nodes.at(-1)!;
+    expect(node.type).toBe('agentic');
+    expect(node.data.stepType).toBe(StepType.Agentic);
+    expect(node.data.config?.goal).toBe('');
+    expect(node.data.config?.agentId ?? null).toBeNull();
+  });
+});

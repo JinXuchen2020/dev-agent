@@ -15,6 +15,7 @@ import {
   ApartmentOutlined,
   ClockCircleOutlined,
   FormOutlined,
+  NodeIndexOutlined,
 } from '@ant-design/icons';
 import type { ReactNode } from 'react';
 import { StepType } from '../../types';
@@ -37,6 +38,7 @@ const TYPE_ICON: Record<StepType, ReactNode> = {
   [StepType.SubWorkflow]: <ApartmentOutlined />,
   [StepType.Delay]: <ClockCircleOutlined />,
   [StepType.UserInput]: <FormOutlined />,
+  [StepType.Agentic]: <NodeIndexOutlined />,
 };
 
 const STATE_COLOR: Record<string, string> = {

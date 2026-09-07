@@ -213,8 +213,8 @@ public sealed class Workflow : ITenantScoped, IWorkspaceScoped, IAggregateRoot
         UpdatedAt = DateTime.UtcNow;
     }
 
-    /// <summary>向图中添加节点，并重新同步遗留步骤投影。</summary>
-    public void AddNode(StepType type, string name, double positionX, double positionY, string? configJson, Guid? assignedAgentId)
+    /// <summary>向图中添加节点，并重新同步遗留步骤投影。返回新建的节点（含服务端生成的 Id）。</summary>
+    public WorkflowNode AddNode(StepType type, string name, double positionX, double positionY, string? configJson, Guid? assignedAgentId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         var node = new WorkflowNode(Guid.NewGuid(), type, name, positionX, positionY, configJson, assignedAgentId);
@@ -224,10 +224,11 @@ public sealed class Workflow : ITenantScoped, IWorkspaceScoped, IAggregateRoot
         _isDag = true;
         SyncStepsFromGraph();
         UpdatedAt = DateTime.UtcNow;
+        return node;
     }
 
-    /// <summary>在两个节点之间添加一条有向边。</summary>
-    public void AddEdge(Guid sourceNodeId, Guid targetNodeId, string? label)
+    /// <summary>在两个节点之间添加一条有向边。返回新建的边（含服务端生成的 Id）。</summary>
+    public WorkflowEdge AddEdge(Guid sourceNodeId, Guid targetNodeId, string? label)
     {
         if (sourceNodeId == targetNodeId)
             throw new WorkflowGraphException("An edge cannot connect a node to itself.");
@@ -235,10 +236,12 @@ public sealed class Workflow : ITenantScoped, IWorkspaceScoped, IAggregateRoot
             throw new WorkflowGraphException("Source node does not exist.");
         if (_nodes.All(n => n.Id != targetNodeId))
             throw new WorkflowGraphException("Target node does not exist.");
-        _edges.Add(new WorkflowEdge(Guid.NewGuid(), sourceNodeId, targetNodeId, label));
+        var edge = new WorkflowEdge(Guid.NewGuid(), sourceNodeId, targetNodeId, label);
+        _edges.Add(edge);
         _isDag = true;
         SyncStepsFromGraph();
         UpdatedAt = DateTime.UtcNow;
+        return edge;
     }
 
     /// <summary>移除节点及其所有关联边。</summary>

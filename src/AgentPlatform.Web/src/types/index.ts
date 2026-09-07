@@ -212,6 +212,7 @@ export interface WorkflowStep {
 // P1 DAG: StepType must match AgentPlatform.Domain.Enums.StepType (serialized as int).
 // Declared as a const object (not `enum`) because tsconfig enables `erasableSyntaxOnly`.
 // F20：新增 HTTP/Condition/Loop/Variable/SubWorkflow/Delay/UserInput（值 8–14 与后端一致）。
+// 2026-09-07 #1：补 Agentic(15) 与后端 StepType.Agentic 对齐（ReAct 自驱节点）。
 export const StepType = {
   Start: 0,
   End: 1,
@@ -228,6 +229,7 @@ export const StepType = {
   SubWorkflow: 12,
   Delay: 13,
   UserInput: 14,
+  Agentic: 15,
 } as const;
 export type StepType = (typeof StepType)[keyof typeof StepType];
 
@@ -278,6 +280,8 @@ export interface NodeConfig {
   // 人工审批门节点 (StepType.UserInput)
   prompt?: string; // 展示给审批人的提示
   approvalRole?: string; // 可选审批角色
+  // 自驱智能体节点 (StepType.Agentic)：复用 agentId；goal 为 ReAct 循环目标（缺省取节点名）
+  goal?: string;
 }
 
 // Backend response: a single graph node.
