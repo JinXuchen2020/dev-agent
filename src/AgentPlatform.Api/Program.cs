@@ -68,9 +68,10 @@ if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Integratio
     logger.LogInformation("Database initialization completed.");
 }
 
-// ── Model client startup validation (fail-fast for non-Test environments) ─────
-// Test 环境使用 StubModelClient，其他环境强制要求配置 OpenAI Key（含 DeepSeek/vLLM 均走 OpenAI 兼容协议）。
-// 注意：Integration 环境（仅 SpecFlow 测试使用）同样强制要求真实 Key —— 集成测试必须跑真实 LLM。
+// ── Model client startup validation ────────────────────────────────────
+// 仅 Test/Integration 环境强制校验真实 Key（测试需跑真实 LLM）。
+// Development/Production/Staging 正常启动不强制 Key —— 运行时由 PlatformModelsProvider
+// 回退 OpenAI:* 配置，或租户通过「我的凭据」自行配置 BYO Key；无可用模型时路由抛出 ModelNotConfiguredException。
 {
     var modelModeLogger = app.Services.GetRequiredService<ILogger<Program>>();
     var openAiKeyConfigured = !string.IsNullOrEmpty(app.Configuration["OpenAI:Key"]);
@@ -79,18 +80,31 @@ if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Integratio
     {
         modelModeLogger.LogInformation("模型客户端：测试环境使用 StubModelClient（仅测试隔离，不影响运行环境）。");
     }
-    else if (openAiKeyConfigured)
+    else if (app.Environment.IsEnvironment("Integration"))
     {
-        modelModeLogger.LogInformation("模型客户端已接入真实 LLM 端点（平台级配置，OpenAI 兼容协议）。");
+        if (openAiKeyConfigured)
+        {
+            modelModeLogger.LogInformation("模型客户端已接入真实 LLM 端点（集成测试环境，OpenAI 兼容协议）。");
+        }
+        else
+        {
+            var msg = "Integration environment requires OpenAI:Key (env OPENAI_API_KEY) for real LLM integration tests.";
+            modelModeLogger.LogCritical(msg);
+            throw new InvalidOperationException(msg);
+        }
     }
     else
     {
-        var msg = "No OpenAI API Key configured. Set OpenAI:Key (env OPENAI_API_KEY) " +
-                  "for OpenAI/DeepSeek/vLLM (all OpenAI-compatible). " +
-                  "Optional: OpenAI:BaseUrl (env OPENAI_BASE_URL) to override endpoint. " +
-                  "Test environment is exempt and uses StubModelClient.";
-        modelModeLogger.LogCritical(msg);
-        throw new InvalidOperationException(msg);
+        if (openAiKeyConfigured)
+        {
+            modelModeLogger.LogInformation("模型客户端已接入真实 LLM 端点（平台级配置，OpenAI 兼容协议）。");
+        }
+        else
+        {
+            modelModeLogger.LogWarning("未配置平台级 OpenAI:Key —— 启动继续；运行时将回退 OpenAI:* 配置或租户 BYO 凭据。" +
+                                       "如无可用模型，首次路由会抛出 ModelNotConfiguredException。" +
+                                       "请在「我的凭据」配置 BYO Key 或设置环境变量 OPENAI_API_KEY。");
+        }
     }
 }
 

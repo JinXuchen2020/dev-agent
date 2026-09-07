@@ -170,7 +170,7 @@ const AgentsPage: React.FC = () => {
         systemPrompt: agent.systemPrompt,
         status: agent.status ?? 'Active',
         allowedToolNames: agent.allowedToolNames ?? [],
-        maxIterations: agent.maxIterations ?? 25,
+        maxIterations: agent.maxIterations ?? 0,
         stopCriteria: agent.stopCriteria ?? undefined,
       });
     } finally {
@@ -405,7 +405,7 @@ const AgentsPage: React.FC = () => {
               />
             </Form.Item>
             <Form.Item name="maxIterations" label={t('pages.agents.maxIterations')} extra={t('pages.agents.maxIterationsExtra')}>
-              <InputNumber min={1} max={200} style={{ width: '100%' }} />
+              <InputNumber min={0} max={200} style={{ width: '100%' }} />
             </Form.Item>
             <Form.Item name="stopCriteria" label={t('pages.agents.stopCriteria')}>
               <Input placeholder={t('pages.agents.stopCriteriaPlaceholder')} />
