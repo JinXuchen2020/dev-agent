@@ -74,6 +74,7 @@ const nodeTypes: NodeTypes = {
   subworkflow: DagNode,
   delay: DagNode,
   userinput: DagNode,
+  agentic: DagNode,
 };
 
 const CanvasInner: React.FC = () => {

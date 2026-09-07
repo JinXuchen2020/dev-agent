@@ -12,6 +12,10 @@ using AgentPlatform.Application.PublishedWorkflows;
 using AgentPlatform.Application.Workflows.Commands.PublishWorkflow;
 using AgentPlatform.Application.Workflows.Commands.UnpublishWorkflow;
 using AgentPlatform.Application.Workflows.Queries.GetPublishStatus;
+using AgentPlatform.Application.Workflows.Commands.AddWorkflowNode;
+using AgentPlatform.Application.Workflows.Commands.RemoveWorkflowNode;
+using AgentPlatform.Application.Workflows.Commands.AddWorkflowEdge;
+using AgentPlatform.Application.Workflows.Commands.RemoveWorkflowEdge;
 using AgentPlatform.Application.Workflows.Versioning;
 using AgentPlatform.Application.WorkflowTriggers;
 using AgentPlatform.Application.Workflows.Versioning.DiffWorkflow;
@@ -165,6 +169,68 @@ public sealed class WorkflowsController : ControllerBase
             _tenant.GetTenantId());
         var result = await _mediator.Send(command, ct);
         return result == null ? NotFound() : Ok(result);
+    }
+
+    /// <summary>
+    /// Incrementally appends a single node to a workflow's DAG (does not replace the whole graph).
+    /// Returns the created node including the server-generated id.
+    /// </summary>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpPost("{id:guid}/nodes")]
+    public async Task<IActionResult> AddWorkflowNode(
+        Guid id,
+        [FromBody] AddWorkflowNodeRequest request,
+        CancellationToken ct = default)
+    {
+        var command = new AddWorkflowNodeCommand(id, request, _tenant.GetTenantId());
+        var result = await _mediator.Send(command, ct);
+        return result == null ? NotFound() : Ok(result);
+    }
+
+    /// <summary>
+    /// Incrementally removes a single node (and its associated edges) from a workflow's DAG.
+    /// </summary>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpDelete("{id:guid}/nodes/{nodeId:guid}")]
+    public async Task<IActionResult> RemoveWorkflowNode(
+        Guid id,
+        Guid nodeId,
+        CancellationToken ct = default)
+    {
+        var command = new RemoveWorkflowNodeCommand(id, nodeId, _tenant.GetTenantId());
+        var removed = await _mediator.Send(command, ct);
+        return removed ? NoContent() : NotFound();
+    }
+
+    /// <summary>
+    /// Incrementally appends a single directed edge between two nodes. Returns the created edge
+    /// including the server-generated id.
+    /// </summary>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpPost("{id:guid}/edges")]
+    public async Task<IActionResult> AddWorkflowEdge(
+        Guid id,
+        [FromBody] AddWorkflowEdgeRequest request,
+        CancellationToken ct = default)
+    {
+        var command = new AddWorkflowEdgeCommand(id, request, _tenant.GetTenantId());
+        var result = await _mediator.Send(command, ct);
+        return result == null ? NotFound() : Ok(result);
+    }
+
+    /// <summary>
+    /// Incrementally removes a single edge from a workflow's DAG.
+    /// </summary>
+    [Authorize(Roles = "Admin,Operator")]
+    [HttpDelete("{id:guid}/edges/{edgeId:guid}")]
+    public async Task<IActionResult> RemoveWorkflowEdge(
+        Guid id,
+        Guid edgeId,
+        CancellationToken ct = default)
+    {
+        var command = new RemoveWorkflowEdgeCommand(id, edgeId, _tenant.GetTenantId());
+        var removed = await _mediator.Send(command, ct);
+        return removed ? NoContent() : NotFound();
     }
 
     /// <summary>

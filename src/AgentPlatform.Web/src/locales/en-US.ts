@@ -878,6 +878,7 @@ export const enUS: Resources = {
       subWorkflow: 'Sub Workflow',
       delay: 'Delay',
       userInput: 'Approval (HITL)',
+      agentic: 'Agentic',
     },
     nodeDesc: {
       start: 'Workflow entry',
@@ -895,6 +896,7 @@ export const enUS: Resources = {
       subWorkflow: 'Trigger a nested workflow',
       delay: 'Wait before continuing',
       userInput: 'Pause for human approval',
+      agentic: 'ReAct self-driving loop node',
     },
     httpMethod: 'HTTP method',
     httpMethodTooltip: 'GET / POST / PUT / DELETE',
@@ -940,6 +942,12 @@ export const enUS: Resources = {
     hitlModalEmpty: 'No pending approvals',
     hitlResolved: 'Approval resolved, resuming run',
     hitlResolveFailed: 'Failed to resolve approval',
+    // ── #1 Agentic self-driving node config ──
+    agenticAgentTooltip: 'Select the agent that runs the ReAct loop (its maxIterations/stopCriteria bound the loop)',
+    agenticGoal: 'Goal',
+    agenticGoalTooltip: 'The objective the ReAct loop works toward; falls back to the node name if empty',
+    agenticGoalPlaceholder: 'e.g. research competitors and produce a comparison report',
+    agenticHint: 'This node turns a single agent into a self-driving subgraph inside the workflow: it loops calling tools until the goal is met or the iteration limit is reached.',
     variableWatch: 'Variable Watch',
     noRunResult: 'No run results yet',
     // ── F8 · Negotiation multi-agent (Negotiation + Critic) productization ──

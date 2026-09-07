@@ -15,6 +15,7 @@ import {
   ApartmentOutlined,
   ClockCircleOutlined,
   FormOutlined,
+  NodeIndexOutlined,
 } from '@ant-design/icons';
 import type { ReactNode } from 'react';
 import { StepType } from '../../types';
@@ -35,6 +36,7 @@ const PALETTE: { type: StepType; icon: ReactNode }[] = [
   { type: StepType.SubWorkflow, icon: <ApartmentOutlined /> },
   { type: StepType.Delay, icon: <ClockCircleOutlined /> },
   { type: StepType.UserInput, icon: <FormOutlined /> },
+  { type: StepType.Agentic, icon: <NodeIndexOutlined /> },
   { type: StepType.End, icon: <CheckCircleOutlined /> },
 ];
 
@@ -56,6 +58,7 @@ export default function NodePalette() {
     [StepType.SubWorkflow]: t('canvas.nodeType.subWorkflow'),
     [StepType.Delay]: t('canvas.nodeType.delay'),
     [StepType.UserInput]: t('canvas.nodeType.userInput'),
+    [StepType.Agentic]: t('canvas.nodeType.agentic'),
   };
   const NODE_DESC: Record<StepType, string> = {
     [StepType.Start]: t('canvas.nodeDesc.start'),
@@ -73,6 +76,7 @@ export default function NodePalette() {
     [StepType.SubWorkflow]: t('canvas.nodeDesc.subWorkflow'),
     [StepType.Delay]: t('canvas.nodeDesc.delay'),
     [StepType.UserInput]: t('canvas.nodeDesc.userInput'),
+    [StepType.Agentic]: t('canvas.nodeDesc.agentic'),
   };
   const onDragStart = (e: React.DragEvent, type: StepType) => {
     e.dataTransfer.setData('application/reactflow', String(type));
