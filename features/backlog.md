@@ -3,24 +3,28 @@
 > **位置与定位**：仓库根 `features/backlog.md`（与 `src` 平级）。本池同时收纳**前端与后端**的 feature 设计与实现意图；**新增 feature 须先将设计文档放入 `features/`，再进入实现**（见下方红线）。
 >
 > **两层级消费模型**：
-> - **Tier 1 · Feature 史诗（F1–F8）** —— 每个 = 一份 `features/<id>.md` 设计文档 + 端到端实现，是 `feature-builder` 的取数单元（取最靠前 `open` 史诗）。
+> - **Tier 1 · Feature 史诗（`F1`–`F57`）** —— 每个 = 一份 `features/<id>.md` 设计文档 + 端到端实现，是 `feature-builder` 的取数单元（取最靠前 `open` 史诗）。
 > - **Tier 2 · 验收子项** —— 原 B/O/P 条目的归并，挂在对应史诗下，既作该史诗的完成判据，也可被 `feature-dev` 单独取出做细粒度前端实现。
 >
 > **红线**：代理**绝不**自己发明需求。只实现这里列出的、或你当轮明确指令的功能。涉及接口契约 / 鉴权 / 路由结构 / 破坏性后端等高风险改动时，代理会停下问人，不自动改。
 
 状态图例：`open`(待做) · `doing`(进行中) · `done`(已完成，已在当前基线) · `done⚠️未合并`(实现完整但停在未合并分支，**当前基线不可用**) · `blocked`(阻塞等待依赖)
 
-> **完成度统计（2026-08-30 二次整理）**：Tier 1 史诗 40 条 + 延后项 6 条 = **46 条**；其中 **done 36 / open 10**。
-> 当前 open 清单（按建议执行顺序）：`F38`(CI YAML 门禁样例) → `F45`(发布端点完整 URL 展示) → `F44`(ApiKeys 租户自助端点，**阻断 F22 生产可用**) → `F42`(工作流数据流) → `F39`(监控告警聚合) → `F46`(生产部署编排) → `F37`(队列化执行与水平扩展) → `F40`(异常回放诊断) → `F36`(Agent 上下文隔离) → `F35`(多工作空间隔离)。
+> **完成度统计（2026-09-22 台账对账 · 以 git 实测为准，替代此前两套并存口径）**：史诗条目 **57 条** —— **done 41 / open 15 / done⚠️未合并 1**。
+>
+> - **open（15 条，按优先级）**：
+>   - **交付闭环（3）**：`F46`(生产部署编排，**🔴 生产不可部署**) · `F44`(ApiKeys 租户自助端点，**🔴 阻断 F22 生产可用**) · `F47`(Skill+MCP 执行器真实化，**🔴 静默伪成功**)。
+>   - **平台演进（2）**：`F42`(工作流数据流) · `F45`(发布端点完整 URL 展示)。
+>   - **2026-09-22 分析报告派生（10）**：`F48`(CI 集成测试启用) · `F49`(本地质量钩子强制启用) · `F50`(迁移目录收敛与基线压缩) · `F51`(前端工程化脚本补齐) · `F52`(测试 hermetic 化) · `F53`(架构测试去假绿) · `F54`(仓库卫生) · `F55`(前端执行态快照) · `F56`(文档治理) · `F57`(backlog 台账 CI 对账)。
+>   - **建议执行顺序**：`F46`/`F44`（交付闭环，最高）→ `F48`+`F53`（修 CI 假绿，同批）→ `F49`+`F51`（工程化基建）→ `F50`（迁移治理）→ `F52`/`F55` → 其余。
+> - **done⚠️未合并（1 条）**：`F10`（A1 残余执行器真实化）—— 实现停在未合并分支，**当前基线 MCP/Skill 工具仍返回伪造成功**（2026-09-22 复核仍成立），已由 `F47` 取代，不再单独排期。
+> - **核对依据**：`git merge-base --is-ancestor` 实测 `F35`–`F41`/`F43` 全部已在 master；远端仅存 `master`（feature 分支已清理）。此前记载的「F35–F40 六条分支尚未并入 master」**已失效**，本次已逐条改正。新增项见下方「分析报告派生项（2026-09-22）」分组。
 >
 > **编号冲突已修正（2026-08-30）**：原存在两个 `F34`（沙箱双层隔离 / 在线评估门禁）。后者现改号为 **F43**（旧号仅作历史别名保留），详情见 `### F43` 条目备注。
-> **2026-08-30 走查新增 3 项**：`F44`（ApiKeys 生命周期闭环，P1）、`F45`（发布端点完整 URL 展示，P3）、`F46`（生产部署编排，P2）——均来自 ApiKeysPage / F22 链路代码走查，缺口定性见各条目；原「待立题」分组已清空（ApiKeys 项升级为 F44）。
+> **2026-08-30 走查新增 3 项**：`F44`（ApiKeys 生命周期闭环，P1）、`F45`（发布端点完整 URL 展示，P3）、`F46`（生产部署编排，**2026-09-22 由 P2 上调为 P1**）——均来自 ApiKeysPage / F22 链路代码走查，缺口定性见各条目；原「待立题」分组已清空（ApiKeys 项升级为 F44）。
 
-代码基现状（2026-07-22 全量走查）：React 19 + Vite 8 + TS（strict）+ Antd 5 + @xyflow/react + zustand；`typecheck/lint/build/unit/e2e` 五道闸门当前全绿。优点：严格 TS、0 处 `any`、0 TODO/FIXME、lint 净。问题集中于「前端数据真实性 / 鉴权态 / 错误兜底 / 工程化」与「后端行动层（工具·代码·调研）空心」两类。
+代码基现状（2026-09-22 全量复核，替代原 2026-07-22 走查结论）：React 19 + Vite 8 + TS（strict）+ Antd 5 + @xyflow/react + zustand；严格 TS、`TODO/FIXME/HACK` 零命中、`any` 仅 10 处。**⚠️ 校正**：原记载「`typecheck/lint/build/unit/e2e` 五道闸门当前全绿」与实测不符 —— `src/AgentPlatform.Web/package.json` 中**不存在 `typecheck`/`lint`/`test` 脚本**，lint 与 vitest 无 npm 入口、CI 亦无前端单测作业（缺口已立为 `F51`）。当前问题已从「前端数据真实性」转向「**交付闭环缺失**（部署 / 凭证）」与「**测试可信度**（CI 假绿通道）」，详见 `docs/code-analysis-2026-09-22.md`。
 
-> **完成度统计（2026-09-04 台账对账后重算）**：史诗条目 47 —— done 42（其中 **done⚠️未合并 7**：实现完整但停在未合并分支，对当前基线不可用）/ 待做 5。
-> 待做清单（按建议顺序）：F44 → F45 → F46 → F42 → F47。
-> **2026-08-30 走查新增 3 项**：`F44`（ApiKeys 生命周期闭环，P1）、`F45`（发布端点完整 URL 展示，P3）、`F46`（生产部署编排，P2）——均来自 ApiKeysPage / F22 链路代码走查，缺口定性见各条目；原「待立题」分组已清空（ApiKeys 项升级为 F44）。
 > **测试约定（2026-08-04 确立，feature-builder 硬约束 #7）**：**前端 E2E 必须 BDD 驱动**——凡触及 UI 的 feature，须配套 `playwright-bdd` 风格的 Gherkin E2E（`src/AgentPlatform.Web/e2e/features/*.feature` + `e2e/steps/*.steps.ts`，`createBdd(test)` 的 `test` 须 `extend` 自 `playwright-bdd` 自带 `test`），运行链路 `bddgen && playwright test`。禁止写裸 `@playwright/test` `.spec.ts` 作 feature E2E（既有 `smoke.*.spec.ts` 属冒烟基线，除外）。F27 已落地示范：`e2e/features/publish-workflow.feature`。
 
 ---
@@ -31,6 +35,7 @@
 
 ### F44 · ApiKeys 租户自助端点 + 前端接线（API Key 生命周期闭环）  [P1]  open  ⚠️设计文档待产出（实现前必须先建 `features/f44-*.md`）🔴升级理由：阻断 F22「发布工作流为 API/MCP」生产可用
 - 来源：F1 史诗子项 `B8`（2026-08-30 走查升级立项；原「待立题」分组收容，现正式进入 Tier 1）
+- **2026-09-22 分析报告复核（`docs/code-analysis-2026-09-22.md` §3 P0-2）**：缺口**全部成立**——后端仍无 `ApiKeysController`；`ApiKeysPage.tsx` 全仓无 import、无路由，仍是不可达孤儿页；`WorkflowsPage.tsx:248` 仍以 `.catch(() => setApiKeys([]))` 静默吞错，导致发布抽屉密钥下拉恒空。**结论：本项为 F22 卖点的生产阻断项，建议列为交付闭环第一顺位。**
 - 缺口定性（2026-08-30 代码走查）：
   - **前端**：`pages/ApiKeysPage.tsx`（97 行）是不可达孤儿页——`App.tsx` 无路由（`git log -S` 零提交）、`AppLayout` 导航无入口、全仓无 import；rotate/revoke 按钮是 `rotateTodo/revokeTodo` 占位 toast；`services/api.ts:528` 仅封装 `GET /api-keys` 且 `WorkflowsPage.tsx:248` 调用处 `.catch(() => setApiKeys([]))` 静默吞错 → **发布抽屉密钥下拉永远为空**。
   - **后端**：ApiKey 校验基建齐全（`Domain.Aggregates.ApiKeys.ApiKey` + `ApiKeyConfiguration` + `ApiKeyAuthenticationHandler`(scheme="ApiKey") + `ApiKeyEncryptionService`(AES-256-GCM) + `KeyRotationService` + `ApiKeyExpiryJob`），但 `IApiKeyRepository` 仅被校验/轮换/过期消费，**无创建 Command、无管理 Controller**。全局唯一 key = `DatabaseInitializer` 在 Integration 播种的 `integration-fixture-key-0001`（明文 dev-only）。
@@ -48,8 +53,9 @@
 - 验收：抽屉内可见完整可调用 URL；复制按钮产出完整 URL；typecheck/build/E2E 全绿。
 - 风险：🟢 纯前端展示层，无契约变更。
 
-### F46 · 生产部署编排（docker-compose 补齐 API 服务）  [P2]  open  🟡中风险（首次容器化 + USE_POSTGRESQL 条件编译验证）
-- 来源：2026-08-30 走查——`docker-compose.yml` 当前**只有 postgres 服务**，无 api 服务；API 仅能 `dotnet run` 裸跑，无容器化生产拓扑。
+### F46 · 生产部署编排（docker-compose 补齐 API 服务）  [P1]  open  🟡中风险（首次容器化 + USE_POSTGRESQL 条件编译验证）
+> **优先级上调（2026-09-22）**：原 `[P2]` → 现 `[P1]`。依据 `docs/code-analysis-2026-09-22.md` §3 P0-1：全仓 `find . -name "Dockerfile*"` **零命中**，`docker-compose.yml` 无 `api` 服务，平台目前**无任何可复现的交付形态**。该项被报告评为「最高性价比交付阻断项」，建议在 F44 之前或与之并行推进。
+- 来源：2026-08-30 走查——`docker-compose.yml` 当时**只有 postgres 服务**，无 api 服务；API 仅能 `dotnet run` 裸跑，无容器化生产拓扑。**（2026-09-22 校正：现 compose 已含 postgres/redis/rabbitmq 三个中间件，但 api 服务与 Dockerfile 仍缺失，缺口成立且更清晰。）**
 - 落地：
   - 多阶段 `Dockerfile`（build + runtime）；`docker-compose.yml` 增加 `api` 服务（`USE_POSTGRESQL` 编译/配置切换 + 连接串 + `OPENAI__Key` 等环境变量映射 + healthcheck）。
   - 可选预留 `redis` 服务（为 F37 队列化铺路）；`deploy/docker-compose.monitoring.yml`（F39 产物）与主 compose 对齐网络。
@@ -88,7 +94,7 @@
 - 目标：UI 展示真实登录身份、失败有兜底，消灭静默吞错与无 404 白屏。纯前端、低风险，无后端契约变更。
 - 验收子项：
   - **B7** Dashboard 假数据 —— ✅ **done（漂移校正）**：现走真实 `getAgents/getWorkflows/getExecutionLogs`，原行号已失效。
-  - **B8 / ApiKeys 页真实化** —— 🔒 **blocked（2026-08-30 复核仍然成立）**：`pages/ApiKeysPage.tsx` 前端页已存在，但 `services/api.ts:528` 仅封装 `GET /api-keys`，后端 `src/**/*.cs` 全文检索**无任何 api-keys 路由/控制器**（无 `ApiKeysController`）——即该端点为 404，页面 rotate/revoke 按钮仍是 `rotateTodo/revokeTodo` 占位 toast。已从本史诗移出至文末「待立题」分组，待后端端点立题后闭环。
+  - **B8 / ApiKeys 页真实化** —— 🔒 **blocked（2026-08-30 复核仍然成立；2026-09-22 分析报告再次确认）**：`pages/ApiKeysPage.tsx` 前端页已存在，但 `services/api.ts:528` 仅封装 `GET /api-keys`，后端 `src/**/*.cs` 全文检索**无任何 api-keys 路由/控制器**（无 `ApiKeysController`）——即该端点为 404，页面 rotate/revoke 按钮仍是 `rotateTodo/revokeTodo` 占位 toast。**已升级为独立史诗 `F44`**（2026-08-30 由「待立题」分组转入 Tier 1），本子项随 F44 闭环，不再单独跟踪。
   - **O4** 真实用户身份上顶栏 —— ✅ **done（2026-08-30 归档校正）**：`layouts/AppLayout.tsx:30` 从 `useAppStore` 取 `userEmail`/`userRole`，`:145` 顶栏展示；RBAC 判定 `:40/:44`。
   - **O5** 静默吞错 → 统一错误 Alert + 重试 —— ✅ **done（2026-08-30 归档校正）**：`DashboardPage.tsx:106` 与 `ExecutionLogDetailPage.tsx:80` 均走 `ErrorState` + `onRetry`。
   - **O1** 顶层 ErrorBoundary —— ✅ **done（漂移校正）**：`components/ErrorBoundary.tsx` 已在 `App.tsx:32` 挂载包裹全部路由。
@@ -354,11 +360,11 @@
   - 真实副作用单测：需在提供 Docker 守护进程的 runner 上跑（本开发沙箱无 Docker，该 feature 门禁须在含 Docker 的 CI 跑，或提供可跳过集成测试标记）。
   - 默认 `Provider=Process` 不变，保证无 Docker 环境仍可运行。
 
-### F10 · A1 残余执行器真实化（Skill + MCP）  [P2]  done⚠️未合并  ❗**当前基线仍为桩**（2026-09-03 实测校正）
+### F10 · A1 残余执行器真实化（Skill + MCP）  [P2]  done⚠️未合并 → **已被 F47 取代，不再单独排期**  ❗**当前基线仍为桩**（2026-09-03 实测校正；2026-09-22 复核结论仍成立：两文件仍各 30 行、仍返回 `Success=true`）
 - **实测状态**：实现只存在于**未并入 master** 的 `feat/f10-executor-realization`（单 commit `e76664c`，`Tools/McpClient.cs` 203 行真实 SDK 调用）。当前基线里 `src/AgentPlatform.Infrastructure/Tools/McpClient.cs` 与 `SkillPackageExecutor.cs` **各仅 30 行、仍 `Task.FromResult(new ToolExecutionResult(true, "Executed via …"))` 返回伪造成功**，且二者**确实注册在 DI 活路径**（`Infrastructure/DependencyInjection.cs:510-511`），即工具类型为 MCP/Skill 的调用会静默「成功」。
 - **文档也在未合并分支上**：本条目原引用的 `features/executor-realization.md` 与 `docs/quality/f10-executor-realization-gate.md` 在 master/当前基线**不存在**。
 - **依赖也不在**：`AgentPlatform.Infrastructure.csproj` 无 `ModelContextProtocol` 包（原文所称「ModelContextProtocol 2.1.0 真实连接」未进入基线）。
-- **待用户定夺（代理不自行合并）**：① 把 `feat/f10-executor-realization` rebase 到当前链并合并（快，但需过 F35 加列/F36 隔离/F37 队列带来的冲突与质量门）；② 视为未做，重新走 feature-builder 立项为 **F42**。
+- **待用户定夺（代理不自行合并）**：① 把 `feat/f10-executor-realization` rebase 到当前链并合并（快，但需过 F35 加列/F36 隔离/F37 队列带来的冲突与质量门）；② 视为未做，重新走 feature-builder 立项 —— **本路径已落地为 `F47`（Skill + MCP 执行器真实化），故本条目不再单独排期**。（编号校正 2026-09-22：原文此处写「立项为 F42」，`F42` 现为「工作流数据流」，系旧编号误引。）
 - 原条目内容（保留备查）：
   - 来源：F5 残留 ②（F5 仅真实化 `NativeToolExecutor`；两执行器保留 `// TODO(Phase6)` 占位）。
   - 目标：让 SK 技能包与 MCP 工具真正执行，补全 Agent 三类动作源（Native / Skill / MCP）的真实副作用。
@@ -472,11 +478,13 @@
   - **延后项** → CI YAML 接入样例 → `F38`；队列化执行/水平扩展 → `F37`；监控告警聚合 → `F39`；异常回放诊断 → `F40`
 - **完成记录（2026-08-25）**：feature-builder 全栈闭环（分支 `feat/f34-online-eval-gate`，基于 f33）。端点 `POST /api/v1/evaluation-datasets/{id}/gate/{workflowId}`（Admin/Operator）。新增测试 5 例（超阈值通过+审计/低于阈值阻断/显式覆盖配置/空数据集恒拦/越界抛错）；全绿 App226/Infra154+6skip/Api35/Arch9，build 0/0，前端零改动。三道质量门 PASS。**二期 F29–F34 全部收口。**
 
-## 延后项（独立排期，从已 done 史诗中拆出）—— **F35–F40 六项已全部实现完毕（2026-08-31 → 2026-09-03），但六条分支尚未并入 master**
+## 延后项（独立排期，从已 done 史诗中拆出）—— **F35–F40 六项已全部完成并并入 master（2026-08-31 → 2026-09-04，2026-09-22 实测核对）**
 
 > 以下条目均来自 F26/F30/F31/F32/F43（原 F34 评估门禁）设计文档中显式标注的「延后项」——v1 边界明确排除、依赖未就绪或破坏性过大，需独立 feature 闭环。
+>
+> **状态更正（2026-09-22）**：本节此前标题与条目状态写作「六条分支尚未并入 master / `done⚠️未合并`」，**已过期**。实测 `git merge-base --is-ancestor` 确认 `f92b1e9`(F35)、`52fd9bf`(F36)、`3ed615b`(F37)、`88255a8`(F38)、`e2f6ddd`(F39)、`2af39ed`(F40) **全部已在 master**，且远端仅存 `master`（feature 分支已清理）。故六项一律改标 `done`；其中 `F37`/`F39` 原误标 `open`（已有完成记录）一并改正。本节条目保留原位以存续完成记录的追溯性。
 
-### F35 · 多工作空间隔离（Workspace）  [P2]  done⚠️未合并  ✅（2026-08-31，分支 `feat/f35-workspace-isolation`；设计文档 features/f35-workspace-isolation.md §6 决策 D1–D5 已锁定 + 质量报告 docs/quality/f35-workspace-isolation-gate.md）🔴高风险（全聚合加 WorkspaceId + query filter + TenantProvider 体系扩展）
+### F35 · 多工作空间隔离（Workspace）  [P2]  done  ✅（2026-08-31，分支 `feat/f35-workspace-isolation`，**已并入 master（commit `f92b1e9`）**；设计文档 features/f35-workspace-isolation.md §6 决策 D1–D5 已锁定 + 质量报告 docs/quality/f35-workspace-isolation-gate.md）🔴高风险（全聚合加 WorkspaceId + query filter + TenantProvider 体系扩展）
 - 来源：F26 企业增强 · S1「Workspace v1 不做，独立排期」
 - 设计依据：`features/enterprise-enhancements.md` §6 S1
 - 目标：创建/切换 workspace；实体按 workspace 隔离；切换后查询仅见当前 workspace 数据。本质是「第二租户维度」——同一租户内再分一层工作空间。
@@ -494,7 +502,7 @@
 - 风险：🔴 破坏性极大——全聚合加列 + query filter 修改 + TenantProvider 体系重构 + 前端全局切换。建议独立分支 feature-builder 全栈闭环。
 - **完成记录（2026-08-31）**：feature-builder 全栈实跑落地。决策（用户锁定）：D1=C claim+header 双通道（`IWorkspaceProvider`：claim → header → `WorkspaceDirectory` 租户默认兜底 → 空 fail-closed）/ D2=A 18 聚合全量（AuditLog/ExecutionLog/AgentRunRecord 仅补列）/ D3=B 成员表（非 Admin 仅见默认+已加入，switch 校验成员资格）/ D4=删除守卫（默认 409、非空 409、绝不级联）/ D5=A `useApiState` 单点订阅全站刷新。后端：`Workspace`/`WorkspaceMember` 聚合 + `IWorkspaceScoped` + 18 聚合加列 + `AppDbContext` 组合过滤器与 SaveChanges 注入 + `WorkspaceProvisioner` 幂等供应/回填 + 迁移 `AddWorkspaceIsolation` + `WorkspacesController` 8 端点 + `WorkspaceHeaderGuardMiddleware`（非 Admin 剥离越权头）+ 登录/`/auth/me`/dev-login 携带 workspace claim + API-Key 认证钉到 Key 所属工作空间 + 触发路径 `GetByIdForTriggerAsync`（修复非默认空间工作流被静默跳过的回归）。前端：`WorkspaceSwitcher` + 拦截器注入头 + `appStore.currentWorkspaceId` 持久化 + i18n 对称 + BDD E2E `workspace-switch.feature`。三道质量门全 PASS：ddd-code-reviewer 修 2×P1（header 越权中间件、触发回归）+3 项；结构门 P0-P2=0（2 waiver）；optimizer Round F35-01 0 open（1 修复 + 5 waiver）。验证：build 0/0；App 238 / Infra 158+6skip / Api 35 / Arch 9 / SpecFlow 114/115（唯一失败=master 既有 LLM 用例）/ Integration 5（需 `OPENAI__Key`）；新增 12 handler 测试 + 4 EF 隔离测试；前端 tsc 0 + vitest（2 既有失败豁免）+ vite build。文档同步：CHANGELOG v2.34、BLUEPRINT 平台化清单、appendices/core-aggregates.md（Workspace/WorkspaceMember 聚合）、appendices/api-spec.md（I.11 工作空间 API，资源域 10→11）。已知残留：触发/调度仅落租户默认工作空间、成员列表 N+1、名称唯一大小写依赖 collation、3 个补列实体运行期 WorkspaceId 恒空（D2=A 设计）。
 
-### F36 · Agent 上下文隔离（Blackboard 分区 + 独立对话历史）  [P2]  done⚠️未合并  ✅（2026-09-01，分支 `feat/f36-agent-context-isolation` 基于 f35；设计文档 features/f36-agent-context-isolation.md §5 决策 D1–D4 已锁定 + §8 审查修复记录 + 质量报告 docs/quality/f36-agent-context-isolation-gate.md）🟡中风险（Blackboard 语义重构 + per-agent 对话状态）
+### F36 · Agent 上下文隔离（Blackboard 分区 + 独立对话历史）  [P2]  done  ✅（2026-09-01，分支 `feat/f36-agent-context-isolation` 基于 f35，**已并入 master（commit `52fd9bf`）**；设计文档 features/f36-agent-context-isolation.md §5 决策 D1–D4 已锁定 + §8 审查修复记录 + 质量报告 docs/quality/f36-agent-context-isolation-gate.md）🟡中风险（Blackboard 语义重构 + per-agent 对话状态）
 - 设计文档：`features/f36-agent-context-isolation.md`（已建，§5 决策 D1–D4 已锁定 2026-09-01；现实修正：Blackboard 实为 Dictionary<string,string>、AgentCallStepExecutor 现从不接触 Conversation）
 - 来源：F31 Agent 运行时实体化 · D4「Blackboard 按 agent 分区 / 每 agent 独立对话历史延后」；F32 消息总线 · 明确不做
 - 设计依据：`features/f31-agent-runtime.md` §明确不做 + `features/f32-agent-message-bus.md` §明确不做
@@ -512,7 +520,8 @@
 - 风险：🟡 Blackboard 值对象变更影响 WorkflowContext 全链路；Conversation 加列为最小迁移。依赖 F31/F32 已合入。
 - **完成记录（2026-09-01）**：feature-builder 全栈实跑落地（基于 feat/f35-workspace-isolation）。决策（用户锁定）：D1=A 软分区视图（`agent:{agentId}:` 键约定 + GetPartitionView/GetGlobalView；F30/F25/RunningExecution 持久化格式零变更）/ D2=A AgentCallStepExecutor 自动创建/复用 per-agent per-workflow 会话（唯一过滤索引防并发双建；持久化失败 Detach 隔离不阻断）/ D3=A 会话页 agent 筛选+标签 / D4=A 回复显式回写 `agent:{agentId}:output`。现实修正（相对 backlog 原文）：Blackboard 实为 Dictionary<string,string>，AgentCall 原不接触 Conversation。三道质量门全 PASS：reviewer 修 P1（唯一过滤索引）+3×P2；结构门 P0-P2=0（2 waiver）；optimizer 修 P1（Detach）+3×P3，0 open。验证：build 0/0；App 253/Infra 162+6skip/Api 35/Arch 9/SpecFlow 115/116（既有豁免）/Integration 5；新增 18 测试 + SpecFlow 1 场景；前端 tsc 0 + vitest（既有豁免×2）+ vite build。文档同步：CHANGELOG v2.35、BLUEPRINT、appendices（Conversation.AgentId + 会话列表 agentId 参数）、backlog F36 done。已知残留：硬分区列 v2；SetInPartition/GetFromPartition 为预留 API（agent 工具链接入）；截断字面量未抽配置。
 
-### F37 · 队列化执行与水平扩展  [P1]  open  🔴高风险（分布式消息中间件 + 租约机制重构 + 多 worker 协调）
+### F37 · 队列化执行与水平扩展  [P1]  done  ✅（2026-09-02，**已并入 master（commit `3ed615b`）**；设计文档 features/f37-queued-execution.md + 质量报告 docs/quality/f37-queued-execution-gate.md）🔴高风险（分布式消息中间件 + 租约机制重构 + 多 worker 协调）
+> **状态更正（2026-09-22）**：本条目原标 `open`，但其下已有「完成记录（2026-09-02）」且分支已并入 master，属**误标**，现改为 `done`。
 - 来源：F30 执行持久化 · 延后项；F43 评估门禁（原 F34）· 延后项
 - 设计依据：`features/f30-durable-execution.md` + `features/f34-online-eval-gate.md` §延后项
 - 目标：将当前进程内 BackgroundService 轮询升级为基于消息队列的分布式任务分发——多 worker 实例可水平消费执行任务，无状态执行引擎横向扩展。复用 F30 租约机制（RunningExecution）防多 worker 重复驱动。
@@ -529,7 +538,7 @@
   - build 0/0 + 全量测试 0 失败（SkippableFact 覆盖 Redis 不可用场景）。
 - 风险：🔴 分布式一致性（租约竞态、消息去重、幂等）+ 运维复杂度（Redis/RabbitMQ 部署）。建议分两阶段：① Redis Stream 最小闭环 ② RabbitMQ 企业级（独立排期）。
 - **完成记录（2026-09-02）**：feature-builder 全栈实跑落地。决策（用户锁定）：D1=B 三后端全做 / D2=B run 端点透明「入队+等待」（既有 run/run-existing 契约在 QueueEnabled 下返回 200 完成 / 202 queued / 503 拒投，默认 QueueEnabled=false 直跑零变化）/ D3=A 复用 F30 5min 租约作接管窗口（**校正 backlog 原文「30s」**：现网租约 LeaseTtlMinutes=5，缩至 30s 会改 F30 崩溃恢复窗口，未选）/ D4=A 评估门禁保持同步直跑。**设计偏差（诚实记录）**：① 复用既有 `IDistributedLockProvider`（Redis 实现本就是 SET NX PX 语义）而非新建 `DistributedLeaseProvider`；② 队列投递在 run 命令处理器内透明完成（`QueuedRunSupport.EnqueueAndWaitAsync`），未新增公开 `EnqueueWorkflowRunCommand`；③ Redis/Rabbit 不可用时 run 端点显式 503（不运行时静默切 InMemory，避免多实例脑裂），InMemory 为注册期选定的后端而非运行期降级。落地：`IExecutionQueue`+`ExecutionJob`/`QueueDelivery`/`EnqueueResult`（Application）；三后端 Infrastructure（InMemory Channel 有界 / Redis Stream XADD+XREADGROUP+XAUTOCLAIM+XACK+死信流 / RabbitMQ durable+BasicGet pull+epoch 防跨代 ack+死信队列）；`ExecutionWorker`（BackgroundService，恒注册+QueueEnabled 运行时门控，失败按 Attempt 重投、超限死信、仅接管成功才 ack）；`ExecuteQueuedWorkflowCommand`（消费 scope 复现租户/工作空间 Override、跨租户拒跑、终态重复投递→Duplicate 不重跑、租约冲突→Duplicate、触发投递 FromQueue 防回环）；触发处理器队列模式投递。前端 runWorkflow/runExistingWorkflow union + isQueuedRunResponse 守卫 + queued 提示。三道质量门全 PASS：reviewer 修 P0（重复投递二次执行）+P1×4（轮询 AsNoTracking、死信成败回报防丢任务、Redis 连接泄漏、Rabbit epoch）；结构门 0 open（P3×2 修）；optimizer Round F37-01 0 open（P3×1 修：未知 QueueBackend 静默降级告警；2 waiver）。验证：build 0/0；App 268 / Infra 171+8跳 / Api 37 / Arch 9 / Integration 5 / SpecFlow 115/116（唯一失败=既有豁免）；新增 Application 队列 15 + Infra queue/worker 9 + Api 队列 E2E 2；前端 tsc 0 + vitest（既有豁免×2）+ vite build。文档同步：CHANGELOG v2.36、BLUEPRINT 平台化清单、appendices（api-spec I.3.1 队列模式 / deployment-devops H.4/H.5）、backlog F37 done。遗留：RabbitMQ 真实 broker 投递闭环在 CI services 覆盖（本地跳过）；InMemory 重启丢未 ack 作业（单实例回退设计接受）。
-### F38 · CI YAML 接入评估门禁样例  [P2]  done⚠️未合并  ✅（2026-09-02，分支 `feat/f38-ci-eval-gate` 基于 f37；交付 ci/eval-gate-github.yml + ci/eval-gate-gitlab.yml + docs/ci-eval-gate-guide.md，设计文档 features/f38-ci-eval-gate.md + 质量报告 docs/quality/f38-ci-eval-gate-gate.md）🟢低风险（文档 + 模板，不触后端代码）
+### F38 · CI YAML 接入评估门禁样例  [P2]  done  ✅（2026-09-02，分支 `feat/f38-ci-eval-gate` 基于 f37，**已并入 master（commit `88255a8`）**；交付 ci/eval-gate-github.yml + ci/eval-gate-gitlab.yml + docs/ci-eval-gate-guide.md，设计文档 features/f38-ci-eval-gate.md + 质量报告 docs/quality/f38-ci-eval-gate-gate.md）🟢低风险（文档 + 模板，不触后端代码）
 - 来源：F43 评估门禁 · 延后项
 - 设计依据：`features/f43-online-eval-gate.md` §延后项
 - 目标：提供可直接复制使用的 CI/CD 流水线模板，将评估门禁端点接入 GitHub Actions / GitLab CI，实现「模型/prompt 变更前自动回归，未达阈值阻断合并」。
@@ -545,7 +554,8 @@
   - 指南文档完整：环境变量 / 阈值 / 失败处理 / 故障排查。
 - 风险：🟢 纯增量，不触后端。但需与 F43（原 F34 评估门禁）端点保持接口一致（API schema 变更须同步更新模板）。
 
-### F39 · 监控告警聚合  [P2]  open  🟡中风险（OpenTelemetry 指标 + 告警规则 + Dashboard 配置）
+### F39 · 监控告警聚合  [P2]  done  ✅（2026-09-02，**已并入 master（commit `e2f6ddd`）**；设计文档 features/f39-observability-alerting.md + 质量报告 docs/quality/f39-observability-alerting-gate.md）🟡中风险（OpenTelemetry 指标 + 告警规则 + Dashboard 配置）
+> **状态更正（2026-09-22）**：本条目原标 `open`，但其下已有「完成记录（2026-09-02）」且分支已并入 master，属**误标**，现改为 `done`。
 - 来源：F43 评估门禁（原 F34）· 延后项
 - 设计依据：`features/f34-online-eval-gate.md` §延后项
 - 目标：将当前裸 OpenTelemetry `/metrics` 端点升级为可用的可观测性栈——Prometheus 抓取配置 + Grafana Dashboard 模板 + 告警规则（执行失败率、门禁阻断率、队列积压、模型调用延迟），实现「平台运行状态一目了然 + 异常自动通知」。
@@ -562,7 +572,7 @@
   - 指南文档完整：一键部署 / 告警对接 / 自定义。
 - 风险：🟡 Grafana Dashboard JSON 维护成本（版本升级可能断面板）；缓解：文档注明版本要求。
 - **完成记录（2026-09-02）**：feature-builder 全栈实跑落地。决策（用户锁定）：D1=**B**（补后端埋点，原建议 A 被否，InMemory 亦可观测）/ D2=A（Alertmanager + Slack/PagerDuty）/ D3=A（修 Grafana provisioning 布局 + 12 面板 + 锁版本）/ D4=A（失败率用 `rolledback` 口径 + API 错误率独立告警）。**关键校正（相对 backlog 原文）**：① 代码里不存在 `result="failed"`（失败⇒回滚 `rolledback`），按直觉写 failed 会得到**永不触发的假告警**；② 门禁阻断率优先用新埋点 `evaluation_gate_total{passed}`、HTTP 422 派生作交叉验证；③ 队列积压由应用自身 `execution_queue_depth{backend}` 上报（**Redis 侧 XACK 不减 XLEN，故 ack 后同步 XDEL**，否则「积压」单调增长 = 假告警）；④ 既有 compose 把裸 dashboard JSON 挂进 provisioning 目录**根本不会加载**，已改为 provider YAML + JSON 目录分离并给数据源显式 `uid: prometheus`（否则 12 面板全报 data source not found）；⑤ 镜像 `latest` 改为全部锁版本。交付：prometheus.yml / alert-rules.yml（9 条告警）/ alertmanager.yml / grafana provisioning + 12 面板 dashboard / docker-compose.monitoring.yml / docs/observability-guide.md；后端埋点 `IExecutionQueue.QueueDepth`（三后端真实读数）+ `WorkflowMetrics.EvaluationGateCounter` + `QueueDepthGauge`。三道质量门全 PASS：对抗审查修 P1×2（Redis 积压语义、Grafana 数据源 uid）+P2×3+P3×5；结构门 0 新增（3×P3 waiver）；optimizer Round F39-01 0 新增（修 3×P2 文档同步 + 2×P3 waiver）。验证：build 0/0；Application **269/269**、Infrastructure **174+8跳**、Api **39/39**、Architecture 9、SpecFlow 115/116（唯一失败=既有豁免）；新增 MeterListener 真断言测试 2 文件（守「埋点确实可观测」）；6 个监控 YAML + dashboard JSON 结构校验通过（脚本核验所有面板/告警只引用已核实指标）。文档同步：CHANGELOG v2.38、deployment-devops 附录（监控栈小节）、backlog F39 done。已知残留：promtool/amtool/Grafana 导入本机无 Docker 未实跑（结构校验兜底 + 指南留校验命令）；`workflow_id`/`path` 高基数标签治理与 RabbitMQ 深度 ≤5s 缓存为独立技术债。
-### F40 · 异常回放诊断入口  [P2]  done⚠️未合并  ✅（2026-09-03，分支 `feat/f40-replay-diagnostics` 基于 f39；设计文档 features/f40-replay-diagnostics.md（§3 能力边界、§6b 决策、§8 审查修复记录、Quality Gate Checklist）+ 质量报告 docs/quality/f40-replay-diagnostics-gate.md）🟡中风险（执行日志回放引擎 + 前端诊断视图）
+### F40 · 异常回放诊断入口  [P2]  done  ✅（2026-09-03，分支 `feat/f40-replay-diagnostics` 基于 f39，**已并入 master（commit `2af39ed`，PR #32）**；设计文档 features/f40-replay-diagnostics.md（§3 能力边界、§6b 决策、§8 审查修复记录、Quality Gate Checklist）+ 质量报告 docs/quality/f40-replay-diagnostics-gate.md）🟡中风险（执行日志回放引擎 + 前端诊断视图）
 - 来源：F43 评估门禁 · 延后项
 - 设计依据：`features/f43-online-eval-gate.md` §延后项
 - 目标：从执行日志重建失败工作流的异常路径——定位失败节点、回放输入输出、展示上下文快照（Blackboard/变量/模型响应），辅助快速定位根因。复用 F24 Trace + F25 调试器能力。
@@ -623,6 +633,98 @@
 
 ---
 
+## 分析报告派生项（2026-09-22 · 来源 `docs/code-analysis-2026-09-22.md`）
+
+> 本节由 2026-09-22 全量代码分析报告派生。**每条缺口均有可复现的核验命令**，见报告附录「核验命令清单」。
+>
+> **P0 两项不在此重复立项**——「生产不可部署」已由 `F46` 覆盖（本次已将其优先级上调为 P1 并补交叉引用），「ApiKeys 凭证闭环」已由 `F44` 覆盖（已补 2026-09-22 复核结论）。本节只登记 P1/P2 级别的**新**缺口。
+>
+> 编号 `F48`–`F57`。**红线不变**：实现前须先建 `features/<id>-*.md` 设计文档（未标注者可按小项并入相邻 feature）。
+
+### F48 · CI 集成测试启用（去除 `if: false`）  [P1]  open  🟡中风险（依赖真实 LLM Key + Docker，运行时长上升）
+
+- 来源：报告 §3 P1-1
+- 缺口定性（实测）：`.github/workflows/ci.yml:73` 的 `- name: Run integration tests` 带 `if: false  # Integration tests need Docker. Enable when Docker is available on runner.` → `AgentPlatform.IntegrationTests`（5 例，需真实 `OPENAI__Key`）**从未在 CI 执行**，CI 的「绿」不覆盖该层。
+- 落地：runner 装 Docker，或改用 Testcontainers 提供依赖；移除 `if: false`；与 `build-and-test` job 既有的 `redis`/`rabbitmq` services 复用；失败即阻断。
+- 验收：CI 日志可见 IntegrationTests 真实执行且 0 失败；故意注入一例失败能被拦下；运行时长增量可接受。
+- 协同：与 `F52`（hermetic 化）配合可显著降低本项的时长与成本代价。
+
+### F49 · 本地质量钩子强制启用  [P1]  open  🟢低风险
+
+- 来源：报告 §3 P1-2
+- 缺口定性（实测）：`git config core.hooksPath` 为空 → `scripts/git-hooks/{pre-commit,commit-msg}` **本地不生效**。README 仅把它写成可选提示，导致四道质量门实际退化为「事后 CI 拦截」而非「提交前拦截」——这与其自身设计意图相悖。
+- 落地：`scripts/install-hooks.ps1` 提升为 README 快速开始的**必做步骤**；CI 侧显式执行安装脚本并断言 `core.hooksPath` 有值；评估以 `Directory.Build.targets` 或 dotnet tool 做双保险，避免「依赖开发者记得配」。
+- 验收：全新克隆按 README 操作后 `core.hooksPath` 有值；含 `src/` 改动但缺 `.quality-gate.json` 的提交被**本地**拦截。
+
+### F50 · EF 迁移目录收敛与基线压缩  [P1]  open  ⚠️设计文档待产出  🔴高风险
+
+- 来源：报告 §3 P1-3 + P1-4
+- 缺口定性（实测）：① 迁移历史被切成**两个目录** —— `Infrastructure/Migrations`（57 文件，2026-07-14 → 09-01）与 `Infrastructure/Persistence/Migrations`（6 文件，2026-08-24 → 08-25）；主时间线中间 3 个迁移（`AddDurableExecutionCheckpoint`/`AddRunningExecution`/`AddAgentMessageLog`）掉进旁支命名空间。`dotnet ef migrations add` 默认只往 DbContext 所在命名空间的 `Migrations` 写，**极易继续分叉**，人工 review 也无法一眼判断全序。② 63 个迁移 = 40,629 行，占后端代码 **38.9%**，从未做过基线压缩。
+- 落地：a) 把 `Persistence/Migrations` 的 3 个迁移迁回 `Infrastructure/Migrations`（或反向统一），并在 `docs/database-conditional-compilation.md` 写明约定；b) 在下一个稳定点做一次基线 squash（生成 `InitialBaseline` 快照 + 归档历史迁移），配套 SQLite / PostgreSQL 双路径升级说明与验证脚本。
+- 验收：迁移目录唯一；`dotnet ef migrations list` 全序与时间戳一致；SQLite 与 PostgreSQL 两条路径均可从空库升到最新 schema，且 schema diff 为空。
+- 风险：🔴 高 —— 迁移历史重写涉及存量数据升级路径，须先在副本库演练；squash 属破坏性变更，须在 CHANGELOG 标 **BREAKING**。
+- 备注：建议拆两个 PR（目录收敛先行，squash 后置），不要合并成一次提交。
+
+### F51 · 前端工程化脚本补齐 + CI 前端单测作业  [P1]  open  🟢低风险
+
+- 来源：报告 §3 P2-1
+- 缺口定性（实测）：README:57 指导执行 `npm run typecheck && npm run build`，但 `src/AgentPlatform.Web/package.json` 的 `scripts` 仅 `dev`/`build`/`preview`/`e2e`/`e2e:ui` —— **不存在 `typecheck`、`lint`、`test`**。14 个 vitest 文件无 npm 入口，CI 亦无前端单测作业；原「`typecheck/lint/build/unit/e2e` 五道闸门全绿」表述不成立（已在文件头校正）。
+- 落地：补 `"typecheck": "tsc --noEmit"`、`"lint": "eslint ."`、`"test": "vitest run"`（可选 `test:watch`）；`.github/workflows/ci.yml` 新增 `frontend-unit` job（`npm ci` → typecheck → lint → test）；同步修正 README 表述。
+- 验收：三条命令本地可跑且 0 错误；CI 新作业绿；README 命令与实际脚本一致。
+- 风险：🟢 低，但**首次接入可能暴露存量失败**——已知 vitest 有 2 例既有失败，须先清理或显式豁免（豁免须在报告中留痕）。
+
+### F52 · 测试 hermetic 化：LLM 录制回放  [P2]  open  ⚠️设计文档待产出  🟠中风险
+
+- 来源：报告 §3 P2-3
+- 缺口定性：后端集成测试与前端 E2E **一律使用真实 `OPENAI_API_KEY`**（README「测试环境约定（2026-08-28 起强制）」）。后果三条：① 测试非 hermetic，网络/配额/供应商波动造成假失败（CHANGELOG 多次记录「唯一失败 = master 既有 LLM 用例」）；② CI 每次真实计费；③ 本地门槛高 —— `.quality-gate.json` 自己记载「本地 E2E 本环境不可跑……交 CI」。
+- 落地：引入录制回放层（VCR 模式：`Test`/`Integration` 环境默认回放已录制响应，录制用显式开关）；为 SSE 流式响应单独设计录制格式；真实 Key 仅保留给 nightly 冒烟与发布前验证；文档写明录制更新流程与脱敏要求。
+- 验收：集成测试与 E2E 在**无 Key 环境**下可跑通；CI 不再依赖 `OPENAI_API_KEY` secret；nightly 仍跑真实链路；录制文件脱敏（无真实 key / 用户数据）。
+- 风险：🟠 中 —— SSE 流式与多轮 ReAct 循环（F29）录制复杂度高；回放可能掩盖真实回归，**须保留真实冒烟兜底**。
+- 协同：与 `F48` 互为前提（F48 打开集成测试后，本项是控制其成本与稳定性的手段）。
+
+### F53 · 架构测试去假绿 + 断言升级  [P2]  open  🟢低风险
+
+- 来源：报告 §3 P2-7
+- 缺口定性（实测）：`src/AgentPlatform.ArchitectureTests/DddLayerTests.cs` 每个用例开头 `if (!dir.Exists) return;` —— 目录缺失即**静默通过**，构成 CI 假绿通道。且多条规则实为读 `.csproj` 文本 / 正则扫源码（如 `@"\b(I\w+)\s+\w+\s"`），靠 `allowed` 白名单 + 注释剥离 + 字符串字面量剥离打补丁（见第 207–219 行），新增合法注入即须改测试；「必须 internal sealed」实由 CA1852 编译器规则兜底，测试仅声明意图（注释自承）。
+- 落地：a) `if (!dir.Exists) return;` 全部改为 `Assert.True(dir.Exists, ...)` 或显式 `Skip` 并带理由，杜绝静默跳过；b) 逐步用 ArchUnitNET 原生 fluent API 替换文本/正则匹配，收敛 `allowed` 白名单；c) 补「假绿」回归锁：故意移走被测目录应使测试失败。
+- 验收：重命名/移走被测目录 → 测试**失败**而非通过；白名单条目数下降；Architecture 用例断言强度提升。
+- 备注：这是「全绿」可信度的前置修复，建议与 `F48` 同批落地。
+
+### F54 · 仓库卫生：残留物清理与 .gitignore 收敛  [P3]  open  🟢低风险
+
+- 来源：报告 §3 P2-4
+- 缺口定性（实测）：`src/AgentPlatform.Api/appsettings.QuickStart.json` **仍被 git 跟踪**（F41 已移除 QuickStart 模式 → 死配置）；工作区另残留 `agent_platform.db`(+`-shm`/`-wal`)、`src/AgentPlatform.Application/bin.bak-1787977398595/`、`.stale-build-artifacts/`、根目录 `backend-dev.log`/`frontend-dev.log`/`build-release.log`、`AgentPlatform.Api.csproj.user`（均未跟踪但存在）。
+- 落地：删除 `appsettings.QuickStart.json` 并全局 grep 确认零引用；`.gitignore` 补 `*.log`、`bin.bak-*`、`.stale-build-artifacts/`、`*.db`/`*.db-shm`/`*.db-wal`、`*.csproj.user`；把「根目录不放临时产物」写入 `docs/` 约定。
+- 验收：`git status` 干净；全仓 grep `QuickStart` 零命中；`.gitignore` 覆盖上述模式。
+- 前置检查：删除 `appsettings.QuickStart.json` 前须确认配置优先级链无隐式依赖。
+
+### F55 · 前端执行态快照与断线重建  [P2]  open  ⚠️设计文档待产出  🟠中风险
+
+- 来源：报告 §3 P2-5
+- 缺口定性：zustand 主要承担请求缓存，**缺执行态快照与乐观更新**；工作流长任务（ReAct 循环、durable execution 恢复）在 UI 侧依赖 SSE 推送补位，断线/刷新后状态重建能力弱。
+- 落地：执行态快照（运行中工作流关键状态入 store 并可持久化）；SSE 断线后基于执行日志重建视图（复用 F40 回放能力的数据基础）；关键操作乐观更新 + 失败回滚。
+- 验收：运行中刷新页面 / 断网重连后，执行态与真实状态一致；乐观更新失败有明确回滚与提示；vitest 覆盖快照与重建逻辑。
+- 风险：🟠 中 —— 状态真相源须明确，避免前端快照与后端漂移。
+- 依赖：`F40`（异常回放诊断，已 done）。
+
+### F56 · 文档治理：docs/ 目录分区与过期归档  [P3]  open  🟢低风险
+
+- 来源：报告 §3 P2-6
+- 缺口定性：`docs/` 86 份 + `features/` 50 + `phases/` 11 + `appendices/` 10 ≈ **157 份 Markdown**（对 751 个源文件）；`docs/` 根目录平铺 17 份（日期戳分析报告、postmortem、guide 混杂），缺少入口索引；存在已过期结论（如 `code-analysis-2026-07-20.md` 的完成度表、本文件原有的「五道闸门全绿」表述）。
+- 落地：`docs/` 按 `analysis/`、`guides/`、`postmortem/` 分区（`quality/`、`learning/` 已存在）；为过期分析报告加「已过期，见 <新报告>」抬头；补 `docs/README.md` 作为唯一入口索引；约定分析报告命名与归档规则。
+- 验收：`docs/` 根目录仅剩入口 README 与分区目录；`docs/README.md` 可导航全部分区；过期文档有显式指向。
+- 备注：注意相对链接批量失效，迁移后须校验。
+
+### F57 · backlog 台账 CI 对账（防止再次漂移）  [P3]  open  🟢低风险
+
+- 来源：报告 §3 P2-2 + **本次 backlog 修复暴露的根因**
+- 缺口定性：`features/backlog.md` 曾长期并存两套互斥统计（46 条 vs 47 条、open 10 vs 待做 5），且 F35–F40 实测已并入 master 却仍标 `done⚠️未合并`、F37/F39 已有完成记录却仍标 `open`。**根因是台账状态靠人工维护、无机器校验** —— 在把「文档驱动」当红线的项目里，主台账失真会直接误导排期。
+- 落地：新增 `scripts/backlog-lint.mjs`（并入既有 `scripts/`）：① 校验文件头统计块数字与 `^### F` 条目实际状态计数一致；② 对每个标 `done` 的条目，校验其记录的 commit 是否可达（`git merge-base --is-ancestor`）；③ 校验编号无重复、无越界；接入 CI 与 pre-commit（复用 `F49` 的钩子链路）。
+- 验收：人为把某 done 条目改回 open、或篡改统计数字 → 校验失败并给出定位；CI 拦截生效。
+- 依赖：建议在 `F49`（钩子启用）落地后接续。
+
+---
+
 ## 待立题（缺设计文档，feature-builder 不取）
 
 > 已识别但尚未正式立项的需求：须先产出 `features/<id>.md` 设计文档，再移入上方「Feature 史诗」分组。本分组仅登记意图，**不参与 feature-builder 取数**。
@@ -655,12 +757,12 @@
 
 ## 未立项候选（**登记性质，非承诺**；立项前须用户确认，代理不自创需求）
 
-> 来源仅限各 feature 完成记录 / 质量报告 / 本文件残留项的既有记载，不引入新设想。**F42 已由上方「新立项」节占用**（Skill+MCP 执行器真实化，状态 open、本轮按用户指示只登记不实现）；编号撞车解除时新占用的 **F43** = 在线评估门禁（原 F34）。下一可用编号 = **F44**。
+> 来源仅限各 feature 完成记录 / 质量报告 / 本文件残留项的既有记载，不引入新设想。**编号校正（2026-09-22）**：`F42` = 工作流数据流（见上方史诗节，open）；**Skill + MCP 执行器真实化 = `F47`**（原 2026-09-03 曾误记为 F42，已随重编号纠正）；`F43` = 在线评估门禁（原 F34 改号）；`F44`/`F45`/`F46` 为 2026-08-30 走查新增。**下一可用编号 = `F58`**（2026-09-22 分析报告派生项已占用 `F48`–`F57`）。
 
 | 候选 | 来源（已记录处） | 性质 |
 | :--- | :--- | :--- |
 | ~~F10 处置~~ → **已立项 F47**（Skill+MCP 真实化；本轮按用户指示只登记不实现） | F10 条目 + F47 新立项节 | **基线功能性缺口**：MCP/Skill 工具执行仍返回伪造成功且在 DI 活路径 |
-| B8 ApiKeys 页真实化（后端 CRUD 端点 + 前端挂载；现为不可达死页调用不存在路由） | F1 验收子项 B8（2026-09-03 复核） | blocked → 需立项 |
+| ~~B8 ApiKeys 页真实化~~ → **已立项 `F44`**（后端 CRUD 端点 + 前端挂载；2026-09-22 复核：`ApiKeysPage.tsx` 仍为不可达死页、后端仍无 `ApiKeysController`，缺口成立） | F1 验收子项 B8（2026-09-03 复核） | 已升级为史诗 F44 |
 | 指标高基数治理：`workflow_id` 标签与含 GUID 的 `path` 归一化；追踪/日志联动 | `docs/observability-guide.md` §9、F39 质量报告 | 技术债 |
 | F37 阶段②：RabbitMQ 企业级加固 + 门禁/评估走队列（当前门禁恒同步直跑，决策 D4=A） | `features/f37-queued-execution.md` §1/§6、CHANGELOG v2.36 残留 | 明确分期项 |
 | 节点级真实入参采集（并回收 `input-snapshot-unavailable` 缺口码）+ per-step 上下文快照（F30 现为末次覆盖写） | F24 残留①、`features/f40-replay-diagnostics.md` §3 | 能力扩展 |
