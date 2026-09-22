@@ -123,6 +123,7 @@ appsettings.*.Development.json
 .omo/run-continuation/
 .workbuddy/memory/
 .workbuddy/backend.log
+.workbuddy-ai/
 .opencode/
 .codebase-optimizer/
 
